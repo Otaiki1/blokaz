@@ -1,16 +1,16 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
-import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 /**
  * @title BlokzGame
  * @notice Game registry, leaderboard, and tournament manager for Blokaz on Celo.
+ *         Standard non-upgradeable version for easy deployment.
  */
-contract BlokzGame is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard {
+contract BlokzGame is Ownable, ReentrancyGuard {
     // ─────────────────────────────────────────────────────────── Constants ──
 
     address public constant CUSD = 0x765DE816845861e75A25fCA122bb6898B8B1282a;
@@ -100,19 +100,11 @@ contract BlokzGame is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard {
     error InvalidTournamentParams();
     error TransferFailed();
 
-    // ─────────────────────────────────────────────────────── Initializer ──
+    // ───────────────────────────────────────────────────────── Constructor ──
 
-    /// @custom:oz-upgrades-unsafe-allow constructor
-    constructor() {
-        _disableInitializers();
-    }
-
-    function initialize(address initialOwner) external initializer {
-        __Ownable_init(initialOwner);
+    constructor(address initialOwner) Ownable(initialOwner) {
         nextGameId = 1;
     }
-
-    function _authorizeUpgrade(address) internal override onlyOwner {}
 
     // ────────────────────────────────────────────────────── Game Registry ──
 

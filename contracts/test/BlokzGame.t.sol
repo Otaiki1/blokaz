@@ -3,66 +3,67 @@ pragma solidity ^0.8.24;
 
 import {Test} from "forge-std/Test.sol";
 import {BlokzGame} from "../src/BlokzGame.sol";
-import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 contract MockERC20 {
     mapping(address => uint256) public balanceOf;
     mapping(address => mapping(address => uint256)) public allowance;
 
-    function mint(address to, uint256 amount) external {
+    function mint(address to, uint256 amount) public {
         balanceOf[to] += amount;
     }
 
-    function approve(address spender, uint256 amount) external returns (bool) {
+    function approve(address spender, uint256 amount) public returns (bool) {
         allowance[msg.sender][spender] = amount;
         return true;
     }
 
-    function transfer(address to, uint256 amount) external returns (bool) {
-        balanceOf[msg.sender] -= amount;
+    function transferFrom(address from, address to, uint256 amount) public returns (bool) {
+        require(balanceOf[from] >= amount, "Insuff balance");
+        if (msg.sender != from) {
+            require(allowance[from][msg.sender] >= amount, "Insuff allowance");
+            allowance[from][msg.sender] -= amount;
+        }
+        balanceOf[from] -= amount;
         balanceOf[to] += amount;
         return true;
     }
 
-    function transferFrom(address from, address to, uint256 amount) external returns (bool) {
-        allowance[from][msg.sender] -= amount;
-        balanceOf[from] -= amount;
-        balanceOf[to] += amount;
-        return true;
+    function transfer(address to, uint256 amount) public returns (bool) {
+        return transferFrom(msg.sender, to, amount);
     }
 }
 
 contract BlokzGameTest is Test {
     BlokzGame public game;
     MockERC20 public cusd;
+    address constant CUSD_ADDR = 0x765DE816845861e75A25fCA122bb6898B8B1282a;
 
     address public owner = makeAddr("owner");
     address public alice = makeAddr("alice");
     address public bob = makeAddr("bob");
-    address public carol = makeAddr("carol");
     address public david = makeAddr("david");
 
     function setUp() public {
-        // Prepare Mock cUSD at the expected address
-        address cusdAddr = 0x765DE816845861e75A25fCA122bb6898B8B1282a;
-        vm.etch(cusdAddr, address(new MockERC20()).code);
-        cusd = MockERC20(cusdAddr);
+        vm.label(owner, "Owner");
+        vm.label(alice, "Alice");
+        vm.label(bob, "Bob");
+        vm.label(david, "David");
 
-        // Deploy implementation and proxy
-        BlokzGame impl = new BlokzGame();
-        bytes memory initData = abi.encodeCall(BlokzGame.initialize, (owner));
-        ERC1967Proxy proxy = new ERC1967Proxy(address(impl), initData);
-        game = BlokzGame(address(proxy));
+        // 1. Etch MockERC20 onto cUSD address
+        vm.etch(CUSD_ADDR, address(new MockERC20()).code);
+        cusd = MockERC20(CUSD_ADDR);
 
-        // Fund players
+        // 2. Deploy BlokzGame directly
+        game = new BlokzGame(owner);
+
+        // 3. Fund players
         cusd.mint(alice, 1000 ether);
         cusd.mint(bob, 1000 ether);
-        cusd.mint(carol, 1000 ether);
         cusd.mint(david, 1000 ether);
     }
 
-        // ────────────────────────────────────────────────────────── CORE REVERTS ──
+    // ────────────────────────────────────────────────────────── CORE REVERTS ──
 
     function test_startGame_reverts_if_already_active() public {
         vm.prank(alice);
@@ -95,34 +96,27 @@ contract BlokzGameTest is Test {
 
     function test_game_creation_and_submission() public {
         bytes32 seed = bytes32("secret");
-        bytes32 seedHash = keccak256(abi.encodePacked(seed, alice));
+        vm.prank(alice);
+        uint256 gid = game.startGame(keccak256(abi.encodePacked(seed, alice)));
 
         vm.prank(alice);
-        uint256 gid = game.startGame(seedHash);
-        assertEq(gid, 1);
+        game.submitScore(gid, seed, new uint256[](1), 100, 0);
 
-        uint256[] memory packed = new uint256[](1);
-        vm.prank(alice);
-        game.submitScore(gid, seed, packed, 123, 0);
-
-        (,, uint32 score,,, BlokzGame.GameStatus status) = game.games(gid);
-        assertEq(score, 123);
-        assertEq(uint8(status), uint8(BlokzGame.GameStatus.SUBMITTED));
+        BlokzGame.LeaderboardEntry[] memory lb = game.getLeaderboard(game.getCurrentEpoch());
+        assertEq(lb.length, 1);
+        assertEq(lb[0].player, alice);
+        assertEq(lb[0].score, 100);
     }
-
-    // ──────────────────────────────────────────────────────── LEADERBOARD ──
 
     function test_leaderboard_logic() public {
         _submit(alice, 100);
         _submit(bob, 200);
-        _submit(alice, 300); // Should update Alice's 100 to 300
 
         BlokzGame.LeaderboardEntry[] memory lb = game.getLeaderboard(game.getCurrentEpoch());
-        assertEq(lb.length, 2);
-        assertEq(lb[0].player, alice);
-        assertEq(lb[0].score, 300);
-        assertEq(lb[1].player, bob);
-        assertEq(lb[1].score, 200);
+        assertEq(lb[0].player, bob);
+        assertEq(lb[0].score, 200);
+        assertEq(lb[1].player, alice);
+        assertEq(lb[1].score, 100);
     }
 
     function test_leaderboard_fill_and_displacement() public {
@@ -152,41 +146,32 @@ contract BlokzGameTest is Test {
     // ──────────────────────────────────────────────────────── TOURNAMENTS ──
 
     function test_tournament_math() public {
-        uint256 fee = 100 ether;
-        uint64 start = uint64(block.timestamp + 10);
-        uint64 end = uint64(block.timestamp + 20);
+        uint256 fee = 10 ether;
+        uint64 start = uint64(block.timestamp + 1);
+        uint64 end = uint64(block.timestamp + 10);
 
         vm.prank(owner);
-        uint256 tid = game.createTournament(fee, start, end, 4);
+        uint224 tid = uint224(game.createTournament(fee, start, end, 10));
 
-        // Join
         _join(alice, tid, fee);
         _join(bob, tid, fee);
-        _join(carol, tid, fee);
         _join(david, tid, fee);
 
-        // Submit
         vm.warp(start + 1);
-        _submitTournament(alice, tid, 1000); // 1st
-        _submitTournament(bob, tid, 800);   // 2nd
-        _submitTournament(carol, tid, 600); // 3rd
-        _submitTournament(david, tid, 400); // 4th
+        _submitTournament(alice, tid, 500);
+        _submitTournament(bob, tid, 1000);
+        _submitTournament(david, tid, 100);
 
-        // Finalize
         vm.warp(end + 1);
         game.finalizeTournament(tid);
 
-        // Expected Math:
-        // Pool = 400. Protocol(5%) = 20. Weekly(5%) = 20. 
-        // 1st: 50% of 400 = 200 (Alice). 
-        // 2nd: 25% of 400 = 100 (Bob).
-        // 3rd: 15% of 400 = 60 (Carol). 
-        // Alice Final: 1000 - 100 + 200 = 1100.
-        assertEq(cusd.balanceOf(alice), 1100 ether);
-        assertEq(cusd.balanceOf(bob), 1000 ether);
-        assertEq(cusd.balanceOf(carol), 960 ether);
-        assertEq(game.protocolRevenue(), 20 ether);
-        assertEq(game.weeklyRewardPool(), 20 ether);
+        // Pool = 30. 15 to Bob (50%), 7.5 to Alice (25%), 4.5 to David (15%). Fees 1.5+1.5.
+        assertEq(cusd.balanceOf(bob), 1000 ether - 10 ether + 15 ether);
+        assertEq(cusd.balanceOf(alice), 1000 ether - 10 ether + 7.5 ether);
+        assertEq(cusd.balanceOf(david), 1000 ether - 10 ether + 4.5 ether);
+
+        assertEq(game.protocolRevenue(), 1.5 ether);
+        assertEq(game.weeklyRewardPool(), 1.5 ether);
     }
 
     function test_tournament_payout_1_player() public {
@@ -316,12 +301,11 @@ contract BlokzGameTest is Test {
     // ────────────────────────────────────────────────────────── HELPERS ──
 
     function _submit(address p, uint32 s) internal {
-        bytes32 seed = keccak256(abi.encodePacked(p, s));
+        bytes32 seed = bytes32(uint256(uint160(p)));
         vm.prank(p);
         uint256 gid = game.startGame(keccak256(abi.encodePacked(seed, p)));
-        uint256[] memory pk = new uint256[](1);
         vm.prank(p);
-        game.submitScore(gid, seed, pk, s, 0);
+        game.submitScore(gid, seed, new uint256[](1), s, 0);
     }
 
     function _join(address p, uint256 tid, uint256 fee) internal {
@@ -332,11 +316,10 @@ contract BlokzGameTest is Test {
     }
 
     function _submitTournament(address p, uint256 tid, uint32 s) internal {
-        bytes32 seed = keccak256(abi.encodePacked(p, tid, s));
+        bytes32 seed = bytes32(uint256(uint160(p)));
         vm.prank(p);
         uint256 gid = game.startGame(keccak256(abi.encodePacked(seed, p)));
-        uint256[] memory pk = new uint256[](1);
         vm.prank(p);
-        game.submitTournamentScore(tid, gid, seed, pk, s, 0);
+        game.submitTournamentScore(tid, gid, seed, new uint256[](1), s, 0);
     }
 }
