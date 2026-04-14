@@ -92,14 +92,14 @@ export class TouchController {
       // @ts-ignore
       const shape = (window as any).currentPieces[this.dragIndex]
       const isValid = this.canPlace(shape, ghostGridPos.row, ghostGridPos.col)
-      this.ghostPos = ghostGridPos
+      this.ghostPos = ghostGridPos;
       
       // Update ghost in renderer
       // We pass it to the state management layer usually, but for MVP we hit renderer direct
-      (window as any).activeGhost = { ...ghostGridPos, valid: isValid }
+      ;(window as any).activeGhost = { ...ghostGridPos, valid: isValid }
     } else {
-      this.ghostPos = null
-      (window as any).activeGhost = null
+      this.ghostPos = null;
+      ;(window as any).activeGhost = null;
     }
   }
 
