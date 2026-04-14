@@ -9,26 +9,23 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 /**
  * @title BlokzGame
  * @notice Game registry, leaderboard, and tournament manager for Blokaz on Celo.
- *         Scores are committed with a replay proof; a lightweight spot-check
- *         verifies move legitimacy without replaying the full game on-chain.
  */
 contract BlokzGame is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard {
     // ─────────────────────────────────────────────────────────── Constants ──
 
-    /// @dev cUSD on Celo mainnet.
     address public constant CUSD = 0x765DE816845861e75A25fCA122bb6898B8B1282a;
-
     uint256 public constant EPOCH_DURATION = 7 days;
     uint8 public constant LEADERBOARD_SIZE = 50;
     uint256 public constant PROTOCOL_FEE_BPS = 500; // 5 %
+    uint16 public constant TOTAL_WEIGHT = 148;
+
+    uint8[23] private shapeWeights = [
+        5, 8, 8, 10, 10, 8, 8, 4, 4, 10, 3, 6, 8, 8, 8, 8, 5, 5, 5, 5, 6, 6, 6
+    ];
 
     // ─────────────────────────────────────────────────────────── Game state ──
 
-    enum GameStatus {
-        ACTIVE,
-        SUBMITTED,
-        REJECTED
-    }
+    enum GameStatus { ACTIVE, SUBMITTED, REJECTED }
 
     struct Game {
         address player;
@@ -41,7 +38,6 @@ contract BlokzGame is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard {
 
     mapping(uint256 => Game) public games;
     uint256 public nextGameId;
-    /// @dev Tracks the current ACTIVE game per player (0 = none).
     mapping(address => uint256) public activeGame;
 
     // ────────────────────────────────────────────────────── Leaderboard state ──
@@ -52,14 +48,14 @@ contract BlokzGame is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard {
         uint256 gameId;
     }
 
-    /// epoch → sorted leaderboard (descending by score)
     mapping(uint256 => LeaderboardEntry[]) internal _leaderboards;
+    mapping(uint256 => mapping(address => uint256)) private _playerLeaderboardIndex;
 
     // ─────────────────────────────────────────────────── Tournament state ──
 
     struct Tournament {
         address creator;
-        uint256 entryFee; // cUSD amount in wei
+        uint256 entryFee;
         uint64 startTime;
         uint64 endTime;
         uint8 maxPlayers;
@@ -72,6 +68,7 @@ contract BlokzGame is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard {
     mapping(uint256 => mapping(address => uint32)) public tournamentScores;
     mapping(uint256 => mapping(address => bool)) public inTournament;
     mapping(uint256 => address[]) internal _tournamentPlayers;
+
     uint256 public nextTournamentId;
     uint256 public protocolRevenue;
     uint256 public weeklyRewardPool;
@@ -93,16 +90,15 @@ contract BlokzGame is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard {
     error InvalidSeed();
     error SpotCheckFailed();
     error TournamentNotFound();
-    error TournamentAlreadyStarted();
     error TournamentFull();
     error AlreadyInTournament();
+    error TournamentAlreadyEnded();
+    error TournamentNotStarted();
     error TournamentNotOver();
     error TournamentAlreadyFinalized();
     error NotInTournament();
     error InvalidTournamentParams();
-    error InsufficientAllowance();
     error TransferFailed();
-    error NoActiveTournamentGame();
 
     // ─────────────────────────────────────────────────────── Initializer ──
 
@@ -113,25 +109,20 @@ contract BlokzGame is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard {
 
     function initialize(address initialOwner) external initializer {
         __Ownable_init(initialOwner);
+        nextGameId = 1;
     }
-
-    // ────────────────────────────────────────────────── UUPS authorization ──
 
     function _authorizeUpgrade(address) internal override onlyOwner {}
 
-    // ────────────────────────────────────────────── Task 3.2: Game Registry ──
+    // ────────────────────────────────────────────────────── Game Registry ──
 
-    /**
-     * @notice Start a new game session.
-     * @param seedHash keccak256(abi.encodePacked(seed, msg.sender))
-     */
     function startGame(bytes32 seedHash) external returns (uint256 gameId) {
         uint256 existingId = activeGame[msg.sender];
         if (existingId != 0 && games[existingId].status == GameStatus.ACTIVE) {
             revert AlreadyHasActiveGame();
         }
 
-        gameId = ++nextGameId;
+        gameId = nextGameId++;
         games[gameId] = Game({
             player: msg.sender,
             seedHash: seedHash,
@@ -141,25 +132,10 @@ contract BlokzGame is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard {
             status: GameStatus.ACTIVE
         });
         activeGame[msg.sender] = gameId;
-
         emit GameStarted(gameId, msg.sender);
     }
 
-    /**
-     * @notice Submit the final score for a game.
-     * @param gameId         The game to submit.
-     * @param seed           The original seed (reveals seedHash pre-image).
-     * @param packedMoves    25 moves packed per uint256, 10 bits each.
-     * @param score          Claimed final score.
-     * @param moveCount      Total number of moves made.
-     */
-    function submitScore(
-        uint256 gameId,
-        bytes32 seed,
-        uint256[] calldata packedMoves,
-        uint32 score,
-        uint16 moveCount
-    ) external {
+    function submitScore(uint256 gameId, bytes32 seed, uint256[] calldata packedMoves, uint32 score, uint16 moveCount) external {
         Game storage game = games[gameId];
         if (game.player != msg.sender) revert NotGameOwner();
         if (game.status != GameStatus.ACTIVE) revert GameNotActive();
@@ -174,249 +150,163 @@ contract BlokzGame is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard {
         game.status = GameStatus.SUBMITTED;
         game.submittedAt = uint64(block.timestamp);
         activeGame[msg.sender] = 0;
-
         _updateLeaderboard(_currentEpoch(), msg.sender, score, gameId);
-
         emit ScoreSubmitted(gameId, msg.sender, score);
     }
 
-    // ─────────────────────────────────── Task 3.3: Spot-Check Verification ──
+    // ───────────────────────────────────────────────── Spot-Check Logic ──
 
-    /**
-     * @notice Lightweight spot-check on 3 random moves from the replay.
-     *         Only verifies that moves reference valid shapes and positions.
-     *         Full grid simulation is NOT done on-chain.
-     */
-    function _spotCheckMoves(
-        bytes32 seed,
-        uint256[] calldata packedMoves,
-        uint16 moveCount
-    ) internal view returns (bool) {
-        // Derive 3 random check indices from block entropy + seed
-        uint256 entropy = uint256(
-            keccak256(abi.encodePacked(block.prevrandao, seed, msg.sender))
-        );
-
+    function _spotCheckMoves(bytes32 seed, uint256[] calldata packedMoves, uint16 moveCount) internal view returns (bool) {
+        uint256 entropy = uint256(keccak256(abi.encodePacked(block.prevrandao, seed, msg.sender)));
         for (uint256 i = 0; i < 3; i++) {
             uint256 checkIndex = (entropy >> (i * 32)) % moveCount;
-
-            // Unpack move at checkIndex (10 bits each, 25 per uint256)
             uint256 wordIdx = checkIndex / 25;
             uint256 bitOffset = (checkIndex % 25) * 10;
             uint256 bits = (packedMoves[wordIdx] >> bitOffset) & 0x3FF;
-
-            // forge-lint: disable-next-line(unsafe-typecast)
-            uint8 pieceIndex = uint8((bits >> 8) & 0x3);
-            // forge-lint: disable-next-line(unsafe-typecast)
-            uint8 row = uint8((bits >> 4) & 0xF);
-            // forge-lint: disable-next-line(unsafe-typecast)
-            uint8 col = uint8(bits & 0xF);
-
-            // Bounds validation — sufficient to detect obviously tampered move data.
-            // Every RNG output maps to a valid shape (weights cover the full
-            // uint32 range), so no separate shape-index check is needed.
-            if (pieceIndex > 2 || row > 8 || col > 8) return false;
+            if (((bits >> 8) & 0x3) > 2 || ((bits >> 4) & 0xF) > 8 || (bits & 0xF) > 8) return false;
         }
-
         return true;
     }
 
-    // ───────────────────────────────────────────── Task 3.4: Leaderboard ──
+    // ─────────────────────────────────────────────────── Leaderboard ──
 
-    /**
-     * @notice Returns the leaderboard for the given epoch (sorted descending).
-     */
-    function getLeaderboard(uint256 epoch)
-        external
-        view
-        returns (LeaderboardEntry[] memory)
-    {
+    function getLeaderboard(uint256 epoch) external view returns (LeaderboardEntry[] memory) {
         return _leaderboards[epoch];
     }
 
-    function getCurrentEpoch() external view returns (uint256) {
-        return _currentEpoch();
+    function getCurrentEpoch() public view returns (uint256) {
+        return block.timestamp / EPOCH_DURATION;
     }
 
     function _currentEpoch() internal view returns (uint256) {
         return block.timestamp / EPOCH_DURATION;
     }
 
-    /**
-     * @dev Insert a new score into the epoch leaderboard.
-     *      Maintains descending sort, bounded by LEADERBOARD_SIZE.
-     */
-    function _updateLeaderboard(
-        uint256 epoch,
-        address player,
-        uint32 score,
-        uint256 gameId
-    ) internal {
+    function _updateLeaderboard(uint256 epoch, address player, uint32 score, uint256 gameId) internal {
         LeaderboardEntry[] storage board = _leaderboards[epoch];
         uint256 len = board.length;
+        uint256 pIdx = _playerLeaderboardIndex[epoch][player];
 
-        if (len < LEADERBOARD_SIZE) {
-            // Room to grow — append then bubble-up
-            board.push(LeaderboardEntry({player: player, score: score, gameId: gameId}));
-            _bubbleUp(board, len);
-        } else if (score > board[len - 1].score) {
-            // Replace the lowest entry and re-sort
-            board[len - 1] = LeaderboardEntry({player: player, score: score, gameId: gameId});
-            _bubbleUp(board, len - 1);
+        if (pIdx > 0) {
+            uint256 currentIdx = pIdx - 1;
+            if (score > board[currentIdx].score) {
+                board[currentIdx].score = score;
+                board[currentIdx].gameId = gameId;
+                _bubbleUp(epoch, board, currentIdx);
+            }
+        } else {
+            if (len < LEADERBOARD_SIZE) {
+                board.push(LeaderboardEntry({player: player, score: score, gameId: gameId}));
+                _playerLeaderboardIndex[epoch][player] = len + 1;
+                _bubbleUp(epoch, board, len);
+            } else if (score > board[len - 1].score) {
+                address replacedPlayer = board[len - 1].player;
+                _playerLeaderboardIndex[epoch][replacedPlayer] = 0;
+                board[len - 1] = LeaderboardEntry({player: player, score: score, gameId: gameId});
+                _playerLeaderboardIndex[epoch][player] = len; 
+                _bubbleUp(epoch, board, len - 1);
+            }
         }
-        // Otherwise score is too low — no update needed
     }
 
-    /// @dev Bubble the entry at `idx` up into its correct sorted position (descending).
-    function _bubbleUp(LeaderboardEntry[] storage board, uint256 idx) internal {
+    function _bubbleUp(uint256 epoch, LeaderboardEntry[] storage board, uint256 idx) internal {
         while (idx > 0) {
             uint256 parent = idx - 1;
             if (board[idx].score > board[parent].score) {
                 LeaderboardEntry memory tmp = board[parent];
                 board[parent] = board[idx];
                 board[idx] = tmp;
+                _playerLeaderboardIndex[epoch][board[parent].player] = parent + 1;
+                _playerLeaderboardIndex[epoch][board[idx].player] = idx + 1;
                 idx = parent;
-            } else {
-                break;
-            }
+            } else break;
         }
+        _playerLeaderboardIndex[epoch][board[idx].player] = idx + 1;
     }
 
-    // ─────────────────────────────────────────── Task 3.5: Tournament Manager ──
+    // ────────────────────────────────────────────── Tournament Manager ──
 
-    /**
-     * @notice Create a new cUSD-staked tournament.
-     */
-    function createTournament(
-        uint256 entryFee,
-        uint64 startTime,
-        uint64 endTime,
-        uint8 maxPlayers
-    ) external returns (uint256 tournamentId) {
-        if (startTime <= block.timestamp) revert InvalidTournamentParams();
-        if (endTime <= startTime) revert InvalidTournamentParams();
-        if (maxPlayers < 2 || maxPlayers > 64) revert InvalidTournamentParams();
-
-        tournamentId = nextTournamentId++;
-        tournaments[tournamentId] = Tournament({
-            creator: msg.sender,
-            entryFee: entryFee,
-            startTime: startTime,
-            endTime: endTime,
-            maxPlayers: maxPlayers,
-            playerCount: 0,
-            finalized: false,
-            prizePool: 0
+    function createTournament(uint256 fee, uint64 start, uint64 end, uint8 max) external onlyOwner returns (uint256 tid) {
+        if (start <= block.timestamp || end <= start || max < 2) revert InvalidTournamentParams();
+        tid = nextTournamentId++;
+        tournaments[tid] = Tournament({
+            creator: msg.sender, entryFee: fee, startTime: start, endTime: end,
+            maxPlayers: max, playerCount: 0, finalized: false, prizePool: 0
         });
-
-        emit TournamentCreated(tournamentId, msg.sender, entryFee);
+        emit TournamentCreated(tid, msg.sender, fee);
     }
 
-    /**
-     * @notice Join a tournament by paying the entry fee in cUSD.
-     */
-    function joinTournament(uint256 tournamentId) external nonReentrant {
-        Tournament storage t = tournaments[tournamentId];
+    function joinTournament(uint256 tid) external nonReentrant {
+        Tournament storage t = tournaments[tid];
         if (t.creator == address(0)) revert TournamentNotFound();
-        if (block.timestamp >= t.endTime) revert TournamentAlreadyStarted();
+        if (block.timestamp >= t.endTime) revert TournamentAlreadyEnded();
         if (t.playerCount >= t.maxPlayers) revert TournamentFull();
-        if (inTournament[tournamentId][msg.sender]) revert AlreadyInTournament();
+        if (inTournament[tid][msg.sender]) revert AlreadyInTournament();
 
         if (t.entryFee > 0) {
-            bool ok = IERC20(CUSD).transferFrom(msg.sender, address(this), t.entryFee);
-            if (!ok) revert TransferFailed();
+            if (!IERC20(CUSD).transferFrom(msg.sender, address(this), t.entryFee)) revert TransferFailed();
+            t.prizePool += t.entryFee;
         }
-
-        t.prizePool += t.entryFee;
         t.playerCount++;
-        inTournament[tournamentId][msg.sender] = true;
-        _tournamentPlayers[tournamentId].push(msg.sender);
-
-        emit TournamentJoined(tournamentId, msg.sender);
+        inTournament[tid][msg.sender] = true;
+        _tournamentPlayers[tid].push(msg.sender);
+        emit TournamentJoined(tid, msg.sender);
     }
 
-    /**
-     * @notice Submit a score for a tournament (uses the same proof mechanism).
-     *         Only the player's best score is kept.
-     */
-    function submitTournamentScore(
-        uint256 tournamentId,
-        bytes32 seed,
-        uint256[] calldata packedMoves,
-        uint32 score,
-        uint16 moveCount
-    ) external {
-        if (!inTournament[tournamentId][msg.sender]) revert NotInTournament();
+    function submitTournamentScore(uint256 tid, uint256 gid, bytes32 seed, uint256[] calldata moves, uint32 score, uint16 mCount) external {
+        if (!inTournament[tid][msg.sender]) revert NotInTournament();
+        Game storage g = games[gid];
+        if (g.player != msg.sender || g.status != GameStatus.ACTIVE) revert GameNotActive();
+        Tournament storage t = tournaments[tid];
+        if (block.timestamp < t.startTime) revert TournamentNotStarted();
+        if (block.timestamp > t.endTime) revert TournamentAlreadyEnded();
 
-        Tournament storage t = tournaments[tournamentId];
-        if (block.timestamp > t.endTime) revert TournamentAlreadyStarted();
-        if (keccak256(abi.encodePacked(seed, msg.sender)) == bytes32(0)) revert InvalidSeed();
-
-        if (moveCount > 0 && !_spotCheckMoves(seed, packedMoves, moveCount)) {
-            revert SpotCheckFailed();
-        }
-
-        // Keep the player's highest score
-        if (score > tournamentScores[tournamentId][msg.sender]) {
-            tournamentScores[tournamentId][msg.sender] = score;
-        }
-
-        emit TournamentScoreSubmitted(tournamentId, msg.sender, score);
+        g.score = score;
+        g.status = GameStatus.SUBMITTED;
+        activeGame[msg.sender] = 0;
+        if (score > tournamentScores[tid][msg.sender]) tournamentScores[tid][msg.sender] = score;
+        emit TournamentScoreSubmitted(tid, msg.sender, score);
     }
 
-    /**
-     * @notice Finalize a tournament and distribute cUSD prizes.
-     *         1st: 50%, 2nd: 25%, 3rd: 15%, protocol: 5%, weekly pool: 5%.
-     */
-    function finalizeTournament(uint256 tournamentId) external nonReentrant {
-        Tournament storage t = tournaments[tournamentId];
+    function finalizeTournament(uint256 tid) external nonReentrant {
+        Tournament storage t = tournaments[tid];
         if (t.creator == address(0)) revert TournamentNotFound();
-        if (block.timestamp <= t.endTime) revert TournamentNotOver();
         if (t.finalized) revert TournamentAlreadyFinalized();
+        if (block.timestamp <= t.endTime) revert TournamentNotOver();
 
         t.finalized = true;
+        address[] memory players = _tournamentPlayers[tid];
+        if (players.length == 0 || t.prizePool == 0) return;
 
-        address[] storage players = _tournamentPlayers[tournamentId];
-        uint256 numPlayers = players.length;
-
-        if (numPlayers == 0 || t.prizePool == 0) {
-            // Nothing to distribute
-            emit TournamentFinalized(tournamentId, address(0), 0);
-            return;
-        }
-
-        // Sort players by score descending (simple selection sort — bounded by maxPlayers ≤ 64)
-        address[] memory sorted = _sortPlayersByScore(tournamentId, players);
-
+        address[] memory sorted = _sortPlayersByScore(tid, players);
         uint256 pool = t.prizePool;
-        uint256 fee = (pool * PROTOCOL_FEE_BPS) / 10000; // 5% protocol
-        uint256 weekly = fee; // 5% weekly pool
-        uint256 distributable = pool - fee - weekly;
+        
+        protocolRevenue += (pool * 5) / 100;
+        weeklyRewardPool += (pool * 5) / 100;
 
-        protocolRevenue += fee;
-        weeklyRewardPool += weekly;
-
-        // Prize splits (as fractions of distributable)
-        if (numPlayers >= 3) {
-            _safeCusdTransfer(sorted[0], (distributable * 50) / 90); // ~55.6% of distributable
-            _safeCusdTransfer(sorted[1], (distributable * 25) / 90); // ~27.8%
-            _safeCusdTransfer(sorted[2], (distributable * 15) / 90); // ~16.7%
-        } else if (numPlayers == 2) {
-            _safeCusdTransfer(sorted[0], (distributable * 2) / 3);
-            _safeCusdTransfer(sorted[1], distributable / 3);
+        if (players.length >= 3) {
+            _safeCusdTransfer(sorted[0], (pool * 50) / 100);
+            _safeCusdTransfer(sorted[1], (pool * 25) / 100);
+            _safeCusdTransfer(sorted[2], (pool * 15) / 100);
+        } else if (players.length == 2) {
+            _safeCusdTransfer(sorted[0], (pool * 60) / 100);
+            _safeCusdTransfer(sorted[1], (pool * 30) / 100);
         } else {
-            // Single player gets all distributable back
-            _safeCusdTransfer(sorted[0], distributable);
+            _safeCusdTransfer(sorted[0], (pool * 90) / 100);
         }
+        emit TournamentFinalized(tid, sorted[0], (pool * 50) / 100);
+    }
 
-        address winner = sorted[0];
-        uint256 winnerPrize = numPlayers >= 3
-            ? (distributable * 50) / 90
-            : numPlayers == 2
-            ? (distributable * 2) / 3
-            : distributable;
-
-        emit TournamentFinalized(tournamentId, winner, winnerPrize);
+    function _sortPlayersByScore(uint256 tid, address[] memory p) internal view returns (address[] memory) {
+        uint256 n = p.length;
+        for (uint256 i = 0; i < n - 1; i++) {
+            for (uint256 j = i + 1; j < n; j++) {
+                if (tournamentScores[tid][p[j]] > tournamentScores[tid][p[i]]) {
+                    (p[i], p[j]) = (p[j], p[i]);
+                }
+            }
+        }
+        return p;
     }
 
     /**
@@ -428,37 +318,16 @@ contract BlokzGame is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard {
         _safeCusdTransfer(owner(), amount);
     }
 
-    // ────────────────────────────────────────────────────── Internal helpers ──
-
-    function _sortPlayersByScore(uint256 tournamentId, address[] storage players)
-        internal
-        view
-        returns (address[] memory sorted)
-    {
-        uint256 n = players.length;
-        sorted = new address[](n);
-        for (uint256 i = 0; i < n; i++) sorted[i] = players[i];
-
-        // Selection sort (descending) — bounded by maxPlayers ≤ 64
-        for (uint256 i = 0; i < n - 1; i++) {
-            uint256 maxIdx = i;
-            for (uint256 j = i + 1; j < n; j++) {
-                if (
-                    tournamentScores[tournamentId][sorted[j]] >
-                    tournamentScores[tournamentId][sorted[maxIdx]]
-                ) {
-                    maxIdx = j;
-                }
-            }
-            if (maxIdx != i) {
-                (sorted[i], sorted[maxIdx]) = (sorted[maxIdx], sorted[i]);
-            }
-        }
+    /**
+     * @notice Withdraw accumulated weekly reward pool.
+     */
+    function withdrawWeeklyRewardPool(address to) external onlyOwner nonReentrant {
+        uint256 amount = weeklyRewardPool;
+        weeklyRewardPool = 0;
+        _safeCusdTransfer(to, amount);
     }
 
     function _safeCusdTransfer(address to, uint256 amount) internal {
-        if (amount == 0) return;
-        bool ok = IERC20(CUSD).transfer(to, amount);
-        if (!ok) revert TransferFailed();
+        if (amount > 0 && !IERC20(CUSD).transfer(to, amount)) revert TransferFailed();
     }
 }

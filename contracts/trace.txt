@@ -1,0 +1,10 @@
+Warning: This is a nightly build of Foundry. It is recommended to use the latest stable version. To mute this warning set `FOUNDRY_DISABLE_NIGHTLY_WARNING` in your environment. 
+
+Compiler run failed:
+Error (2314): Expected identifier but got '('
+   --> src/BlokzGame.sol:370:12:
+    |
+370 | console.log("Joined:", tournamentId, msg.sender);
+    |            ^
+
+Error: Compilation failed

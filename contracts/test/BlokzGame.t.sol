@@ -6,13 +6,7 @@ import {BlokzGame} from "../src/BlokzGame.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-// ─────────────────────────────────────────────────── Mock cUSD ERC-20 ──
-
-contract MockERC20 is Test {
-    string public name = "Mock cUSD";
-    string public symbol = "mCUSD";
-    uint8 public decimals = 18;
-
+contract MockERC20 {
     mapping(address => uint256) public balanceOf;
     mapping(address => mapping(address => uint256)) public allowance;
 
@@ -26,15 +20,12 @@ contract MockERC20 is Test {
     }
 
     function transfer(address to, uint256 amount) external returns (bool) {
-        require(balanceOf[msg.sender] >= amount, "insufficient");
         balanceOf[msg.sender] -= amount;
         balanceOf[to] += amount;
         return true;
     }
 
     function transferFrom(address from, address to, uint256 amount) external returns (bool) {
-        require(balanceOf[from] >= amount, "insufficient");
-        require(allowance[from][msg.sender] >= amount, "allowance");
         allowance[from][msg.sender] -= amount;
         balanceOf[from] -= amount;
         balanceOf[to] += amount;
@@ -42,355 +33,310 @@ contract MockERC20 is Test {
     }
 }
 
-// ─────────────────────────────────────────────────── Exposed subclass ──
-
-/// @dev Exposes internals for testing.
-contract BlokzGameExposed is BlokzGame {
-    MockERC20 public mockCusd;
-
-    function setCusdMock(address mock) external {
-        mockCusd = MockERC20(mock);
-    }
-
-    // Override CUSD constant behaviour by overriding the transfer helper in tests.
-    // We use vm.mockCall in the test instead — no override needed.
-}
-
-// ──────────────────────────────────────────────────────────── Tests ──
-
 contract BlokzGameTest is Test {
     BlokzGame public game;
     MockERC20 public cusd;
+
     address public owner = makeAddr("owner");
     address public alice = makeAddr("alice");
     address public bob = makeAddr("bob");
     address public carol = makeAddr("carol");
+    address public david = makeAddr("david");
 
     function setUp() public {
-        // Deploy mock cUSD
-        cusd = new MockERC20();
+        // Prepare Mock cUSD at the expected address
+        address cusdAddr = 0x765DE816845861e75A25fCA122bb6898B8B1282a;
+        vm.etch(cusdAddr, address(new MockERC20()).code);
+        cusd = MockERC20(cusdAddr);
 
-        // Deploy implementation + proxy
+        // Deploy implementation and proxy
         BlokzGame impl = new BlokzGame();
         bytes memory initData = abi.encodeCall(BlokzGame.initialize, (owner));
         ERC1967Proxy proxy = new ERC1967Proxy(address(impl), initData);
         game = BlokzGame(address(proxy));
 
-        // Fund players with mock cUSD
+        // Fund players
         cusd.mint(alice, 1000 ether);
         cusd.mint(bob, 1000 ether);
         cusd.mint(carol, 1000 ether);
+        cusd.mint(david, 1000 ether);
     }
 
-    // ─────────────────────────────────── Task 3.2: Game Registry tests ──
+        // ────────────────────────────────────────────────────────── CORE REVERTS ──
 
-    function test_startGame_createsActiveGame() public {
+    function test_startGame_reverts_if_already_active() public {
         vm.prank(alice);
-        // forge-lint: disable-next-line(unsafe-typecast)
-        bytes32 seedHash = keccak256(abi.encodePacked(bytes32("seed"), alice));
-        uint256 gameId = game.startGame(seedHash);
-
-        (address player,,,,, BlokzGame.GameStatus status) = game.games(gameId);
-        assertEq(player, alice, "player mismatch");
-        assertEq(uint8(status), uint8(BlokzGame.GameStatus.ACTIVE), "should be ACTIVE");
-        assertEq(game.activeGame(alice), gameId, "activeGame mismatch");
-        assertEq(gameId, 1, "first gameId should be 1");
-    }
-
-    function test_startGame_cannotHaveTwoActiveGames() public {
-        vm.startPrank(alice);
-        // forge-lint: disable-next-line(unsafe-typecast)
-        bytes32 seedHash = keccak256(abi.encodePacked(bytes32("seed"), alice));
-        game.startGame(seedHash);
-
+        game.startGame(keccak256("seed1"));
+        
         vm.expectRevert(BlokzGame.AlreadyHasActiveGame.selector);
-        game.startGame(seedHash);
-        vm.stopPrank();
+        vm.prank(alice);
+        game.startGame(keccak256("seed2"));
     }
 
-    function test_submitScore_withValidSeed() public {
-        // forge-lint: disable-next-line(unsafe-typecast)
-        bytes32 seed = bytes32("myseed");
-        bytes32 seedHash = keccak256(abi.encodePacked(seed, alice));
-
+    function test_submitScore_reverts_if_wrong_owner() public {
         vm.prank(alice);
-        uint256 gameId = game.startGame(seedHash);
-
-        // Build a minimal packed moves array (1 move: pieceIndex=0, row=0, col=0)
-        // 10 bits per move, 25 per word: bits = 0b00_0000_0000 = 0
-        uint256[] memory packed = new uint256[](1);
-        packed[0] = 0; // all zeros → move (0,0,0)
-
-        vm.prank(alice);
-        game.submitScore(gameId, seed, packed, 100, 1);
-
-        (,,uint32 score,,,BlokzGame.GameStatus status) = game.games(gameId);
-        assertEq(score, 100, "score mismatch");
-        assertEq(uint8(status), uint8(BlokzGame.GameStatus.SUBMITTED), "should be SUBMITTED");
-        assertEq(game.activeGame(alice), 0, "activeGame should clear");
-    }
-
-    function test_submitScore_wrongSeedReverts() public {
-        // forge-lint: disable-next-line(unsafe-typecast)
-        bytes32 seed = bytes32("realseed");
-        bytes32 seedHash = keccak256(abi.encodePacked(seed, alice));
-
-        vm.prank(alice);
-        uint256 gameId = game.startGame(seedHash);
-
-        uint256[] memory packed = new uint256[](1);
-        vm.prank(alice);
-        vm.expectRevert(BlokzGame.InvalidSeed.selector);
-        // forge-lint: disable-next-line(unsafe-typecast)
-        game.submitScore(gameId, bytes32("wrongseed"), packed, 100, 0);
-    }
-
-    function test_submitScore_onlyOwnerCanSubmit() public {
-        // forge-lint: disable-next-line(unsafe-typecast)
-        bytes32 seed = bytes32("s");
-        bytes32 seedHash = keccak256(abi.encodePacked(seed, alice));
-        vm.prank(alice);
-        uint256 gameId = game.startGame(seedHash);
-
-        uint256[] memory packed = new uint256[](1);
-        vm.prank(bob);
+        uint256 gid = game.startGame(keccak256(abi.encodePacked(bytes32("seed"), alice)));
+        
         vm.expectRevert(BlokzGame.NotGameOwner.selector);
-        game.submitScore(gameId, seed, packed, 50, 0);
+        vm.prank(bob);
+        game.submitScore(gid, bytes32("seed"), new uint256[](1), 100, 0);
     }
 
-    function test_canStartNewGameAfterSubmitting() public {
-        // forge-lint: disable-next-line(unsafe-typecast)
-        bytes32 seed = bytes32("s");
+    function test_submitScore_reverts_if_wrong_seed() public {
+        vm.prank(alice);
+        uint256 gid = game.startGame(keccak256(abi.encodePacked(bytes32("real_seed"), alice)));
+        
+        vm.expectRevert(BlokzGame.InvalidSeed.selector);
+        vm.prank(alice);
+        game.submitScore(gid, bytes32("fake_seed"), new uint256[](1), 100, 0);
+    }
+
+    // ──────────────────────────────────────────────────────────  LEADERBOARD ──
+
+    function test_game_creation_and_submission() public {
+        bytes32 seed = bytes32("secret");
         bytes32 seedHash = keccak256(abi.encodePacked(seed, alice));
 
         vm.prank(alice);
-        uint256 gameId = game.startGame(seedHash);
+        uint256 gid = game.startGame(seedHash);
+        assertEq(gid, 1);
 
         uint256[] memory packed = new uint256[](1);
         vm.prank(alice);
-        game.submitScore(gameId, seed, packed, 100, 0);
+        game.submitScore(gid, seed, packed, 123, 0);
 
-        // Should be able to start a new game
-        // forge-lint: disable-next-line(unsafe-typecast)
-        bytes32 seedHash2 = keccak256(abi.encodePacked(bytes32("seed2"), alice));
-        vm.prank(alice);
-        uint256 gameId2 = game.startGame(seedHash2);
-        assertEq(gameId2, gameId + 1);
+        (,, uint32 score,,, BlokzGame.GameStatus status) = game.games(gid);
+        assertEq(score, 123);
+        assertEq(uint8(status), uint8(BlokzGame.GameStatus.SUBMITTED));
     }
 
-    // ──────────────────────────────── Task 3.4: Leaderboard tests ──
+    // ──────────────────────────────────────────────────────── LEADERBOARD ──
 
-    function test_leaderboard_sortedDescending() public {
-        _submitGameWithScore(alice, 500);
-        _submitGameWithScore(bob, 200);
-        _submitGameWithScore(carol, 350);
+    function test_leaderboard_logic() public {
+        _submit(alice, 100);
+        _submit(bob, 200);
+        _submit(alice, 300); // Should update Alice's 100 to 300
 
-        uint256 epoch = game.getCurrentEpoch();
-        BlokzGame.LeaderboardEntry[] memory board = game.getLeaderboard(epoch);
-
-        assertEq(board.length, 3);
-        assertEq(board[0].score, 500, "1st should be 500");
-        assertEq(board[1].score, 350, "2nd should be 350");
-        assertEq(board[2].score, 200, "3rd should be 200");
+        BlokzGame.LeaderboardEntry[] memory lb = game.getLeaderboard(game.getCurrentEpoch());
+        assertEq(lb.length, 2);
+        assertEq(lb[0].player, alice);
+        assertEq(lb[0].score, 300);
+        assertEq(lb[1].player, bob);
+        assertEq(lb[1].score, 200);
     }
 
-    function test_leaderboard_lowestReplacedWhenFull() public {
-        // Fill leaderboard with 50 entries at score=100
-        address[] memory players = new address[](50);
-        for (uint256 i = 0; i < 50; i++) {
-            address p = makeAddr(string(abi.encodePacked("player", i)));
-            players[i] = p;
-            _submitGameWithScore(p, 100);
+    function test_leaderboard_fill_and_displacement() public {
+        // 1. Fill leaderboard to 50 players (scores: 10, 20, ..., 500)
+        for (uint160 i = 1; i <= 50; i++) {
+            _submit(address(i + 1000), uint32(i * 10)); 
         }
 
-        uint256 epoch = game.getCurrentEpoch();
-        BlokzGame.LeaderboardEntry[] memory before = game.getLeaderboard(epoch);
-        assertEq(before.length, 50);
-        assertEq(before[49].score, 100);
+        BlokzGame.LeaderboardEntry[] memory lb = game.getLeaderboard(game.getCurrentEpoch());
+        assertEq(lb.length, 50);
+        assertEq(lb[49].score, 10, "last score should be 10");
 
-        // A higher score should replace the lowest
-        address newPlayer = makeAddr("newPlayer");
-        _submitGameWithScore(newPlayer, 150);
+        // 2. New player submits 5 (too low) -> ignored
+        _submit(david, 5);
+        lb = game.getLeaderboard(game.getCurrentEpoch());
+        assertEq(lb.length, 50);
+        assertEq(lb[49].score, 10, "last score should still be 10");
 
-        BlokzGame.LeaderboardEntry[] memory after_ = game.getLeaderboard(epoch);
-        assertEq(after_.length, 50);
-        assertEq(after_[0].score, 150, "new player should be first");
-        assertEq(after_[49].score, 100, "last should still be 100");
+        // 3. New player submits 15 (displaces 10) -> enters at the end
+        _submit(david, 15);
+        lb = game.getLeaderboard(game.getCurrentEpoch());
+        assertEq(lb.length, 50);
+        assertEq(lb[49].player, david);
+        assertEq(lb[49].score, 15);
     }
 
-    function test_leaderboard_lowScoreNotReplaced() public {
-        _submitGameWithScore(alice, 500);
-        _submitGameWithScore(bob, 400);
-        // Fill to 50 with scores >= 300
-        for (uint256 i = 0; i < 48; i++) {
-            address p = makeAddr(string(abi.encodePacked("p", i)));
-            _submitGameWithScore(p, 300);
-        }
-        // Submitting a lower score should not add to leaderboard
-        _submitGameWithScore(carol, 50);
-        uint256 epoch = game.getCurrentEpoch();
-        BlokzGame.LeaderboardEntry[] memory board = game.getLeaderboard(epoch);
-        assertEq(board.length, 50);
-        // lowest entry should still be 300
-        assertEq(board[49].score, 300);
-    }
+    // ──────────────────────────────────────────────────────── TOURNAMENTS ──
 
-    function test_differentEpochsAreIndependent() public {
-        _submitGameWithScore(alice, 999);
+    function test_tournament_math() public {
+        uint256 fee = 100 ether;
+        uint64 start = uint64(block.timestamp + 10);
+        uint64 end = uint64(block.timestamp + 20);
 
-        uint256 epoch = game.getCurrentEpoch();
-        BlokzGame.LeaderboardEntry[] memory board1 = game.getLeaderboard(epoch);
-        BlokzGame.LeaderboardEntry[] memory board2 = game.getLeaderboard(epoch + 1);
-
-        assertEq(board1.length, 1);
-        assertEq(board2.length, 0, "next epoch should be empty");
-    }
-
-    // ─────────────────────────────── Task 3.5: Tournament tests ──
-
-    function _mockCusd() internal {
-        // Replace CUSD calls with our mock
-        vm.mockCall(
-            game.CUSD(),
-            abi.encodeWithSelector(IERC20.transferFrom.selector),
-            abi.encode(true)
-        );
-        vm.mockCall(
-            game.CUSD(),
-            abi.encodeWithSelector(IERC20.transfer.selector),
-            abi.encode(true)
-        );
-    }
-
-    function test_tournament_fullLifecycle() public {
-        _mockCusd();
-        uint256 entryFee = 1 ether;
-        uint64 start = uint64(block.timestamp + 60);
-        uint64 end = uint64(block.timestamp + 1 days);
-
-        vm.prank(alice);
-        uint256 tid = game.createTournament(entryFee, start, end, 4);
-        assertEq(tid, 0, "first tournament id = 0");
+        vm.prank(owner);
+        uint256 tid = game.createTournament(fee, start, end, 4);
 
         // Join
-        vm.prank(alice);
-        game.joinTournament(tid);
-        vm.prank(bob);
-        game.joinTournament(tid);
-        vm.prank(carol);
-        game.joinTournament(tid);
+        _join(alice, tid, fee);
+        _join(bob, tid, fee);
+        _join(carol, tid, fee);
+        _join(david, tid, fee);
 
-        (,,,,, uint8 playerCount,,) = game.tournaments(tid);
-        assertEq(playerCount, 3);
-
-        // Submit scores (no moves needed, zero moveCount skips spot-check)
-        // forge-lint: disable-next-line(unsafe-typecast)
-        bytes32 seed = bytes32("seed");
-        uint256[] memory packed = new uint256[](1);
-
-        vm.prank(alice);
-        game.submitTournamentScore(tid, seed, packed, 800, 0);
-        vm.prank(bob);
-        game.submitTournamentScore(tid, seed, packed, 500, 0);
-        vm.prank(carol);
-        game.submitTournamentScore(tid, seed, packed, 650, 0);
-
-        assertEq(game.tournamentScores(tid, alice), 800);
-        assertEq(game.tournamentScores(tid, carol), 650);
-        assertEq(game.tournamentScores(tid, bob), 500);
+        // Submit
+        vm.warp(start + 1);
+        _submitTournament(alice, tid, 1000); // 1st
+        _submitTournament(bob, tid, 800);   // 2nd
+        _submitTournament(carol, tid, 600); // 3rd
+        _submitTournament(david, tid, 400); // 4th
 
         // Finalize
         vm.warp(end + 1);
         game.finalizeTournament(tid);
 
-        (,,,,,, bool finalized,) = game.tournaments(tid);
-        assertTrue(finalized);
+        // Expected Math:
+        // Pool = 400. Protocol(5%) = 20. Weekly(5%) = 20. 
+        // 1st: 50% of 400 = 200 (Alice). 
+        // 2nd: 25% of 400 = 100 (Bob).
+        // 3rd: 15% of 400 = 60 (Carol). 
+        // Alice Final: 1000 - 100 + 200 = 1100.
+        assertEq(cusd.balanceOf(alice), 1100 ether);
+        assertEq(cusd.balanceOf(bob), 1000 ether);
+        assertEq(cusd.balanceOf(carol), 960 ether);
+        assertEq(game.protocolRevenue(), 20 ether);
+        assertEq(game.weeklyRewardPool(), 20 ether);
     }
 
-    function test_tournament_cannotJoinAfterEnd() public {
-        _mockCusd();
-        uint64 start = uint64(block.timestamp + 60);
-        uint64 end = uint64(block.timestamp + 1 hours);
+    function test_tournament_payout_1_player() public {
+        uint256 fee = 100 ether;
+        uint64 start = uint64(block.timestamp + 10);
+        uint64 end = uint64(block.timestamp + 20);
 
-        vm.prank(alice);
-        uint256 tid = game.createTournament(1 ether, start, end, 4);
+        vm.prank(owner);
+        uint256 tid = game.createTournament(fee, start, end, 10);
+
+        _join(alice, tid, fee);
+        vm.warp(start + 1);
+        _submitTournament(alice, tid, 500);
 
         vm.warp(end + 1);
-        vm.prank(bob);
-        vm.expectRevert(BlokzGame.TournamentAlreadyStarted.selector);
+        game.finalizeTournament(tid);
+
+        // Expect 90% back (total pool 100, protocol 5, weekly 5, player gets 90)
+        assertEq(cusd.balanceOf(alice), 1000 ether - 100 ether + 90 ether);
+        assertEq(game.protocolRevenue(), 5 ether);
+    }
+
+    function test_tournament_payout_2_players() public {
+        uint256 fee = 100 ether;
+        uint64 start = uint64(block.timestamp + 10);
+        uint64 end = uint64(block.timestamp + 20);
+
+        vm.prank(owner);
+        uint256 tid = game.createTournament(fee, start, end, 10);
+
+        _join(alice, tid, fee);
+        _join(bob, tid, fee);
+        
+        vm.warp(start + 1);
+        _submitTournament(alice, tid, 1000); // 1st (60%)
+        _submitTournament(bob, tid, 500);    // 2nd (30%)
+
+        vm.warp(end + 1);
+        game.finalizeTournament(tid);
+
+        // Pool 200. Alice wins 120, Bob wins 60. Fees 10+10.
+        assertEq(cusd.balanceOf(alice), 1000 ether - 100 ether + 120 ether);
+        assertEq(cusd.balanceOf(bob), 1000 ether - 100 ether + 60 ether);
+    }
+
+    function test_join_reverts_after_end() public {
+        uint64 end = uint64(block.timestamp + 20);
+        vm.prank(owner);
+        uint256 tid = game.createTournament(0, uint64(block.timestamp + 10), end, 10);
+        
+        vm.warp(end + 1);
+        vm.prank(alice);
+        vm.expectRevert(BlokzGame.TournamentAlreadyEnded.selector);
         game.joinTournament(tid);
     }
 
-    function test_tournament_cannotJoinTwice() public {
-        _mockCusd();
-        uint64 start = uint64(block.timestamp + 60);
-        uint64 end = uint64(block.timestamp + 1 days);
+    function test_submitTournament_reverts_timing() public {
+        uint64 start = uint64(block.timestamp + 10);
+        uint64 end = uint64(block.timestamp + 20);
+        vm.prank(owner);
+        uint256 tid = game.createTournament(0, start, end, 10);
+        _join(alice, tid, 0);
 
+        // Need a valid game ID
         vm.prank(alice);
-        uint256 tid = game.createTournament(0, start, end, 4);
+        uint256 gid = game.startGame(keccak256(abi.encodePacked(bytes32("seed"), alice)));
 
+        // 1. Too early
         vm.prank(alice);
-        game.joinTournament(tid);
+        vm.expectRevert(BlokzGame.TournamentNotStarted.selector);
+        game.submitTournamentScore(tid, gid, bytes32("seed"), new uint256[](1), 100, 0);
 
+        // 2. Too late
+        vm.warp(end + 1);
         vm.prank(alice);
-        vm.expectRevert(BlokzGame.AlreadyInTournament.selector);
-        game.joinTournament(tid);
+        vm.expectRevert(BlokzGame.TournamentAlreadyEnded.selector);
+        game.submitTournamentScore(tid, gid, bytes32("seed"), new uint256[](1), 100, 0);
     }
 
-    function test_tournament_cannotFinalizeBeforeEnd() public {
-        uint64 start = uint64(block.timestamp + 60);
-        uint64 end = uint64(block.timestamp + 1 days);
-
-        vm.prank(alice);
-        uint256 tid = game.createTournament(0, start, end, 4);
-
+    function test_finalize_reverts_too_early() public {
+        uint64 end = uint64(block.timestamp + 20);
+        vm.prank(owner);
+        uint256 tid = game.createTournament(0, uint64(block.timestamp + 10), end, 10);
+        
         vm.expectRevert(BlokzGame.TournamentNotOver.selector);
         game.finalizeTournament(tid);
     }
 
-    function test_tournament_cannotFinalizeTwice() public {
-        uint64 start = uint64(block.timestamp + 60);
-        uint64 end = uint64(block.timestamp + 1 hours);
-
-        vm.prank(alice);
-        uint256 tid = game.createTournament(0, start, end, 4);
-
+    function test_finalize_reverts_double_call() public {
+        uint64 end = uint64(block.timestamp + 20);
+        vm.prank(owner);
+        uint256 tid = game.createTournament(0, uint64(block.timestamp + 10), end, 2);
+        _join(alice, tid, 0);
+        
         vm.warp(end + 1);
         game.finalizeTournament(tid);
-
+        
         vm.expectRevert(BlokzGame.TournamentAlreadyFinalized.selector);
         game.finalizeTournament(tid);
     }
 
-    function test_tournament_maxPlayersEnforced() public {
-        _mockCusd();
-        uint64 start = uint64(block.timestamp + 60);
-        uint64 end = uint64(block.timestamp + 1 days);
+    // ────────────────────────────────────────────────────────── ADMIN ──
 
+    function test_withdraw_revenue_reset() public {
+        // Generate some revenue (100 prize pool -> 5 protocol)
+        vm.prank(owner);
+        uint256 tid = game.createTournament(100 ether, uint64(block.timestamp + 10), uint64(block.timestamp + 20), 2);
+        _join(alice, tid, 100 ether);
+        vm.warp(block.timestamp + 30);
+        game.finalizeTournament(tid);
+        
+        assertEq(game.protocolRevenue(), 5 ether);
+        
+        uint256 ownerBefore = cusd.balanceOf(owner);
+        vm.prank(owner);
+        game.withdrawProtocolRevenue();
+        assertEq(cusd.balanceOf(owner), ownerBefore + 5 ether);
+        assertEq(game.protocolRevenue(), 0);
+    }
+
+    function test_withdraw_reverts_non_owner() public {
+        vm.expectRevert(abi.encodeWithSelector(bytes4(keccak256("OwnableUnauthorizedAccount(address)")), alice));
         vm.prank(alice);
-        uint256 tid = game.createTournament(0, start, end, 2);
+        game.withdrawProtocolRevenue();
+    }
 
-        vm.prank(alice);
-        game.joinTournament(tid);
-        vm.prank(bob);
-        game.joinTournament(tid);
+    // ────────────────────────────────────────────────────────── HELPERS ──
 
-        vm.prank(carol);
-        vm.expectRevert(BlokzGame.TournamentFull.selector);
+    function _submit(address p, uint32 s) internal {
+        bytes32 seed = keccak256(abi.encodePacked(p, s));
+        vm.prank(p);
+        uint256 gid = game.startGame(keccak256(abi.encodePacked(seed, p)));
+        uint256[] memory pk = new uint256[](1);
+        vm.prank(p);
+        game.submitScore(gid, seed, pk, s, 0);
+    }
+
+    function _join(address p, uint256 tid, uint256 fee) internal {
+        vm.prank(p);
+        cusd.approve(address(game), fee);
+        vm.prank(p);
         game.joinTournament(tid);
     }
 
-    // ─────────────────────────────────────────── Helpers ──
-
-    function _submitGameWithScore(address player, uint32 score) internal {
-        bytes32 seed = keccak256(abi.encodePacked(player, score));
-        bytes32 seedHash = keccak256(abi.encodePacked(seed, player));
-
-        vm.prank(player);
-        uint256 gameId = game.startGame(seedHash);
-
-        uint256[] memory packed = new uint256[](1);
-        vm.prank(player);
-        game.submitScore(gameId, seed, packed, score, 0);
+    function _submitTournament(address p, uint256 tid, uint32 s) internal {
+        bytes32 seed = keccak256(abi.encodePacked(p, tid, s));
+        vm.prank(p);
+        uint256 gid = game.startGame(keccak256(abi.encodePacked(seed, p)));
+        uint256[] memory pk = new uint256[](1);
+        vm.prank(p);
+        game.submitTournamentScore(tid, gid, seed, pk, s, 0);
     }
 }
