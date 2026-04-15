@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react'
 import { useGameStore } from '../stores/gameStore'
 import { packMoves } from '../engine/replay'
-import { useSubmitScore, useActiveGame } from '../hooks/useBlokzGame'
+import { useSubmitScore, useActiveGame, useSubmitTournamentScore } from '../hooks/useBlokzGame'
 import { useAccount, useReadContract } from 'wagmi'
 import { BLOKZ_GAME_ABI } from '../constants/abi'
 import contractInfo from '../contract.json'
@@ -19,8 +19,9 @@ const SEED_STORAGE_KEY = 'blokaz_active_seed'
 const GameOverModal: React.FC<GameOverModalProps> = ({ score, onPlayAgain }) => {
   const { address } = useAccount()
   const { gameId: activeGameId, isLoading: isLoadingGameId } = useActiveGame(address)
-  const { gameSession, onChainSeed, onChainGameId, onChainStatus, forceReset } = useGameStore()
+  const { gameSession, onChainSeed, onChainGameId, onChainStatus, forceReset, tournamentId, setTournamentId } = useGameStore()
   const { submitScore, isPending, isConfirming, isSuccess, error } = useSubmitScore()
+  const { submitTournamentScore, isPending: isToursPending, isConfirming: isToursConfirming, isSuccess: isToursSuccess, error: toursError } = useSubmitTournamentScore()
 
   // Use the store's gameId if available, fall back to the activeGame hook
   const effectiveGameId = onChainGameId || activeGameId
@@ -59,13 +60,25 @@ const GameOverModal: React.FC<GameOverModalProps> = ({ score, onPlayAgain }) => 
     if (isPending || isConfirming || isSuccess) return
 
     const packed = packMoves(gameSession.moveHistory)
-    submitScore(
-      effectiveGameId,
-      onChainSeed,
-      packed,
-      gameSession.score,
-      gameSession.moveHistory.length
-    )
+    
+    if (tournamentId !== null) {
+      submitTournamentScore(
+        tournamentId,
+        effectiveGameId,
+        onChainSeed,
+        packed,
+        gameSession.score,
+        gameSession.moveHistory.length
+      )
+    } else {
+      submitScore(
+        effectiveGameId,
+        onChainSeed,
+        packed,
+        gameSession.score,
+        gameSession.moveHistory.length
+      )
+    }
   }
 
   // Clear seed from storage once submission is successful
@@ -75,9 +88,11 @@ const GameOverModal: React.FC<GameOverModalProps> = ({ score, onPlayAgain }) => 
     }
   }, [isSuccess])
 
-  const isRegistering = isPending || isConfirming
+  const isRegistering = isPending || isConfirming || isToursPending || isToursConfirming
   const isSyncing = onChainStatus === 'pending' || onChainStatus === 'syncing'
-  const canSubmit = !isRegistering && !isSuccess && isSeedMatch && !!effectiveGameId && onChainStatus === 'registered'
+  const isAllSuccess = isSuccess || isToursSuccess
+  const hasError = error || toursError
+  const canSubmit = !isRegistering && !isAllSuccess && isSeedMatch && !!effectiveGameId && onChainStatus === 'registered'
 
   return (
     <div className="absolute inset-0 flex items-center justify-center bg-black/80 backdrop-blur-md rounded-lg z-50 animate-in fade-in duration-300">
@@ -136,10 +151,10 @@ const GameOverModal: React.FC<GameOverModalProps> = ({ score, onPlayAgain }) => 
                   <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                   {isConfirming ? 'Recording...' : 'Signing...'}
                 </>
-              ) : isSuccess ? (
+              ) : isAllSuccess ? (
                 'Score Recorded! ✓'
               ) : (
-                'Submit to Ledger'
+                tournamentId !== null ? 'Submit to Tournament' : 'Submit to Ledger'
               )}
             </button>
           )}
@@ -148,22 +163,22 @@ const GameOverModal: React.FC<GameOverModalProps> = ({ score, onPlayAgain }) => 
             onClick={onPlayAgain}
             className="w-full bg-white/10 hover:bg-white/20 text-white font-semibold py-4 rounded-xl transition-all"
           >
-            {isSuccess ? 'Play Again' : 'Discard & New Game'}
+            {isAllSuccess ? 'Play Again' : 'Discard & New Game'}
           </button>
         </div>
 
 
         {/* Error State */}
-        {error && (
+        {hasError && (
           <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-xs text-left">
             <div className="font-bold mb-1 flex items-center gap-2">
               <span className="text-lg">❌</span> 
-              {error.message?.includes('863a7486') ? 'Incompatible Session' : 'Submission Failed'}
+              {(error?.message || toursError?.message)?.includes('863a7486') ? 'Incompatible Session' : 'Submission Failed'}
             </div>
             <p className="opacity-80 leading-relaxed">
-              {error.message?.includes('863a7486') 
+              {(error?.message || toursError?.message)?.includes('863a7486') 
                 ? 'This session is out of sync with the on-chain recorded seed.'
-                : error.message || 'An error occurred while submitting your score.'}
+                : (error?.message || toursError?.message) || 'An error occurred while submitting your score.'}
             </p>
           </div>
         )}

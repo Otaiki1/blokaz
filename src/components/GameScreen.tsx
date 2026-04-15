@@ -26,7 +26,7 @@ const GameScreen: React.FC = () => {
   const { 
     gameSession, score, comboStreak, isGameOver, 
     startGame, setOnChainData, placePiece, resetGame, forceReset,
-    onChainStatus 
+    onChainStatus, tournamentId, setTournamentId
   } = useGameStore()
 
   const { address, isConnected } = useAccount()
@@ -259,6 +259,26 @@ const GameScreen: React.FC = () => {
   return (
     <div className="flex flex-col h-screen bg-[#0a0a0c] text-white select-none">
       <ScoreBar score={score} comboStreak={comboStreak} />
+      
+      {/* Tournament Indicator */}
+      {tournamentId !== null && !gameSession && (
+        <div className="px-6 py-3 bg-blue-500/10 border-b border-blue-500/20 flex items-center justify-between animate-in slide-in-from-top duration-500">
+          <div className="flex items-center gap-3">
+            <span className="text-xl">🏆</span>
+            <div>
+              <div className="text-[10px] text-blue-400 font-black uppercase tracking-widest">Tournament Mode Active</div>
+              <div className="text-sm font-bold">Competing in Match #{tournamentId.toString()}</div>
+            </div>
+          </div>
+          <button 
+            onClick={() => setTournamentId(null)}
+            className="px-3 py-1 bg-white/5 hover:bg-white/10 rounded-lg text-[9px] uppercase font-bold tracking-tighter"
+          >
+            Switch to Classic
+          </button>
+        </div>
+      )}
+
       <div className="flex-1 flex items-start justify-center pt-2">
         <div className="relative">
           <canvas
@@ -299,13 +319,14 @@ const GameScreen: React.FC = () => {
                 
                 <button
                   onClick={handleStartGame}
-                  className="w-full bg-blue-500 hover:bg-blue-600 active:scale-95 text-white font-bold py-4 rounded-xl shadow-lg shadow-blue-500/20 transition-all text-xl"
+                  className={`w-full ${tournamentId !== null ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-blue-500 hover:bg-blue-600'} active:scale-95 text-white font-bold py-4 rounded-xl shadow-lg transition-all text-xl`}
                 >
-                  Start Game
+                  {tournamentId !== null ? 'Enter Contest Match' : 'Start Game'}
                 </button>
                 
                 <p className="text-gray-500 text-[10px] mt-4 uppercase tracking-widest opacity-60">
-                  {isConnected ? 'On-chain registration will start in background' : 'Practice mode (Connect wallet for rewards)'}
+                  {tournamentId !== null ? 'Entry score will be recorded to tournament leaderboard' : 
+                   isConnected ? 'On-chain registration will start in background' : 'Practice mode (Connect wallet for rewards)'}
                 </p>
               </div>
             </div>

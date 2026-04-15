@@ -119,11 +119,12 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ isOpen, onClose }) => {
             </button>
           </div>
 
-          {/* Identity Registration */}
-          <UsernameRegistration />
+          <div className="flex-1 overflow-y-auto custom-scrollbar">
+            {/* Identity Registration */}
+            <UsernameRegistration />
 
-          {/* List */}
-          <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-2">
+            {/* List */}
+            <div className="p-4 space-y-2">
             <h3 className="px-2 pb-2 text-[10px] font-black uppercase tracking-[0.2em] text-gray-600">
               Global Players
             </h3>
@@ -194,18 +195,19 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ isOpen, onClose }) => {
                     </div>
                   )
                 })
-            ) : (
-              // Empty State
-              <div className="flex flex-col items-center justify-center h-64 text-center opacity-30">
-                <div className="w-16 h-16 border-2 border-dashed border-white/20 rounded-full flex items-center justify-center mb-4">
-                  <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                  </svg>
+              ) : (
+                // Empty State
+                <div className="flex flex-col items-center justify-center h-64 text-center opacity-30">
+                  <div className="w-16 h-16 border-2 border-dashed border-white/20 rounded-full flex items-center justify-center mb-4">
+                    <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                    </svg>
+                  </div>
+                  <p className="text-sm font-medium">Competition hasn't started</p>
+                  <p className="text-[10px] uppercase tracking-widest mt-1 italic">Be the bridge-head</p>
                 </div>
-                <p className="text-sm font-medium">Competition hasn't started</p>
-                <p className="text-[10px] uppercase tracking-widest mt-1 italic">Be the bridge-head</p>
-              </div>
-            )}
+              )}
+            </div>
           </div>
 
           {/* Footer */}

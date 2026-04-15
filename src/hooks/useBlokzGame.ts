@@ -9,6 +9,31 @@ import { BLOKZ_GAME_ABI } from '../constants/abi'
 import contractInfo from '../contract.json'
 
 const CONTRACT_ADDRESS = contractInfo.address as `0x${string}`
+const CUSD_ADDRESS = '0x765DE816845861e75A25fCA122bb6898B8B1282a' as const
+
+const ERC20_ABI = [
+  {
+    type: 'function',
+    name: 'allowance',
+    inputs: [
+      { name: 'owner', type: 'address' },
+      { name: 'spender', type: 'address' }
+    ],
+    outputs: [{ name: '', type: 'uint256' }],
+    stateMutability: 'view'
+  },
+  {
+    type: 'function',
+    name: 'approve',
+    inputs: [
+      { name: 'spender', type: 'address' },
+      { name: 'value', type: 'uint256' }
+    ],
+    outputs: [{ name: '', type: 'bool' }],
+    stateMutability: 'nonpayable'
+  }
+] as const
+
 
 /**
  * Utility to generate a random 32-byte seed and its hash.
@@ -80,6 +105,48 @@ export function useTournament(tournamentId: bigint) {
 
   return { tournament, isLoading }
 }
+
+/**
+ * Hook to get the total number of tournaments created.
+ */
+export function useTournamentCount() {
+  const { data: count, isLoading } = useReadContract({
+    address: CONTRACT_ADDRESS,
+    abi: BLOKZ_GAME_ABI,
+    functionName: 'nextTournamentId',
+  })
+
+  return { count: count as bigint | undefined, isLoading }
+}
+
+/**
+ * Hook to check if a player is joined in a specific tournament.
+ */
+export function useInTournament(tournamentId: bigint, playerAddress?: `0x${string}`) {
+  const { data: isIn, isLoading, refetch } = useReadContract({
+    address: CONTRACT_ADDRESS,
+    abi: BLOKZ_GAME_ABI,
+    functionName: 'inTournament',
+    args: playerAddress ? [tournamentId, playerAddress] : undefined,
+  })
+
+  return { isIn: isIn as boolean | undefined, isLoading, refetch }
+}
+
+/**
+ * Hook to check cUSD allowance for the BlokzGame contract.
+ */
+export function useCUSDAllowance(ownerAddress?: `0x${string}`) {
+  const { data: allowance, isLoading, refetch } = useReadContract({
+    address: CUSD_ADDRESS,
+    abi: ERC20_ABI,
+    functionName: 'allowance',
+    args: ownerAddress ? [ownerAddress, CONTRACT_ADDRESS] : undefined,
+  })
+
+  return { allowance: allowance as bigint | undefined, isLoading, refetch }
+}
+
 
 /**
  * Hook to get a player's registered username.
@@ -257,4 +324,24 @@ export function useSetUsername() {
 
   return { setUsername, hash, isPending, isConfirming, isSuccess, error }
 }
+
+/**
+ * Hook to approve cUSD spending for the BlokzGame contract.
+ */
+export function useApproveCUSD() {
+  const { writeContract, data: hash, error, isPending } = useWriteContract()
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash })
+
+  const approve = (amount: bigint) => {
+    writeContract({
+      address: CUSD_ADDRESS,
+      abi: ERC20_ABI,
+      functionName: 'approve',
+      args: [CONTRACT_ADDRESS, amount],
+    })
+  }
+
+  return { approve, hash, isPending, isConfirming, isSuccess, error }
+}
+
 

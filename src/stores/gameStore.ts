@@ -11,9 +11,13 @@ interface GameState {
   onChainGameId: bigint | null
   onChainSeed: `0x${string}` | null
   onChainStatus: 'none' | 'pending' | 'syncing' | 'registered' | 'failed'
+  tournamentId: bigint | null
   
   startGame: (seed: bigint) => void
   setOnChainData: (gameId: bigint, seed: `0x${string}`, status?: 'registered' | 'pending' | 'syncing' | 'failed') => void
+  setOnChainGameId: (id: bigint) => void
+  setOnChainSeed: (seed: `0x${string}`) => void
+  setTournamentId: (id: bigint | null) => void
   placePiece: (index: number, r: number, c: number) => any
   resetGame: () => void
   forceReset: () => void
@@ -28,6 +32,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   onChainGameId: null,
   onChainSeed: null,
   onChainStatus: 'none',
+  tournamentId: null,
 
   startGame: (seed) => {
     const session = new GameSession(seed)
@@ -48,6 +53,10 @@ export const useGameStore = create<GameState>((set, get) => ({
   setOnChainData: (gameId, seed, status = 'registered') => {
     set({ onChainGameId: gameId, onChainSeed: seed, onChainStatus: status })
   },
+
+  setOnChainGameId: (id) => set({ onChainGameId: id }),
+  setOnChainSeed: (seed) => set({ onChainSeed: seed }),
+  setTournamentId: (id) => set({ tournamentId: id }),
 
   placePiece: (index, r, c) => {
     const { gameSession } = get()
@@ -80,7 +89,8 @@ export const useGameStore = create<GameState>((set, get) => ({
       isGameOver: false,
       onChainGameId: null,
       onChainSeed: null,
-      onChainStatus: 'none'
+      onChainStatus: 'none',
+      tournamentId: null
     })
   }
 }))
