@@ -89,8 +89,12 @@ export class TouchController {
     const ghostGridPos = this.gridRenderer.screenToGrid(e.clientX, e.clientY - 40)
     
     if (ghostGridPos) {
-      // @ts-ignore
       const shape = (window as any).currentPieces[this.dragIndex]
+      if (!shape) {
+        this.ghostPos = null;
+        ;(window as any).activeGhost = null;
+        return;
+      }
       const isValid = this.canPlace(shape, ghostGridPos.row, ghostGridPos.col)
       this.ghostPos = ghostGridPos;
       
@@ -109,7 +113,7 @@ export class TouchController {
     if (this.ghostPos) {
       // @ts-ignore
       const shape = (window as any).currentPieces[this.dragIndex]
-      if (this.canPlace(shape, this.ghostPos.row, this.ghostPos.col)) {
+      if (shape && this.canPlace(shape, this.ghostPos.row, this.ghostPos.col)) {
         this.onPlace(this.dragIndex, this.ghostPos.row, this.ghostPos.col)
       }
     }
