@@ -13,6 +13,14 @@ export const BLOKZ_GAME_ABI = [
   },
   {
     "type": "function",
+    "name": "usernames",
+    "inputs": [{ "name": "", "type": "address", "internalType": "address" }],
+    "outputs": [{ "name": "", "type": "string", "internalType": "string" }],
+    "stateMutability": "view"
+  },
+
+  {
+    "type": "function",
     "name": "createTournament",
     "inputs": [
       { "name": "fee", "type": "uint256", "internalType": "uint256" },
@@ -102,7 +110,15 @@ export const BLOKZ_GAME_ABI = [
   },
   {
     "type": "function",
+    "name": "setUsername",
+    "inputs": [{ "name": "name", "type": "string", "internalType": "string" }],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "startGame",
+
     "inputs": [{ "name": "seedHash", "type": "bytes32", "internalType": "bytes32" }],
     "outputs": [{ "name": "gameId", "type": "uint256", "internalType": "uint256" }],
     "stateMutability": "nonpayable"
@@ -182,5 +198,25 @@ export const BLOKZ_GAME_ABI = [
       { "name": "entryFee", "type": "uint256", "indexed": false }
     ],
     "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "UsernameRegistered",
+    "inputs": [
+      { "name": "player", "type": "address", "indexed": true },
+      { "name": "username", "type": "string", "indexed": false }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "error",
+    "name": "UsernameTooLong",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "UsernameTooShort",
+    "inputs": []
   }
 ] as const
+
