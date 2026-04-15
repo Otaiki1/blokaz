@@ -26,20 +26,31 @@ export function generateGameSeed(playerAddress: `0x${string}`) {
  * Hook to get the current leaderboard for a specific epoch.
  */
 export function useLeaderboard(epoch?: bigint) {
-  const { data: currentEpoch } = useReadContract({
+  const { data: currentEpoch, isLoading: isLoadingEpoch } = useReadContract({
     address: CONTRACT_ADDRESS,
     abi: BLOKZ_GAME_ABI,
     functionName: 'getCurrentEpoch',
   })
 
-  const { data: leaderboard, isLoading, refetch } = useReadContract({
+  // Only query the leaderboard if we have an epoch to query
+  const targetEpoch = epoch ?? currentEpoch
+
+  const { data: leaderboard, isLoading: isLoadingBoard, refetch } = useReadContract({
     address: CONTRACT_ADDRESS,
     abi: BLOKZ_GAME_ABI,
     functionName: 'getLeaderboard',
-    args: [epoch ?? currentEpoch ?? 0n],
+    args: targetEpoch !== undefined ? [targetEpoch] : undefined,
+    query: {
+      enabled: targetEpoch !== undefined
+    }
   })
 
-  return { leaderboard, isLoading, currentEpoch, refetch }
+  return { 
+    leaderboard, 
+    isLoading: isLoadingEpoch || isLoadingBoard, 
+    currentEpoch, 
+    refetch 
+  }
 }
 
 /**
@@ -69,6 +80,21 @@ export function useTournament(tournamentId: bigint) {
 
   return { tournament, isLoading }
 }
+
+/**
+ * Hook to get a player's registered username.
+ */
+export function useUsername(address?: `0x${string}`) {
+  const { data: username, isLoading, refetch } = useReadContract({
+    address: CONTRACT_ADDRESS,
+    abi: BLOKZ_GAME_ABI,
+    functionName: 'usernames',
+    args: address ? [address] : undefined,
+  })
+
+  return { username: username as string | undefined, isLoading, refetch }
+}
+
 
 // ───────────────────────────────────────────────────────── Write Hooks ──
 
@@ -212,3 +238,23 @@ export function useWithdrawRevenue() {
 
   return { withdraw, hash, isPending, isConfirming, isSuccess, error }
 }
+
+/**
+ * Hook to register or update a player's username.
+ */
+export function useSetUsername() {
+  const { writeContract, data: hash, error, isPending } = useWriteContract()
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash })
+
+  const setUsername = (name: string) => {
+    writeContract({
+      address: CONTRACT_ADDRESS,
+      abi: BLOKZ_GAME_ABI,
+      functionName: 'setUsername',
+      args: [name],
+    })
+  }
+
+  return { setUsername, hash, isPending, isConfirming, isSuccess, error }
+}
+
