@@ -39,6 +39,7 @@ contract BlokzGame is Ownable, ReentrancyGuard {
     mapping(uint256 => Game) public games;
     uint256 public nextGameId;
     mapping(address => uint256) public activeGame;
+    mapping(address => string) public usernames;
 
     // ────────────────────────────────────────────────────── Leaderboard state ──
 
@@ -81,6 +82,7 @@ contract BlokzGame is Ownable, ReentrancyGuard {
     event TournamentJoined(uint256 indexed tournamentId, address indexed player);
     event TournamentFinalized(uint256 indexed tournamentId, address indexed winner, uint256 prize);
     event TournamentScoreSubmitted(uint256 indexed tournamentId, address indexed player, uint32 score);
+    event UsernameRegistered(address indexed player, string username);
 
     // ─────────────────────────────────────────────────────────── Errors ──
 
@@ -99,6 +101,8 @@ contract BlokzGame is Ownable, ReentrancyGuard {
     error NotInTournament();
     error InvalidTournamentParams();
     error TransferFailed();
+    error UsernameTooLong();
+    error UsernameTooShort();
 
     // ───────────────────────────────────────────────────────── Constructor ──
 
@@ -140,6 +144,17 @@ contract BlokzGame is Ownable, ReentrancyGuard {
         _updateLeaderboard(_currentEpoch(), msg.sender, score, gameId);
         emit ScoreSubmitted(gameId, msg.sender, score);
     }
+
+    // ─────────────────────────────────────────────────── User Identity ──
+
+    function setUsername(string calldata name) external {
+        uint256 len = bytes(name).length;
+        if (len < 3) revert UsernameTooShort();
+        if (len > 16) revert UsernameTooLong();
+        usernames[msg.sender] = name;
+        emit UsernameRegistered(msg.sender, name);
+    }
+
 
     // ───────────────────────────────────────────────── Spot-Check Logic ──
 
