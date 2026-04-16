@@ -107,13 +107,18 @@ const TournamentGameScreen: React.FC<TournamentGameScreenProps> = ({ onBackToHal
   const handleStartGame = () => {
     if (!isConnected || !address) return
     
+    // ESSENTIAL: Pull freshest state from store to avoid stale closures during "Play Again"
+    const freshState = useGameStore.getState()
+    const { onChainSeed: latestSeed, onChainGameId: latestGameId } = freshState
+
     // Check if we HAVE a hydrated seed with an ACTIVE gameId
-    if (onChainSeed && onChainGameId && onChainGameId !== 0n) {
-      console.log('Using hydrated seed for tournament game engine recovery:', onChainSeed)
-      const localSeed = BigInt(keccak256(encodePacked(['bytes32', 'address'], [onChainSeed, address])).slice(0, 18))
+    if (latestSeed && latestGameId && latestGameId !== 0n) {
+      console.log('Using fresh store state for tournament match recovery:', latestSeed)
+      const localSeed = BigInt(keccak256(encodePacked(['bytes32', 'address'], [latestSeed, address])).slice(0, 18))
       startGame(localSeed, true) // TRUE to preserve onChain data
       return
     }
+
 
     const { seed, hash } = generateGameSeed(address)
     

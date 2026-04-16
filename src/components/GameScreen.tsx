@@ -101,13 +101,18 @@ const GameScreen: React.FC<GameScreenProps> = ({ onOpenLeaderboard }) => {
 
   // 1. Handle Start (Instant + Background Sync)
   const handleStartGame = () => {
+    // ESSENTIAL: Pull freshest state from store to avoid stale closures during "Play Again"
+    const freshState = useGameStore.getState()
+    const { onChainSeed: latestSeed, onChainGameId: latestGameId } = freshState
+
     // Check if we HAVE a hydrated seed with an ACTIVE gameId
-    if (isConnected && address && onChainSeed && onChainGameId && onChainGameId !== 0n) {
-       console.log('Using hydrated seed for classic game engine recovery:', onChainSeed)
-       const localSeed = BigInt(keccak256(encodePacked(['bytes32', 'address'], [onChainSeed, address])).slice(0, 18))
+    if (isConnected && address && latestSeed && latestGameId && latestGameId !== 0n) {
+       console.log('Using fresh store state for game engine recovery:', latestSeed)
+       const localSeed = BigInt(keccak256(encodePacked(['bytes32', 'address'], [latestSeed, address])).slice(0, 18))
        startGame(localSeed, true) // Preserve hydrated state
        return
     }
+
 
     // Generate seed for BOTH local engine and on-chain registration
     const dummyAddr = address || ZERO_ADDRESS
