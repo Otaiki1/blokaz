@@ -143,7 +143,9 @@ const GameOverModal: React.FC<GameOverModalProps> = ({ score, onPlayAgain, mode 
   // Improved canSubmit: Allow submission if we have an effective game ID and seeds match,
   // even if the in-memory onChainStatus is 'none' (recovery case)
   const isRegisteredOrRecovered = onChainStatus === 'registered' || (!!effectiveGameId && onChainStatus === 'none' && !isLoading)
-  const canSubmit = !isRegistering && !isAllSuccess && isSeedMatch && !!effectiveGameId && isRegisteredOrRecovered
+  const isPotentialConflict = effectiveGameId && !isSeedMatch && !isLoading && gameData
+  const canSubmit = !isRegistering && !isAllSuccess && isSeedMatch && !!effectiveGameId && isRegisteredOrRecovered && !isPotentialConflict
+
 
   // Clear seed from storage once submission is successful
   React.useEffect(() => {
@@ -204,8 +206,9 @@ const GameOverModal: React.FC<GameOverModalProps> = ({ score, onPlayAgain, mode 
             )}
           </div>
 
-          {effectiveGameId && !isSeedMatch && !isLoading && gameData && onChainStatus === 'registered' && (
+          {effectiveGameId && !isSeedMatch && !isLoading && gameData && (
             <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-xs text-left">
+
               <div className="font-bold mb-1 flex items-center gap-2">
                 <span className="text-lg">⚠️</span> 
                 {onChainHash === EMPTY_HASH 

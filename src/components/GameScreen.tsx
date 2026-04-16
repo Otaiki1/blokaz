@@ -38,10 +38,13 @@ const GameScreen: React.FC<GameScreenProps> = ({ onOpenLeaderboard }) => {
   } = useGameStore()
 
   const { address, isConnected } = useAccount()
-  const { refetch: refetchActiveGame } = useActiveGame(address)
+  const { gameId: onChainActiveGameId, isLoading: isLoadingActiveGame, refetch: refetchActiveGame } = useActiveGame(address)
   const { startGame: contractStartGame, isPending, isConfirming, isSuccess } = useStartGame()
   
   const [currentSeed, setCurrentSeed] = useState<{seed: `0x${string}`, hash: `0x${string}`} | null>(null)
+  const [isSyncingContract, setIsSyncingContract] = useState(true)
+  const [sessionConflict, setSessionConflict] = useState(false)
+
 
   // 0. Account Switch Protection
   // If the wallet address changes, we MUST clear the current in-memory session 
@@ -55,9 +58,12 @@ const GameScreen: React.FC<GameScreenProps> = ({ onOpenLeaderboard }) => {
     }
   }, [address, forceReset])
   
-  // 0.5 Hydration: Restore session from localStorage on mount/address match
+  // 0.5 Hydration & Reconciliation
   useEffect(() => {
-    if (!isConnected || !address) return
+    if (!isConnected || !address || isLoadingActiveGame) {
+      if (!isConnected) setIsSyncingContract(false)
+      return
+    }
 
     const storedSession = readStoredGameSession(
       CLASSIC_SESSION_STORAGE_KEY,
@@ -65,11 +71,33 @@ const GameScreen: React.FC<GameScreenProps> = ({ onOpenLeaderboard }) => {
       CONTRACT_ADDRESS
     )
 
-    if (storedSession) {
-      console.log('Hydrating classic session from storage', storedSession)
-      setOnChainData(BigInt(storedSession.gameId || 0), storedSession.seed, 'none')
+    const contractActiveId = onChainActiveGameId as bigint || 0n
+
+    if (contractActiveId !== 0n) {
+      // Contract says we have a game. Check local storage for matching seed.
+      if (storedSession && (storedSession.gameId === contractActiveId.toString() || !storedSession.gameId)) {
+        console.log('Recovering active classic on-chain session:', contractActiveId)
+        setOnChainData(contractActiveId, storedSession.seed, 'none')
+        setSessionConflict(false)
+      } else {
+        console.warn('Session conflict: On-chain game exists but local seed is missing or mismatching.', {
+          contractActiveId: contractActiveId.toString(),
+          storedId: storedSession?.gameId
+        })
+        setSessionConflict(true)
+      }
+    } else {
+      // Contract says no active game. Clear any potentially stale local session.
+      if (storedSession) {
+         console.log('Contract has no active game, starting fresh')
+         setOnChainData(0n, null, 'none')
+      }
+      setSessionConflict(false)
     }
-  }, [isConnected, address, setOnChainData])
+
+    setIsSyncingContract(false)
+  }, [isConnected, address, isLoadingActiveGame, onChainActiveGameId, setOnChainData])
+
 
   // 1. Handle Start (Instant + Background Sync)
   const handleStartGame = () => {
@@ -340,10 +368,41 @@ const GameScreen: React.FC<GameScreenProps> = ({ onOpenLeaderboard }) => {
                 
                 <button
                   onClick={handleStartGame}
-                  className="w-full bg-blue-500 hover:bg-blue-600 active:scale-95 text-white font-bold py-4 rounded-xl shadow-lg transition-all text-xl"
+                  disabled={isPending || isConfirming || isSyncingContract || sessionConflict}
+                  className="w-full bg-blue-500 hover:bg-blue-600 active:scale-95 text-white font-bold py-4 rounded-xl shadow-lg transition-all text-xl disabled:opacity-50 flex items-center justify-center gap-3"
                 >
-                  Start Classic Game
+                  {isSyncingContract ? (
+                    <>
+                      <div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+                      Syncing...
+                    </>
+                  ) : sessionConflict ? (
+                    'Session Conflict'
+                  ) : (
+                    'Start Classic Game'
+                  )}
                 </button>
+
+                {sessionConflict && (
+                  <div className="mt-4 p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-left">
+                    <p className="text-[10px] text-red-500 font-black uppercase tracking-widest mb-2 flex items-center gap-2">
+                       <span>⚠️</span> Desync Detected
+                    </p>
+                    <p className="text-[11px] text-gray-400 leading-relaxed mb-4">
+                      The blockchain still has an active game recorded that doesn't match your browser. You must reset to play.
+                    </p>
+                    <button
+                      onClick={() => {
+                        useGameStore.getState().forceReset()
+                        setSessionConflict(false)
+                      }}
+                      className="w-full py-2 bg-red-500 hover:bg-red-600 text-white text-[10px] font-black uppercase tracking-widest rounded-lg transition-all"
+                    >
+                      Reset Session
+                    </button>
+                  </div>
+                )}
+
                 
                 <p className="text-gray-500 text-[10px] mt-4 uppercase tracking-widest opacity-60">
                   {isConnected

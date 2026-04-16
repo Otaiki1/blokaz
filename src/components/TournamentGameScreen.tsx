@@ -39,15 +39,18 @@ const TournamentGameScreen: React.FC<TournamentGameScreenProps> = ({ onBackToHal
   } = useGameStore()
 
   const { address, isConnected } = useAccount()
-  const { refetch: refetchActiveGame } = useActiveGame(address)
+  const { gameId: onChainActiveGameId, isLoading: isLoadingActiveGame, refetch: refetchActiveGame } = useActiveGame(address)
   const { startTournamentGame: contractStartTournamentGame, isPending, isConfirming, isSuccess } = useStartTournamentGame()
   
   const [currentSeed, setCurrentSeed] = useState<{seed: `0x${string}`, hash: `0x${string}`} | null>(null)
   const [isLeaderboardOpen, setIsLeaderboardOpen] = useState(false)
+  const [isSyncingContract, setIsSyncingContract] = useState(true)
+  const [sessionConflict, setSessionConflict] = useState(false)
 
-  // --- HYDRATION ---
+
+  // --- HYDRATION & RECONCILIATION ---
   useEffect(() => {
-    if (!isConnected || !address) return
+    if (!isConnected || !address || isLoadingActiveGame) return
 
     const storedSession = readStoredGameSession(
       TOURNAMENT_SESSION_STORAGE_KEY,
@@ -55,15 +58,43 @@ const TournamentGameScreen: React.FC<TournamentGameScreenProps> = ({ onBackToHal
       CONTRACT_ADDRESS
     )
 
-    if (storedSession) {
-      console.log('Hydrating tournament session from storage', storedSession)
-      setOnChainData(BigInt(storedSession.gameId || 0), storedSession.seed, 'none')
+    const contractActiveId = onChainActiveGameId as bigint || 0n
 
-      if (storedSession.tournamentId && !tournamentId) {
-        setTournamentId(BigInt(storedSession.tournamentId))
+    if (contractActiveId !== 0n) {
+      // Contract says we have a game. Check if we have matching seed.
+      if (storedSession && (storedSession.gameId === contractActiveId.toString() || !storedSession.gameId)) {
+        console.log('Recovering active on-chain session:', contractActiveId)
+        setOnChainData(contractActiveId, storedSession.seed, 'none')
+        setSessionConflict(false)
+      } else {
+        console.warn('Session conflict: On-chain game exists but local seed is missing or mismatching.', {
+          contractActiveId: contractActiveId.toString(),
+          storedId: storedSession?.gameId
+        })
+        setSessionConflict(true)
       }
+    } else {
+      // Contract says no active game. If storage has one, it's stale.
+      if (storedSession) {
+         console.log('Contract has no active game, clearing stale local session')
+         // We don't necessarily need to clear it, but we shouldn't use it as "registered"
+         setOnChainData(0n, null, 'none')
+      }
+      setSessionConflict(false)
     }
-  }, [isConnected, address, setOnChainData, setTournamentId, tournamentId])
+    
+    setIsSyncingContract(false)
+  }, [isConnected, address, isLoadingActiveGame, onChainActiveGameId, setOnChainData])
+
+  // Basic hydration for mode state (tournamentId)
+  useEffect(() => {
+    if (!isConnected || !address) return
+    const storedSession = readStoredGameSession(TOURNAMENT_SESSION_STORAGE_KEY, address, CONTRACT_ADDRESS)
+    if (storedSession?.tournamentId && !tournamentId) {
+      setTournamentId(BigInt(storedSession.tournamentId))
+    }
+  }, [isConnected, address, setTournamentId, tournamentId])
+
 
   // Redirect if no tournamentId is active (sanity check)
   useEffect(() => {
@@ -333,11 +364,40 @@ const TournamentGameScreen: React.FC<TournamentGameScreenProps> = ({ onBackToHal
                 
                 <button
                   onClick={handleStartGame}
-                  disabled={isPending || isConfirming}
+                  disabled={isPending || isConfirming || isSyncingContract || sessionConflict}
                   className="w-full bg-gradient-to-r from-blue-600 to-indigo-700 hover:from-blue-700 hover:to-indigo-800 text-white font-black py-4 rounded-2xl shadow-xl shadow-blue-500/20 transition-all active:scale-95 text-sm uppercase tracking-widest disabled:opacity-50"
                 >
-                  {isPending || isConfirming ? 'Preparing...' : 'Commence Match'}
+                  {isSyncingContract ? (
+                    <div className="flex items-center justify-center gap-2">
+                       <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+                       Syncing...
+                    </div>
+                  ) : sessionConflict ? (
+                    'Session Conflict'
+                  ) : isPending || isConfirming ? (
+                    'Preparing...'
+                  ) : (
+                    'Commence Match'
+                  )}
                 </button>
+
+                {sessionConflict && (
+                  <div className="mt-4 p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-left">
+                    <p className="text-[9px] text-red-400 font-bold uppercase tracking-widest mb-2">⚠️ Matching Error</p>
+                    <p className="text-[10px] text-gray-400 leading-relaxed mb-4">
+                      An active session exists on the blockchain with a different record. You must reset to start a fresh match.
+                    </p>
+                    <button
+                      onClick={() => {
+                        useGameStore.getState().forceReset(true)
+                        setSessionConflict(false)
+                      }}
+                      className="w-full py-2 bg-red-500 hover:bg-red-600 text-white text-[10px] font-black uppercase tracking-widest rounded-lg transition-all"
+                    >
+                      Reset Session
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           )}
