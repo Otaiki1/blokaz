@@ -3,23 +3,28 @@ import { ConnectButton } from '@rainbow-me/rainbowkit'
 import { useAccount } from 'wagmi'
 import { useOwner } from '../hooks/useBlokzGame'
 
+type HeaderView = 'classic' | 'tournaments' | 'tournament-play' | 'admin'
+
 interface HeaderProps {
-  onShowLeaderboard: () => void
-  onViewChange: (view: 'game' | 'tournaments' | 'admin') => void
-  activeView: 'game' | 'tournaments' | 'admin'
+  onShowLeaderboard?: () => void
+  onViewChange: (view: 'classic' | 'tournaments' | 'admin') => void
+  activeView: HeaderView
+  showLeaderboardAction: boolean
 }
 
 export const Header: React.FC<HeaderProps> = ({ 
   onShowLeaderboard, 
   onViewChange, 
-  activeView 
+  activeView,
+  showLeaderboardAction
 }) => {
   const { address } = useAccount()
   const { owner } = useOwner()
 
   const isOwner = address && owner && address.toLowerCase() === owner.toLowerCase()
+  const isTournamentView = activeView === 'tournaments' || activeView === 'tournament-play'
 
-  const safeNavigate = (view: 'game' | 'tournaments' | 'admin') => {
+  const safeNavigate = (view: 'classic' | 'tournaments' | 'admin') => {
     console.log('Header: attempting to navigate to', view)
     if (typeof onViewChange === 'function') {
       onViewChange(view)
@@ -30,7 +35,7 @@ export const Header: React.FC<HeaderProps> = ({
     <header className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-6 py-4 bg-black/20 backdrop-blur-md border-b border-white/10">
       <div 
         className="flex items-center gap-2 cursor-pointer group"
-        onClick={() => safeNavigate('game')}
+        onClick={() => safeNavigate('classic')}
       >
         <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center font-bold text-white shadow-lg shadow-blue-500/20 group-hover:scale-110 transition-transform">
           B
@@ -42,9 +47,9 @@ export const Header: React.FC<HeaderProps> = ({
       
       <div className="flex items-center gap-4">
         <button 
-          onClick={() => safeNavigate('game')}
+          onClick={() => safeNavigate('classic')}
           className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all text-sm font-medium group ${
-            activeView === 'game' 
+            activeView === 'classic' 
               ? 'bg-blue-500/20 border border-blue-500/40 text-blue-400' 
               : 'bg-white/5 border border-white/10 hover:bg-white/10 text-gray-400 hover:text-white'
           }`}
@@ -56,7 +61,7 @@ export const Header: React.FC<HeaderProps> = ({
         <button 
           onClick={() => safeNavigate('tournaments')}
           className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all text-sm font-medium group ${
-            activeView === 'tournaments' 
+            isTournamentView 
               ? 'bg-blue-500/20 border border-blue-500/40 text-blue-400' 
               : 'bg-white/5 border border-white/10 hover:bg-white/10 text-gray-400 hover:text-white'
           }`}
@@ -79,12 +84,14 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
         )}
 
-        <button 
-          onClick={onShowLeaderboard}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition-all text-sm font-medium group text-gray-400 hover:text-white"
-        >
-          Rankings
-        </button>
+        {showLeaderboardAction && onShowLeaderboard && (
+          <button 
+            onClick={onShowLeaderboard}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition-all text-sm font-medium group text-gray-400 hover:text-white"
+          >
+            Classic Rankings
+          </button>
+        )}
 
         <ConnectButton 
           accountStatus="avatar" 

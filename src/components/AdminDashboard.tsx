@@ -3,8 +3,8 @@ import { useCreateTournament, useWithdrawRevenue, useProtocolRevenue, USDC_DECIM
 import { parseUnits, formatUnits } from 'viem'
 
 const AdminDashboard: React.FC = () => {
-  const { createTournament, isPending: isCreating, isSuccess: isCreateSuccess } = useCreateTournament()
-  const { withdraw, isPending: isWithdrawing, isSuccess: isWithdrawSuccess } = useWithdrawRevenue()
+  const { createTournament, isPending: isCreating, isSuccess: isCreateSuccess, error: createError } = useCreateTournament()
+  const { withdraw, isPending: isWithdrawing, isSuccess: isWithdrawSuccess, error: withdrawError } = useWithdrawRevenue()
   const { revenue, isLoading: isLoadingRevenue } = useProtocolRevenue()
 
   const [fee, setFee] = useState('0.1')
@@ -13,7 +13,7 @@ const AdminDashboard: React.FC = () => {
 
   const handleCreate = () => {
     const feeWei = parseUnits(fee, USDC_DECIMALS)
-    const start = BigInt(Math.floor(Date.now() / 1000) + 300) // 5 mins from now
+    const start = BigInt(Math.floor(Date.now() / 1000) + 60) // 60 seconds from now
     const end = start + BigInt(Number(duration) * 3600)
     createTournament(feeWei, start, end, Number(maxPlayers))
   }
@@ -77,6 +77,12 @@ const AdminDashboard: React.FC = () => {
             
             {isCreateSuccess && (
               <p className="text-center text-green-500 text-xs font-bold animate-pulse">Tournament live on-chain!</p>
+            )}
+
+            {createError && (
+              <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-[10px] whitespace-pre-wrap break-words">
+                <span className="font-bold">Error:</span> {createError.message}
+              </div>
             )}
           </div>
         </div>

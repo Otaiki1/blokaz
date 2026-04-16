@@ -42,7 +42,7 @@ const TournamentHall: React.FC<TournamentHallProps> = ({ onBack, onEnterMatch })
 
       {/* Main Content */}
       <div className="bg-[#1a1b24]/40 backdrop-blur-2xl border border-white/5 rounded-[2rem] p-8 min-h-[500px]">
-        <TournamentSection />
+        <TournamentSection onStartMatch={() => onEnterMatch()} />
       </div>
 
       {/* Footer / Navigation */}

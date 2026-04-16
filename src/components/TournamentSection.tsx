@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
+import TournamentLeaderboard from './TournamentLeaderboard'
 import { 
   useTournamentCount, 
   useTournament, 
@@ -16,9 +17,10 @@ import { useGameStore } from '../stores/gameStore'
 interface TournamentCardProps {
   id: bigint
   onStartMatch: (id: bigint) => void
+  onViewRankings: (id: bigint, prizePool: bigint) => void
 }
 
-const TournamentCard: React.FC<TournamentCardProps> = ({ id, onStartMatch }) => {
+const TournamentCard: React.FC<TournamentCardProps> = ({ id, onStartMatch, onViewRankings }) => {
   const { address } = useAccount()
   const { tournament, isLoading: isLoadingDetails, refetch: refetchTournament } = useTournament(id)
   const { isIn, isLoading: isLoadingIn, refetch: refetchIn } = useInTournament(id, address)
@@ -32,12 +34,16 @@ const TournamentCard: React.FC<TournamentCardProps> = ({ id, onStartMatch }) => 
     if (isApproveSuccess) refetchAllowance()
   }, [isApproveSuccess, refetchAllowance])
 
+  const joinTriggeredRef = useRef(false)
   useEffect(() => {
-    if (isJoinSuccess) {
+    if (isJoinSuccess && !joinTriggeredRef.current) {
+      joinTriggeredRef.current = true
       refetchIn()
       refetchTournament()
+      // Automatically jump to the game board
+      onStartMatch(id)
     }
-  }, [isJoinSuccess, refetchIn, refetchTournament])
+  }, [isJoinSuccess, id, onStartMatch, refetchIn, refetchTournament])
 
   useEffect(() => {
     if (isFinalizeSuccess) {
@@ -45,19 +51,28 @@ const TournamentCard: React.FC<TournamentCardProps> = ({ id, onStartMatch }) => 
     }
   }, [isFinalizeSuccess, refetchTournament])
 
+  const [now, setNow] = useState(BigInt(Math.floor(Date.now() / 1000)))
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setNow(BigInt(Math.floor(Date.now() / 1000)))
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [])
+
   if (isLoadingDetails || !tournament) {
     return <div className="h-32 bg-white/5 rounded-2xl animate-pulse" />
   }
 
   const [creator, entryFee, startTime, endTime, maxPlayers, playerCount, finalized, prizePool] = tournament as any
-  
-  const now = BigInt(Math.floor(Date.now() / 1000))
+
   const isStarted = now >= startTime
   const isEnded = now >= endTime
   const isFull = playerCount >= maxPlayers
   const needsApproval = allowance !== undefined && allowance < entryFee
 
   const formatTime = (ts: bigint) => new Date(Number(ts) * 1000).toLocaleDateString()
+  const formatDateTime = (ts: bigint) => new Date(Number(ts) * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   const formatAmount = (amt: bigint) => formatUnits(amt, USDC_DECIMALS)
 
   const handleJoin = async () => {
@@ -99,30 +114,66 @@ const TournamentCard: React.FC<TournamentCardProps> = ({ id, onStartMatch }) => 
       {isIn ? (
         <div className="space-y-2">
           {!isEnded && isStarted && (
-            <button 
-              onClick={() => onStartMatch(id)}
-              className="w-full py-3 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white font-black rounded-xl shadow-lg shadow-blue-500/20 transition-all active:scale-95 text-sm uppercase tracking-widest"
-            >
-              Start Tournament Match
-            </button>
+            <div className="flex gap-2">
+              <button 
+                onClick={() => onStartMatch(id)}
+                className="flex-[2] py-3 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white font-black rounded-xl shadow-lg shadow-blue-500/20 transition-all active:scale-95 text-sm uppercase tracking-widest"
+              >
+                Start Match
+              </button>
+              <button 
+                onClick={() => onViewRankings(id, prizePool)}
+                className="flex-1 py-3 bg-white/5 hover:bg-white/10 text-white border border-white/10 font-bold rounded-xl transition-all text-xs uppercase"
+              >
+                Rankings
+              </button>
+            </div>
           )}
           {isEnded && !finalized && (
-            <button 
-              onClick={() => finalizeTournament(id)}
-              disabled={isFinalizing}
-              className="w-full py-3 bg-green-500 hover:bg-green-600 text-white font-black rounded-xl transition-all text-sm uppercase"
-            >
-              {isFinalizing ? 'Finalizing...' : 'Finalize & Distribute'}
-            </button>
+            <div className="flex gap-2">
+              <button 
+                onClick={() => finalizeTournament(id)}
+                disabled={isFinalizing}
+                className="flex-[2] py-3 bg-green-500 hover:bg-green-600 text-white font-black rounded-xl transition-all text-sm uppercase"
+              >
+                {isFinalizing ? 'Finalizing...' : 'Finalize'}
+              </button>
+              <button 
+                onClick={() => onViewRankings(id, prizePool)}
+                className="flex-1 py-3 bg-white/5 hover:bg-white/10 text-white border border-white/10 font-bold rounded-xl transition-all text-xs uppercase"
+              >
+                Board
+              </button>
+            </div>
           )}
           {isEnded && finalized && (
-            <div className="text-center py-2 bg-white/5 rounded-lg border border-white/5 text-[10px] text-gray-500 uppercase tracking-widest font-bold">
-              Tournament Finalized
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex-1 text-center py-2 bg-white/5 rounded-lg border border-white/5 text-[10px] text-gray-500 uppercase tracking-widest font-bold">
+                Finalized
+              </div>
+              <button 
+                onClick={() => onViewRankings(id, prizePool)}
+                className="px-4 py-2 bg-white/5 hover:bg-white/10 text-white border border-white/10 font-bold rounded-lg transition-all text-[9px] uppercase"
+              >
+                Final Results
+              </button>
             </div>
           )}
           {!isEnded && !isStarted && (
-            <div className="text-center py-2 bg-yellow-500/10 rounded-lg border border-yellow-500/20 text-[10px] text-yellow-500 uppercase tracking-widest font-bold">
-              Match Starts {formatTime(startTime)}
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex-1 text-center py-2 bg-yellow-500/10 rounded-lg border border-yellow-500/20 text-[10px] text-yellow-500 uppercase tracking-widest font-black">
+                {startTime - now < 3600n ? (
+                  `Starting in ${Math.floor(Number(startTime - now) / 60)}m ${Number(startTime - now) % 60}s`
+                ) : (
+                  `Starts ${formatTime(startTime)} @ ${formatDateTime(startTime)}`
+                )}
+              </div>
+              <button 
+                onClick={() => onViewRankings(id, prizePool)}
+                className="px-4 py-2 bg-white/5 hover:bg-white/10 text-white border border-white/10 font-bold rounded-lg transition-all text-[9px] uppercase"
+              >
+                Players
+              </button>
             </div>
           )}
         </div>
@@ -150,15 +201,31 @@ const TournamentCard: React.FC<TournamentCardProps> = ({ id, onStartMatch }) => 
   )
 }
 
-const TournamentSection: React.FC = () => {
+interface TournamentSectionProps {
+  onStartMatch?: (id: bigint) => void
+}
+
+const TournamentSection: React.FC<TournamentSectionProps> = ({ onStartMatch }) => {
   const { count, isLoading } = useTournamentCount()
   const { setTournamentId } = useGameStore()
+  
+  const [selectedTournament, setSelectedTournament] = useState<{id: bigint, prizePool: bigint} | null>(null)
+  const [isLeaderboardOpen, setIsLeaderboardOpen] = useState(false)
 
-  const handleStartMatch = (id: bigint) => {
+  const handleStartMatch = useCallback((id: bigint) => {
     setTournamentId(id)
-    // Implicitly navigate back to game screen to start the match
-    window.location.hash = '#/'
-  }
+    if (onStartMatch) {
+      onStartMatch(id)
+    } else {
+      // Fallback
+      window.location.hash = '#/classic'
+    }
+  }, [onStartMatch, setTournamentId])
+
+  const handleOpenLeaderboard = useCallback((id: bigint, prizePool: bigint) => {
+    setSelectedTournament({ id, prizePool })
+    setIsLeaderboardOpen(true)
+  }, [])
 
   return (
     <div className="p-4 space-y-4">
@@ -180,6 +247,7 @@ const TournamentSection: React.FC = () => {
               key={i} 
               id={BigInt(i)} 
               onStartMatch={handleStartMatch} 
+              onViewRankings={handleOpenLeaderboard}
             />
           ))
         ) : (
@@ -192,6 +260,13 @@ const TournamentSection: React.FC = () => {
           </div>
         )}
       </div>
+
+      <TournamentLeaderboard 
+        isOpen={isLeaderboardOpen}
+        onClose={() => setIsLeaderboardOpen(false)}
+        tournamentId={selectedTournament?.id ?? null}
+        prizePool={selectedTournament?.prizePool}
+      />
     </div>
   )
 }

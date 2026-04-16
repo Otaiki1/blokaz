@@ -13,7 +13,7 @@ interface GameState {
   onChainStatus: 'none' | 'pending' | 'syncing' | 'registered' | 'failed'
   tournamentId: bigint | null
   
-  startGame: (seed: bigint) => void
+  startGame: (seed: bigint, preserveOnChain?: boolean) => void
   setOnChainData: (gameId: bigint, seed: `0x${string}`, status?: 'registered' | 'pending' | 'syncing' | 'failed') => void
   setOnChainGameId: (id: bigint) => void
   setOnChainSeed: (seed: `0x${string}`) => void
@@ -34,20 +34,26 @@ export const useGameStore = create<GameState>((set, get) => ({
   onChainStatus: 'none',
   tournamentId: null,
 
-  startGame: (seed) => {
+  startGame: (seed, preserveOnChain = false) => {
     const session = new GameSession(seed)
     // @ts-ignore
     window.currentPieces = session.currentPieces
-    set({
+
+    const updates: Partial<GameState> = {
       gameSession: session,
       score: 0,
       comboStreak: 0,
       currentPieces: session.currentPieces,
-      isGameOver: false,
-      onChainGameId: null,
-      onChainSeed: null,
-      onChainStatus: 'none'
-    })
+      isGameOver: false
+    }
+
+    if (!preserveOnChain) {
+      updates.onChainGameId = null
+      updates.onChainSeed = null
+      updates.onChainStatus = 'none'
+    }
+
+    set(updates)
   },
 
   setOnChainData: (gameId, seed, status = 'registered') => {
@@ -80,7 +86,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     get().startGame(BigInt(Date.now()))
   },
 
-  forceReset: () => {
+  forceReset: (keepTournamentId = false) => {
     set({
       gameSession: null,
       score: 0,
@@ -90,7 +96,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       onChainGameId: null,
       onChainSeed: null,
       onChainStatus: 'none',
-      tournamentId: null
+      tournamentId: keepTournamentId ? get().tournamentId : null
     })
   }
 }))

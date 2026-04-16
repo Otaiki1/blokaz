@@ -103,7 +103,7 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ isOpen, onClose }) => {
           <div className="p-6 border-b border-white/5 flex items-center justify-between bg-white/5 mb-4">
             <div>
               <h2 className="text-2xl font-black tracking-tight bg-gradient-to-r from-white to-white/60 bg-clip-text text-transparent">
-                RANKINGS
+                CLASSIC RANKINGS
               </h2>
               <p className="text-[10px] text-blue-400 font-bold uppercase tracking-widest mt-1">
                 {currentEpoch !== undefined ? `Epoch #${currentEpoch.toString()}` : 'Loading Epoch...'}
@@ -126,7 +126,7 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ isOpen, onClose }) => {
             {/* List */}
             <div className="p-4 space-y-2">
             <h3 className="px-2 pb-2 text-[10px] font-black uppercase tracking-[0.2em] text-gray-600">
-              Global Players
+              Classic Players
             </h3>
             
             {isLoading ? (

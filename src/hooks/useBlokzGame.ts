@@ -108,6 +108,23 @@ export function useTournament(tournamentId: bigint) {
 }
 
 /**
+ * Hook to get the leaderboard for a specific tournament.
+ */
+export function useTournamentLeaderboard(tournamentId?: bigint) {
+  const { data: leaderboard, isLoading, refetch } = useReadContract({
+    address: CONTRACT_ADDRESS,
+    abi: BLOKZ_GAME_ABI,
+    functionName: 'getTournamentLeaderboard',
+    args: tournamentId !== undefined ? [tournamentId] : undefined,
+    query: {
+      enabled: tournamentId !== undefined
+    }
+  })
+
+  return { leaderboard, isLoading, refetch }
+}
+
+/**
  * Hook to get the total number of tournaments created.
  */
 export function useTournamentCount() {
@@ -193,9 +210,6 @@ export function useProtocolRevenue() {
 
 // ───────────────────────────────────────────────────────── Write Hooks ──
 
-/**
- * Hook to start a new game session on-chain.
- */
 export function useStartGame() {
   const { writeContract, data: hash, error, isPending } = useWriteContract()
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash })
@@ -210,6 +224,25 @@ export function useStartGame() {
   }
 
   return { startGame, hash, isPending, isConfirming, isSuccess, error }
+}
+
+/**
+ * Hook to start a new tournament-specific game session on-chain.
+ */
+export function useStartTournamentGame() {
+  const { writeContract, data: hash, error, isPending } = useWriteContract()
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash })
+
+  const startTournamentGame = (tournamentId: bigint, seedHash: `0x${string}`) => {
+    writeContract({
+      address: CONTRACT_ADDRESS,
+      abi: BLOKZ_GAME_ABI,
+      functionName: 'startTournamentGame',
+      args: [tournamentId, seedHash],
+    })
+  }
+
+  return { startTournamentGame, hash, isPending, isConfirming, isSuccess, error }
 }
 
 /**

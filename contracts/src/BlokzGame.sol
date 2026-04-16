@@ -4,6 +4,7 @@ pragma solidity ^0.8.24;
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 /**
  * @title BlokzGame
@@ -11,6 +12,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
  *         Standard non-upgradeable version for easy deployment.
  */
 contract BlokzGame is Ownable, ReentrancyGuard {
+    using SafeERC20 for IERC20;
     // ─────────────────────────────────────────────────────────── Constants ──
 
     address public constant USDC = 0x01C5C0122039549AD1493B8220cABEdD739BC44E;
@@ -39,6 +41,7 @@ contract BlokzGame is Ownable, ReentrancyGuard {
     mapping(uint256 => Game) public games;
     uint256 public nextGameId;
     mapping(address => uint256) public activeGame;
+    mapping(uint256 => uint256) public gameTournament; // gid -> tid (0 for classic)
     mapping(address => string) public usernames;
 
     // ────────────────────────────────────────────────────── Leaderboard state ──
@@ -83,6 +86,7 @@ contract BlokzGame is Ownable, ReentrancyGuard {
     event TournamentFinalized(uint256 indexed tournamentId, address indexed winner, uint256 prize);
     event TournamentScoreSubmitted(uint256 indexed tournamentId, address indexed player, uint32 score);
     event UsernameRegistered(address indexed player, string username);
+    event TournamentGameStarted(uint256 indexed tournamentId, uint256 indexed gameId, address indexed player);
 
     // ─────────────────────────────────────────────────────────── Errors ──
 
@@ -122,8 +126,30 @@ contract BlokzGame is Ownable, ReentrancyGuard {
             submittedAt: 0,
             status: GameStatus.ACTIVE
         });
+        gameTournament[gameId] = 0; // Classic
         activeGame[msg.sender] = gameId;
         emit GameStarted(gameId, msg.sender);
+    }
+
+    function startTournamentGame(uint256 tid, bytes32 seedHash) external returns (uint256 gameId) {
+        if (!inTournament[tid][msg.sender]) revert NotInTournament();
+        
+        Tournament storage t = tournaments[tid];
+        if (block.timestamp < t.startTime) revert TournamentNotStarted();
+        if (block.timestamp > t.endTime) revert TournamentAlreadyEnded();
+
+        gameId = nextGameId++;
+        games[gameId] = Game({
+            player: msg.sender,
+            seedHash: seedHash,
+            score: 0,
+            startedAt: uint64(block.timestamp),
+            submittedAt: 0,
+            status: GameStatus.ACTIVE
+        });
+        gameTournament[gameId] = tid;
+        activeGame[msg.sender] = gameId;
+        emit TournamentGameStarted(tid, gameId, msg.sender);
     }
 
     function submitScore(uint256 gameId, bytes32 seed, uint256[] calldata packedMoves, uint32 score, uint16 moveCount) external {
@@ -246,7 +272,7 @@ contract BlokzGame is Ownable, ReentrancyGuard {
         if (inTournament[tid][msg.sender]) revert AlreadyInTournament();
 
         if (t.entryFee > 0) {
-            if (!IERC20(USDC).transferFrom(msg.sender, address(this), t.entryFee)) revert TransferFailed();
+            IERC20(USDC).safeTransferFrom(msg.sender, address(this), t.entryFee);
             t.prizePool += t.entryFee;
         }
         t.playerCount++;
@@ -257,8 +283,14 @@ contract BlokzGame is Ownable, ReentrancyGuard {
 
     function submitTournamentScore(uint256 tid, uint256 gid, bytes32 seed, uint256[] calldata moves, uint32 score, uint16 mCount) external {
         if (!inTournament[tid][msg.sender]) revert NotInTournament();
+        if (gameTournament[gid] != tid) revert NotGameOwner();
+        
         Game storage g = games[gid];
         if (g.player != msg.sender || g.status != GameStatus.ACTIVE) revert GameNotActive();
+        
+        // Ensure the seed matches the committed hash (Security parity with submitScore)
+        if (keccak256(abi.encodePacked(seed, msg.sender)) != g.seedHash) revert InvalidSeed();
+
         Tournament storage t = tournaments[tid];
         if (block.timestamp < t.startTime) revert TournamentNotStarted();
         if (block.timestamp > t.endTime) revert TournamentAlreadyEnded();
@@ -312,6 +344,36 @@ contract BlokzGame is Ownable, ReentrancyGuard {
     }
 
     /**
+     * @notice Get the rankings for a specific tournament.
+     * @param tid The tournament ID.
+     */
+    function getTournamentLeaderboard(uint256 tid) external view returns (LeaderboardEntry[] memory) {
+        address[] memory players = _tournamentPlayers[tid];
+        if (players.length == 0) return new LeaderboardEntry[](0);
+
+        // We use a temporary array to sort without affecting state if called from a transaction,
+        // although this is a view function.
+        address[] memory playersCopy = new address[](players.length);
+        for (uint256 i = 0; i < players.length; i++) {
+            playersCopy[i] = players[i];
+        }
+
+        address[] memory sorted = _sortPlayersByScore(tid, playersCopy);
+        LeaderboardEntry[] memory leaderboard = new LeaderboardEntry[](sorted.length);
+
+        for (uint256 i = 0; i < sorted.length; i++) {
+            address p = sorted[i];
+            leaderboard[i] = LeaderboardEntry({
+                player: p,
+                score: tournamentScores[tid][p],
+                gameId: 0 // In tournaments we only track top score per player
+            });
+        }
+
+        return leaderboard;
+    }
+
+    /**
      * @notice Withdraw accumulated protocol revenue (cUSD) to owner.
      */
     function withdrawProtocolRevenue() external onlyOwner nonReentrant {
@@ -330,6 +392,8 @@ contract BlokzGame is Ownable, ReentrancyGuard {
     }
 
     function _safeCusdTransfer(address to, uint256 amount) internal {
-        if (amount > 0 && !IERC20(USDC).transfer(to, amount)) revert TransferFailed();
+        if (amount > 0) {
+            IERC20(USDC).safeTransfer(to, amount);
+        }
     }
 }

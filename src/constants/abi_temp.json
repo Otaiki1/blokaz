@@ -1,4 +1,4 @@
-export const BLOKZ_GAME_ABI = [
+[
   {
     "type": "constructor",
     "inputs": [
@@ -856,13 +856,41 @@ export const BLOKZ_GAME_ABI = [
     ],
     "anonymous": false
   },
-  { "type": "error", "name": "AlreadyHasActiveGame", "inputs": [] },
-  { "type": "error", "name": "AlreadyInTournament", "inputs": [] },
-  { "type": "error", "name": "GameNotActive", "inputs": [] },
-  { "type": "error", "name": "InvalidSeed", "inputs": [] },
-  { "type": "error", "name": "InvalidTournamentParams", "inputs": [] },
-  { "type": "error", "name": "NotGameOwner", "inputs": [] },
-  { "type": "error", "name": "NotInTournament", "inputs": [] },
+  {
+    "type": "error",
+    "name": "AlreadyHasActiveGame",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "AlreadyInTournament",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "GameNotActive",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidSeed",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidTournamentParams",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NotGameOwner",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NotInTournament",
+    "inputs": []
+  },
   {
     "type": "error",
     "name": "OwnableInvalidOwner",
@@ -885,7 +913,11 @@ export const BLOKZ_GAME_ABI = [
       }
     ]
   },
-  { "type": "error", "name": "ReentrancyGuardReentrantCall", "inputs": [] },
+  {
+    "type": "error",
+    "name": "ReentrancyGuardReentrantCall",
+    "inputs": []
+  },
   {
     "type": "error",
     "name": "SafeERC20FailedOperation",
@@ -897,14 +929,54 @@ export const BLOKZ_GAME_ABI = [
       }
     ]
   },
-  { "type": "error", "name": "SpotCheckFailed", "inputs": [] },
-  { "type": "error", "name": "TournamentAlreadyEnded", "inputs": [] },
-  { "type": "error", "name": "TournamentAlreadyFinalized", "inputs": [] },
-  { "type": "error", "name": "TournamentFull", "inputs": [] },
-  { "type": "error", "name": "TournamentNotFound", "inputs": [] },
-  { "type": "error", "name": "TournamentNotOver", "inputs": [] },
-  { "type": "error", "name": "TournamentNotStarted", "inputs": [] },
-  { "type": "error", "name": "TransferFailed", "inputs": [] },
-  { "type": "error", "name": "UsernameTooLong", "inputs": [] },
-  { "type": "error", "name": "UsernameTooShort", "inputs": [] }
-] as const
+  {
+    "type": "error",
+    "name": "SpotCheckFailed",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "TournamentAlreadyEnded",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "TournamentAlreadyFinalized",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "TournamentFull",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "TournamentNotFound",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "TournamentNotOver",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "TournamentNotStarted",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "TransferFailed",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "UsernameTooLong",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "UsernameTooShort",
+    "inputs": []
+  }
+]

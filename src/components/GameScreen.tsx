@@ -11,26 +11,34 @@ import GameOverModal from './GameOverModal'
 import { hapticImpact, hapticNotification, hapticError } from '../miniapp/haptics'
 import { useStartGame, generateGameSeed, useActiveGame } from '../hooks/useBlokzGame'
 import { useAccount } from 'wagmi'
+import { keccak256, encodePacked } from 'viem'
+import contractInfo from '../contract.json'
+import {
+  CLASSIC_SESSION_STORAGE_KEY,
+  readStoredGameSession,
+  writeStoredGameSession,
+} from '../utils/gameSessionStorage'
 
-const SEED_STORAGE_KEY = 'blokaz_active_seed'
+const CONTRACT_ADDRESS = contractInfo.address as `0x${string}`
+const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
 
-const GameScreen: React.FC = () => {
+interface GameScreenProps {
+  onOpenLeaderboard?: () => void
+}
+
+const GameScreen: React.FC<GameScreenProps> = ({ onOpenLeaderboard }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const gridRendererRef = useRef<GridRenderer | null>(null)
-  const pieceRendererRef = useRef<PieceRenderer | null>(null)
-  const touchControllerRef = useRef<TouchController | null>(null)
   const animManagerRef = useRef<AnimationManager>(new AnimationManager())
-  const rafRef = useRef<number>(0)
   const lastTimeRef = useRef<number>(0)
 
   const { 
     gameSession, score, comboStreak, isGameOver, 
-    startGame, setOnChainData, placePiece, resetGame, forceReset,
-    onChainStatus, tournamentId, setTournamentId
+    startGame, setOnChainData, forceReset,
+    onChainStatus, onChainSeed, onChainGameId
   } = useGameStore()
 
   const { address, isConnected } = useAccount()
-  const { gameId, isLoading: isLoadingActiveGame, refetch: refetchActiveGame } = useActiveGame(address)
+  const { refetch: refetchActiveGame } = useActiveGame(address)
   const { startGame: contractStartGame, isPending, isConfirming, isSuccess } = useStartGame()
   
   const [currentSeed, setCurrentSeed] = useState<{seed: `0x${string}`, hash: `0x${string}`} | null>(null)
@@ -46,11 +54,35 @@ const GameScreen: React.FC = () => {
         lastAddressRef.current = address
     }
   }, [address, forceReset])
+  
+  // 0.5 Hydration: Restore session from localStorage on mount/address match
+  useEffect(() => {
+    if (!isConnected || !address) return
+
+    const storedSession = readStoredGameSession(
+      CLASSIC_SESSION_STORAGE_KEY,
+      address,
+      CONTRACT_ADDRESS
+    )
+
+    if (storedSession) {
+      console.log('Hydrating classic session from storage', storedSession)
+      setOnChainData(BigInt(storedSession.gameId || 0), storedSession.seed, 'none')
+    }
+  }, [isConnected, address, setOnChainData])
 
   // 1. Handle Start (Instant + Background Sync)
   const handleStartGame = () => {
+    // Check if we HAVE a hydrated seed with an ACTIVE gameId
+    if (isConnected && address && onChainSeed && onChainGameId && onChainGameId !== 0n) {
+       console.log('Using hydrated seed for classic game engine recovery:', onChainSeed)
+       const localSeed = BigInt(keccak256(encodePacked(['bytes32', 'address'], [onChainSeed, address])).slice(0, 18))
+       startGame(localSeed, true) // Preserve hydrated state
+       return
+    }
+
     // Generate seed for BOTH local engine and on-chain registration
-    const dummyAddr = address || '0x0000000000000000000000000000000000000000'
+    const dummyAddr = address || ZERO_ADDRESS
     const { seed, hash } = generateGameSeed(dummyAddr)
     
     // Start local engine IMMEDIATELY
@@ -62,12 +94,13 @@ const GameScreen: React.FC = () => {
       setOnChainData(0n, seed, 'pending')
       
       // Persist immediately
-      localStorage.setItem(SEED_STORAGE_KEY, JSON.stringify({
+      writeStoredGameSession(CLASSIC_SESSION_STORAGE_KEY, {
         address,
         seed,
         hash,
-        gameId: null
-      }))
+        gameId: null,
+        contractAddress: CONTRACT_ADDRESS
+      })
       
       // Fire on-chain registration in background
       contractStartGame(hash)
@@ -90,12 +123,13 @@ const GameScreen: React.FC = () => {
           console.log('Background sync complete. GameId:', newGameId.toString())
           setOnChainData(newGameId, currentSeed.seed, 'registered')
           
-          localStorage.setItem(SEED_STORAGE_KEY, JSON.stringify({
+          writeStoredGameSession(CLASSIC_SESSION_STORAGE_KEY, {
             address,
             seed: currentSeed.seed,
             hash: currentSeed.hash,
-            gameId: newGameId.toString()
-          }))
+            gameId: newGameId.toString(),
+            contractAddress: CONTRACT_ADDRESS
+          })
           
           clearInterval(timer)
         }
@@ -103,15 +137,10 @@ const GameScreen: React.FC = () => {
       
       return () => clearInterval(timer)
     }
-  }, [isSuccess, !!currentSeed, address]) // Reduced dependencies
+  }, [address, currentSeed, isSuccess, refetchActiveGame, setOnChainData])
 
 
-  // 3. Background Sync: Watch for transaction error
-  const { error: contractError } = useStartGame() // Use a separate hook call or the one from line 31
-  // Actually, I'll just use the existing one.
-
-
-  // 4. Practice Mode Fallback
+  // 3. Practice Mode Fallback
   useEffect(() => {
     if (!isConnected && !gameSession) {
       handleStartGame()
@@ -143,9 +172,6 @@ const GameScreen: React.FC = () => {
     const gridRenderer = new GridRenderer(canvas, gridSize)
     const pieceRenderer = new PieceRenderer(canvas, trayY, cellSize)
     const animManager = animManagerRef.current
-    
-    gridRendererRef.current = gridRenderer
-    pieceRendererRef.current = pieceRenderer
 
     const touchController = new TouchController(
       canvas,
@@ -185,7 +211,6 @@ const GameScreen: React.FC = () => {
         return session ? Grid.canPlace(session.grid, shape, row, col) : false
       }
     )
-    touchControllerRef.current = touchController
 
     let rafHandle: number
     lastTimeRef.current = 0
@@ -219,20 +244,21 @@ const GameScreen: React.FC = () => {
         }
       }
 
-      gridRenderer.draw(currentSession.grid, ghostCells)
+      gridRenderer.draw(currentSession.grid, ghostCells, false)
       pieceRenderer.drawTray(
         currentSession.currentPieces,
-        dragState.isDragging && dragState.dragIndex !== null ? dragState.dragIndex : undefined
+        dragState.isDragging && dragState.dragIndex !== null ? dragState.dragIndex : undefined,
+        false
       )
 
       if (dragState.isDragging && dragState.dragIndex !== null) {
         const shape = currentSession.currentPieces[dragState.dragIndex]
         if (shape) {
-          pieceRenderer.drawDragging(shape, dragState.dragPos.x, dragState.dragPos.y, cellSize)
+          pieceRenderer.drawDragging(shape, dragState.dragPos.x, dragState.dragPos.y, cellSize, false)
         }
       }
 
-      animManager.draw(ctx, cellSize)
+      animManager.draw(ctx, cellSize, false)
       rafHandle = requestAnimationFrame(render)
     }
     
@@ -249,35 +275,30 @@ const GameScreen: React.FC = () => {
     handleStartGame()
   }
 
-  const handleResetDeadlock = () => {
-    localStorage.removeItem(SEED_STORAGE_KEY)
-    forceReset()
-  }
-
-  const hasStoredSeed = isConnected && !!localStorage.getItem(SEED_STORAGE_KEY)
-
   return (
     <div className="flex flex-col h-screen bg-[#0a0a0c] text-white select-none">
       <ScoreBar score={score} comboStreak={comboStreak} />
-      
-      {/* Tournament Indicator */}
-      {tournamentId !== null && !gameSession && (
-        <div className="px-6 py-3 bg-blue-500/10 border-b border-blue-500/20 flex items-center justify-between animate-in slide-in-from-top duration-500">
-          <div className="flex items-center gap-3">
-            <span className="text-xl">🏆</span>
-            <div>
-              <div className="text-[10px] text-blue-400 font-black uppercase tracking-widest">Tournament Mode Active</div>
-              <div className="text-sm font-bold">Competing in Match #{tournamentId.toString()}</div>
-            </div>
+
+      <div className="px-6 py-4 bg-gradient-to-r from-blue-950/25 to-slate-900/30 border-b border-white/5 flex items-center justify-between z-10 backdrop-blur-md">
+        <div className="flex items-center gap-4">
+          <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20">
+            <span className="text-xl">🎮</span>
           </div>
-          <button 
-            onClick={() => setTournamentId(null)}
-            className="px-3 py-1 bg-white/5 hover:bg-white/10 rounded-lg text-[9px] uppercase font-bold tracking-tighter"
-          >
-            Switch to Classic
-          </button>
+          <div>
+            <div className="text-[10px] text-blue-400 font-black uppercase tracking-[0.2em]">Classic Mode</div>
+            <div className="text-lg font-black tracking-tighter">WEEKLY LEADERBOARD RUN</div>
+          </div>
         </div>
-      )}
+
+        {onOpenLeaderboard && (
+          <button
+            onClick={onOpenLeaderboard}
+            className="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95"
+          >
+            Classic Rankings
+          </button>
+        )}
+      </div>
 
       <div className="flex-1 flex items-start justify-center pt-2">
         <div className="relative">
@@ -314,26 +335,27 @@ const GameScreen: React.FC = () => {
               <div className="text-center p-8 bg-[#1a1b24] rounded-2xl border border-white/10 shadow-2xl max-w-sm transition-all pointer-events-auto">
                 <div className="mb-2 text-blue-400 font-bold tracking-widest text-xs uppercase">Blokaz</div>
                 <h2 className="text-3xl font-black mb-6 bg-gradient-to-b from-white to-gray-400 bg-clip-text text-transparent">
-                  Ready to Blast?
+                  Ready for a Classic Run?
                 </h2>
                 
                 <button
                   onClick={handleStartGame}
-                  className={`w-full ${tournamentId !== null ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-blue-500 hover:bg-blue-600'} active:scale-95 text-white font-bold py-4 rounded-xl shadow-lg transition-all text-xl`}
+                  className="w-full bg-blue-500 hover:bg-blue-600 active:scale-95 text-white font-bold py-4 rounded-xl shadow-lg transition-all text-xl"
                 >
-                  {tournamentId !== null ? 'Enter Contest Match' : 'Start Game'}
+                  Start Classic Game
                 </button>
                 
                 <p className="text-gray-500 text-[10px] mt-4 uppercase tracking-widest opacity-60">
-                  {tournamentId !== null ? 'Entry score will be recorded to tournament leaderboard' : 
-                   isConnected ? 'On-chain registration will start in background' : 'Practice mode (Connect wallet for rewards)'}
+                  {isConnected
+                    ? 'Your score will flow into the classic leaderboard after submission'
+                    : 'Practice mode (Connect wallet for classic rewards)'}
                 </p>
               </div>
             </div>
           )}
 
 
-          {isGameOver && <GameOverModal score={score} onPlayAgain={handlePlayAgain} />}
+          {isGameOver && <GameOverModal score={score} onPlayAgain={handlePlayAgain} mode="classic" />}
         </div>
       </div>
     </div>

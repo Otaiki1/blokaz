@@ -12,6 +12,18 @@ export const COLOR_PALETTE = {
   8: '#aa3bff', // Purple
 }
 
+export const TOURNAMENT_PALETTE = {
+  0: 'transparent',
+  1: '#ff00cc', // Neon Pink
+  2: '#00ff41', // Matrix Green
+  3: '#00ccff', // Electric Blue
+  4: '#ffff00', // Neon Yellow
+  5: '#bd00ff', // Cyber Purple
+  6: '#00ffd2', // Aqua Neon
+  7: '#ff5c00', // Burning Orange
+  8: '#ffde00', // Gold Neon
+}
+
 export class GridRenderer {
   private canvas: HTMLCanvasElement
   private ctx: CanvasRenderingContext2D
@@ -27,18 +39,29 @@ export class GridRenderer {
 
   draw(
     grid: Uint8Array,
-    ghostCells?: { row: number; col: number; valid: boolean }[]
+    ghostCells?: { row: number; col: number; valid: boolean }[],
+    isTournament: boolean = false
   ): void {
     this.ctx.clearRect(0, 0, this.gridSize, this.gridSize)
 
     // Draw background
-    this.ctx.fillStyle = '#16171d'
+    this.ctx.fillStyle = isTournament ? '#05050a' : '#16171d'
     this.ctx.beginPath()
     this.roundRect(this.ctx, 0, 0, this.gridSize, this.gridSize, 8)
     this.ctx.fill()
 
-    // Draw gridlines (subtle)
-    this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)'
+    if (isTournament) {
+      // Add subtle outer glow to the board
+      this.ctx.shadowBlur = 15;
+      this.ctx.shadowColor = 'rgba(0, 242, 255, 0.15)';
+      this.ctx.strokeStyle = '#00f2ff33';
+      this.ctx.lineWidth = 2;
+      this.ctx.stroke();
+      this.ctx.shadowBlur = 0;
+    }
+
+    // Draw gridlines
+    this.ctx.strokeStyle = isTournament ? 'rgba(0, 242, 255, 0.1)' : 'rgba(255, 255, 255, 0.05)'
     this.ctx.lineWidth = 1
     for (let i = 1; i < 9; i++) {
       const pos = i * this.cellSize
@@ -55,11 +78,12 @@ export class GridRenderer {
     }
 
     // Draw filled cells
+    const palette = isTournament ? TOURNAMENT_PALETTE : COLOR_PALETTE
     for (let r = 0; r < 9; r++) {
       for (let c = 0; c < 9; c++) {
         const val = Grid.getCell(grid, r, c)
         if (val !== 0) {
-          this.drawCell(r, c, COLOR_PALETTE[val as keyof typeof COLOR_PALETTE])
+          this.drawCell(r, c, palette[val as keyof typeof palette], isTournament)
         }
       }
     }
@@ -68,28 +92,35 @@ export class GridRenderer {
     if (ghostCells) {
       for (const ghost of ghostCells) {
         const color = ghost.valid
-          ? 'rgba(59, 255, 59, 0.3)'
-          : 'rgba(255, 59, 59, 0.3)'
-        this.drawCell(ghost.row, ghost.col, color)
+          ? isTournament ? 'rgba(0, 255, 65, 0.3)' : 'rgba(59, 255, 59, 0.3)'
+          : isTournament ? 'rgba(255, 0, 204, 0.3)' : 'rgba(255, 59, 59, 0.3)'
+        this.drawCell(ghost.row, ghost.col, color, isTournament)
       }
     }
   }
 
-  private drawCell(row: number, col: number, color: string): void {
+  private drawCell(row: number, col: number, color: string, isTournament: boolean = false): void {
     const x = col * this.cellSize + 1
     const y = row * this.cellSize + 1
     const size = this.cellSize - 2
 
     this.ctx.fillStyle = color
+    
+    if (isTournament && !color.includes('rgba')) {
+      this.ctx.shadowBlur = 10
+      this.ctx.shadowColor = color
+    }
+
     this.ctx.beginPath()
     this.roundRect(this.ctx, x, y, size, size, 4)
     this.ctx.fill()
+    this.ctx.shadowBlur = 0
 
     // Subtle drop shadow/glow for filled cells
     if (!color.includes('rgba')) {
-      this.ctx.shadowBlur = 4
+      this.ctx.shadowBlur = isTournament ? 2 : 4
       this.ctx.shadowColor = 'rgba(0,0,0,0.5)'
-      this.ctx.stroke()
+      if (!isTournament) this.ctx.stroke()
       this.ctx.shadowBlur = 0
     }
   }
