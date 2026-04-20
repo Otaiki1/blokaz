@@ -359,7 +359,7 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
           <button
             onClick={handleSubmit}
             disabled={!canSubmit}
-            className="brutal-btn flex w-full items-center justify-center gap-3 border-4 border-ink bg-accent-lime py-5 font-display text-sm tracking-[0.15em] uppercase disabled:opacity-50" style={{ boxShadow: '6px 6px 0 var(--ink)' }}
+            className="brutal-btn flex w-full items-center justify-center gap-3 border-4 border-ink bg-accent-lime py-5 font-display text-base tracking-[0.15em] uppercase text-ink disabled:opacity-50" style={{ boxShadow: '6px 6px 0 var(--ink)' }}
           >
             {isRegistering ? <div className="brutal-loader" /> : <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>}
             {isAllSuccess ? 'REPLAYING...' : 'SUBMIT + PLAY AGAIN'}
@@ -367,13 +367,13 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
 
           <div className="grid grid-cols-2 gap-3">
             <button
-              className="brutal-btn border-4 border-ink bg-paper-2 py-4 font-display text-[11px] tracking-widest uppercase" style={{ boxShadow: '4px 4px 0 var(--ink)' }}
+              className="brutal-btn border-4 border-ink bg-paper-2 py-4 font-display text-xs tracking-wider uppercase text-ink" style={{ boxShadow: '4px 4px 0 var(--ink)' }}
             >
               SHARE CAST
             </button>
             <button
               onClick={onOpenLeaderboard}
-              className="brutal-btn border-4 border-ink bg-accent-orange py-4 font-display text-[11px] tracking-widest shadow-[4px_4px_0_var(--ink)] uppercase text-ink"
+              className="brutal-btn border-4 border-ink bg-accent-orange py-4 font-display text-xs tracking-wider shadow-[4px_4px_0_var(--ink)] uppercase text-ink"
             >
               LEADERBOARD
             </button>
