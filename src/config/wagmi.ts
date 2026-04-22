@@ -1,28 +1,60 @@
 import { getDefaultConfig } from '@rainbow-me/rainbowkit'
-import { createConfig, http } from 'wagmi'
 import { injected } from 'wagmi/connectors'
-import { custom } from 'viem'
+import { http, custom, fallback } from 'wagmi'
 import { celo } from 'wagmi/chains'
-import { IS_MINIPAY } from '../utils/miniPay'
 
-// In MiniPay all reads AND writes must go through window.ethereum (the injected
-// provider). Using http() would route reads through a public RPC that may differ
-// from MiniPay's state, causing nonce/gas mismatches on writes.
-const miniPayTransport = IS_MINIPAY && typeof window !== 'undefined' && window.ethereum
-  ? custom(window.ethereum)
-  : http()
+// Use the Infura RPC from .env as the secondary fallback.
+const rpcUrl = import.meta.env.VITE_RPC as string | undefined
 
-const miniPayConfig = createConfig({
-  chains: [celo],
-  connectors: [injected()],
-  transports: { [celo.id]: miniPayTransport },
+// Lazy EIP-1193 proxy: resolves window.ethereum at RPC call-time, NOT at module
+// load time. This is critical for MiniPay — the provider is injected into
+// window.ethereum asynchronously after the page loads. Capturing it at module
+// evaluation time means it's undefined and the custom transport is silently
+// dropped, forcing Wagmi onto the HTTP fallback. MiniPay's sandbox blocks
+// HTTP-originated eth_estimateGas / eth_sendTransaction, producing the
+// "unknown RPC error". With this proxy, every request checks window.ethereum
+// live, so the injected MiniPay provider is always used once it is ready.
+const lazyWindowEthereum = {
+  request: async (args: { method: string; params?: unknown[] }) => {
+    const provider = typeof window !== 'undefined'
+      ? (window.ethereum as any)
+      : undefined
+    if (!provider) throw new Error('No injected EIP-1193 provider available')
+    return provider.request(args)
+  },
+}
+
+/**
+ * Custom injected target for MiniPay.
+ */
+export const injectedConnector = injected({
+  target() {
+    return {
+      id: 'injected',
+      name:
+        typeof window !== 'undefined' && (window.ethereum as any)?.isMiniPay
+          ? 'MiniPay'
+          : 'MetaMask',
+      provider:
+        typeof window !== 'undefined' ? (window.ethereum as any) : undefined,
+    }
+  },
 })
 
-const rainbowConfig = getDefaultConfig({
+// Single unified wagmi config.
+export const config = getDefaultConfig({
   appName: 'Blokaz',
   projectId: import.meta.env.VITE_WALLETCONNECT_PROJECT_ID ?? '',
   chains: [celo],
+  connectors: [injectedConnector],
+  transports: {
+    [celo.id]: 
+      typeof window !== 'undefined' && (window.ethereum as any)?.isMiniPay
+        ? custom(lazyWindowEthereum)
+        : fallback([
+            rpcUrl ? http(rpcUrl) : http('https://forno.celo.org'),
+            http(),
+          ]),
+  },
   ssr: false,
 })
-
-export const config = IS_MINIPAY ? miniPayConfig : rainbowConfig
