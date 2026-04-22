@@ -10,6 +10,12 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  server: {
+    allowedHosts: [
+      'aptly-letter-rocklike.ngrok-free.dev',
+      'all'
+    ],
+  },
   // @ts-ignore - vitest types
   test: {
     globals: true,
