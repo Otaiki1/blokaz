@@ -525,8 +525,13 @@ const GameScreen: React.FC<GameScreenProps> = ({ onOpenLeaderboard, onBack }) =>
 
     const vpFallback = Math.min(window.innerWidth - 32, Math.round(window.innerHeight * 0.75))
 
-    const computeDims = (containerWidth: number) => {
-      const gridSize = containerWidth > 0 ? containerWidth : vpFallback
+    const computeDims = (containerWidth: number, containerHeight = 0) => {
+      let gridSize = containerWidth > 0 ? containerWidth : vpFallback
+      if (containerHeight > 0) {
+        // totalCanvasH = gridSize + trayGap + trayH ≈ gridSize × 25/18
+        const maxByHeight = Math.floor(containerHeight * 18 / 25)
+        if (maxByHeight > 0 && maxByHeight < gridSize) gridSize = maxByHeight
+      }
       const cellSize = gridSize / 9
       const trayGap = Math.round(cellSize * 0.5)
       const trayHeight = Math.round(gridSize / 3)
@@ -535,7 +540,8 @@ const GameScreen: React.FC<GameScreenProps> = ({ onOpenLeaderboard, onBack }) =>
     }
 
     const initialW = boardContainerRef.current?.clientWidth || 0
-    const init = computeDims(initialW)
+    const initialH = boardContainerRef.current?.clientHeight || 0
+    const init = computeDims(initialW, initialH)
 
     canvas.width = init.gridSize
     canvas.height = init.gridSize + init.trayGap + init.trayHeight
@@ -555,8 +561,9 @@ const GameScreen: React.FC<GameScreenProps> = ({ onOpenLeaderboard, onBack }) =>
     if (boardContainerRef.current) {
       ro = new ResizeObserver(([entry]) => {
         const w = entry.contentRect.width
+        const h = entry.contentRect.height
         if (w <= 0) return
-        const d = computeDims(w)
+        const d = computeDims(w, h)
         const totalH = d.gridSize + d.trayGap + d.trayHeight
         canvas.width = d.gridSize
         canvas.height = totalH
@@ -959,94 +966,119 @@ const ClassicStartCard: React.FC<{
       )}
     </button>
 
-    {/* GoodDollar (G$) Reward Mode Toggle */}
+    {/* GoodDollar (G$) Reward Mode */}
     {isConnected && (
-      <div className="border-4 border-ink bg-paper-2 p-4 shadow-[4px_4px_0_var(--ink)]">
-        <div className="mb-3 flex items-center justify-between">
-          <div className="flex items-center gap-2 font-display text-[10px] tracking-widest text-ink/70 uppercase">
-            <img src="https://docs.gooddollar.org/~gitbook/image?url=https%3A%2F%2F1693836101-files.gitbook.io%2F~%2Ffiles%2Fv0%2Fb%2Fgitbook-x-prod.appspot.com%2Fo%2Fspaces%252F-LfsEjhezedCgGFXCkms%252Ficon%252F7UuO7n9qO2vO6Z3z7N2N%252FGoodDollar_Icon_Green.png%3Falt%3Dmedia%26token%3D7f3b8b1b-7f1b-4f1b-8f1b-7f1b8f1b7f1b&width=32&dpr=2" alt="G$" className="w-4 h-4" />
-            G$ Reward Mode
+      <div className="border-4 border-ink" style={{ background: 'var(--paper-2)', boxShadow: '4px 4px 0 var(--ink)' }}>
+        {/* Header */}
+        <div
+          className="flex items-center justify-between border-b-4 border-ink px-4 py-3"
+          style={{ background: 'var(--paper)' }}
+        >
+          <div className="flex items-center gap-2 font-display text-[10px] tracking-[0.18em] uppercase">
+            <div
+              className="flex h-5 w-5 items-center justify-center border-2 border-ink font-display text-[8px] font-bold"
+              style={{ background: 'var(--accent-lime)', color: 'var(--ink-fixed)' }}
+            >
+              G$
+            </div>
+            REWARD MODE
           </div>
-          <button 
+          <button
             onClick={() => setGModeEnabled(!gModeEnabled)}
-            className={`h-6 w-12 border-2 border-ink shadow-[2px_2px_0_var(--ink)] transition-colors ${gModeEnabled ? 'bg-accent-lime' : 'bg-paper'}`}
+            className={`relative h-7 w-14 border-[3px] border-ink transition-colors ${gModeEnabled ? 'bg-accent-lime' : 'bg-paper-2'}`}
+            style={{ boxShadow: '2px 2px 0 var(--ink)' }}
           >
-            <div className={`h-4 w-4 border-2 border-ink bg-white transition-transform ${gModeEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+            <div
+              className={`absolute top-0.5 h-4 w-4 border-2 border-ink transition-transform ${gModeEnabled ? 'translate-x-[30px]' : 'translate-x-0.5'}`}
+              style={{ background: 'var(--paper)' }}
+            />
           </button>
         </div>
 
-        {gModeEnabled && !isWhitelisted && (
-          <div className="mt-3 border-2 border-dashed border-accent-pink bg-white p-3">
-            <div className="mb-2 font-display text-[9px] tracking-widest text-accent-pink uppercase leading-tight">
-              Identity Verification Required
-            </div>
-            <div className="mb-3 break-all font-mono text-[8px] text-ink/50 bg-paper p-1 border border-ink/10">
-              {isConnected && address ? address : 'No wallet connected'}
-            </div>
-            <a 
-              href={verificationUrl} 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="brutal-btn block w-full border-2 border-ink bg-accent-pink py-2 text-center font-display text-[9px] tracking-widest text-white uppercase shadow-[2px_2px_0_var(--ink)]"
-            >
-              Verify Face on GoodDollar
-            </a>
-
-            {/* Mobile Handoff Options */}
-            <div className="mt-4 border-t-2 border-ink/5 pt-3">
-              <div className="mb-2 font-display text-[8px] text-ink/40 uppercase tracking-widest text-center">
-                Hardware issues? Try on mobile:
-              </div>
-              <div className="flex gap-2">
-                <button 
-                  onClick={() => {
-                    navigator.clipboard.writeText(verificationUrl)
-                    // Custom alert logic could be added here, for now using standard
-                    alert('Verification link copied! Send it to your phone to finish verification.')
-                  }}
-                  className="flex-1 border-2 border-ink bg-paper py-2 font-display text-[8px] uppercase tracking-wider hover:bg-accent-lime/10 transition-colors"
+        {gModeEnabled && (
+          <div className="p-4">
+            {!isWhitelisted ? (
+              <div className="flex flex-col gap-3">
+                <div className="font-body text-[10px] text-ink/60 leading-relaxed">
+                  Face-verify once to earn G$ while you play and unlock the Revive power.
+                </div>
+                <a
+                  href={verificationUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="brutal-btn flex w-full items-center justify-center gap-2 border-4 border-ink bg-accent-pink py-3 font-display text-[10px] uppercase tracking-wider shadow-[4px_4px_0_var(--ink)]"
+                  style={{ color: 'var(--ink-fixed)' }}
                 >
-                  Copy Link
-                </button>
-                <div className="group relative">
-                  <button className="border-2 border-ink bg-paper px-3 py-2 font-display text-[8px] uppercase tracking-wider hover:bg-accent-lime/10">
-                    QR Code
+                  <BrutalIcon name="alert" size={12} />
+                  VERIFY IDENTITY
+                </a>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(verificationUrl)
+                      alert('Verification link copied! Send it to your phone to finish verification.')
+                    }}
+                    className="flex-1 border-[3px] border-ink py-2 font-display text-[8px] uppercase tracking-wider shadow-[2px_2px_0_var(--ink)] transition-colors hover:bg-accent-lime/10"
+                    style={{ background: 'var(--paper)' }}
+                  >
+                    COPY LINK
                   </button>
-                  {/* Tooltip with QR Code */}
-                  <div className="absolute bottom-full left-1/2 mb-3 hidden -translate-x-1/2 border-2 border-ink bg-white p-3 shadow-[6px_6px_0_var(--ink)] group-hover:block z-50">
-                     <img 
-                       src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(verificationUrl)}`} 
-                       alt="Verification QR Code"
-                       className="w-32 h-32"
-                     />
-                     <div className="mt-2 text-center font-display text-[7px] uppercase text-ink/50 whitespace-nowrap">
-                       Scan to Verify on Mobile
-                     </div>
+                  <div className="group relative">
+                    <button
+                      className="border-[3px] border-ink px-3 py-2 font-display text-[8px] uppercase tracking-wider shadow-[2px_2px_0_var(--ink)] transition-colors hover:bg-accent-lime/10"
+                      style={{ background: 'var(--paper)' }}
+                    >
+                      QR CODE
+                    </button>
+                    <div className="absolute bottom-full left-1/2 z-50 mb-3 hidden -translate-x-1/2 border-4 border-ink p-3 shadow-[6px_6px_0_var(--ink)] group-hover:block" style={{ background: 'var(--paper)' }}>
+                      <img
+                        src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(verificationUrl)}`}
+                        alt="Verification QR Code"
+                        className="w-32 h-32"
+                      />
+                      <div className="mt-2 text-center font-display text-[7px] uppercase text-ink/50 whitespace-nowrap">
+                        SCAN TO VERIFY
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div className="border-[3px] border-ink/20 p-2" style={{ background: 'var(--paper)' }}>
+                  <div className="font-mono text-[8px] text-ink/40 break-all">
+                    {isConnected && address ? address : 'No wallet connected'}
                   </div>
                 </div>
               </div>
-            </div>
-          </div>
-        )}
-        
-        {gModeEnabled && isWhitelisted && (
-          <div className="mt-4 flex flex-col gap-2">
-            <div className="flex items-center justify-between">
-              <div className="font-body text-[10px] text-accent-lime font-bold uppercase tracking-widest">
-                ✅ Verified Human
-              </div>
-              {entitlement > 0n && (
-                <button 
-                  onClick={claimUBI}
-                  className="border-2 border-ink bg-accent-yellow px-3 py-1 font-display text-[8px] uppercase tracking-wider shadow-[2px_2px_0_var(--ink)] active:shadow-none active:translate-x-[1px] active:translate-y-[1px] transition-all"
+            ) : (
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center justify-between">
+                  <div
+                    className="flex items-center gap-2 border-[3px] border-ink px-3 py-1.5"
+                    style={{ background: 'var(--accent-lime)', color: 'var(--ink-fixed)' }}
+                  >
+                    <BrutalIcon name="zap" size={10} strokeWidth={2.5} />
+                    <span className="font-display text-[9px] uppercase tracking-widest">VERIFIED HUMAN</span>
+                  </div>
+                  {entitlement > 0n && (
+                    <button
+                      onClick={claimUBI}
+                      className="border-[3px] border-ink px-3 py-1.5 font-display text-[9px] uppercase tracking-wider shadow-[2px_2px_0_var(--ink)] transition-all active:translate-x-[2px] active:translate-y-[2px] active:shadow-none"
+                      style={{ background: 'var(--accent-yellow)', color: 'var(--ink-fixed)' }}
+                    >
+                      CLAIM {Number(entitlement) / 100} G$
+                    </button>
+                  )}
+                </div>
+                <div
+                  className="flex items-center gap-2 border-[3px] border-ink p-2.5"
+                  style={{ background: 'var(--paper)' }}
                 >
-                  Claim {Number(entitlement) / 100} G$
-                </button>
-              )}
-            </div>
-            <div className="font-body text-[8px] text-ink/50 uppercase tracking-widest bg-ink/5 p-2 border border-ink/10">
-              Streaming: 0.05 G$/min Active
-            </div>
+                  <div className="h-1.5 w-1.5 animate-pulse rounded-full" style={{ background: 'var(--accent-lime)' }} />
+                  <span className="font-display text-[9px] uppercase tracking-[0.15em] text-ink/70">
+                    STREAMING 0.05 G$/MIN WHILE ACTIVE
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -1144,7 +1176,7 @@ const CanvasArea: React.FC<CanvasAreaProps> = ({
   }
 
   return (
-    <div ref={boardContainerRef} className="w-full flex justify-center select-none">
+    <div ref={boardContainerRef} className="h-full w-full flex items-center justify-center select-none">
       <div className="relative inline-flex flex-col">
         {canvasDims && (
           <>
@@ -1376,17 +1408,17 @@ const MobileLayout: React.FC<MobileLayoutProps> = ({
   onBack,
   canvasArea,
 }) => (
-  <div className="flex flex-col w-full">
+  <div className="h-full flex flex-col overflow-hidden">
     {gameSession && (
       <>
         {/* ── Game chrome: back / status / pause ──────────────────── */}
-        <div className="flex items-center justify-between px-3 py-2 border-b-4 border-ink bg-paper">
+        <div className="flex shrink-0 items-center justify-between px-3 py-1.5 border-b-4 border-ink bg-paper">
           <button
-            className="brutal-btn border-[3px] border-ink bg-paper p-2"
+            className="brutal-btn border-[3px] border-ink bg-paper p-1.5"
             style={{ boxShadow: '2px 2px 0 var(--ink)' }}
             onClick={onBack ?? (() => window.history.back())}
           >
-            <BrutalIcon name="back" size={18} strokeWidth={3} />
+            <BrutalIcon name="back" size={16} strokeWidth={3} />
           </button>
 
           <div
@@ -1398,20 +1430,22 @@ const MobileLayout: React.FC<MobileLayoutProps> = ({
           </div>
 
           <button
-            className="brutal-btn border-[3px] border-ink bg-paper p-2"
+            className="brutal-btn border-[3px] border-ink bg-paper p-1.5"
             style={{ boxShadow: '2px 2px 0 var(--ink)' }}
           >
-            <BrutalIcon name="pause" size={18} strokeWidth={3} />
+            <BrutalIcon name="pause" size={16} strokeWidth={3} />
           </button>
         </div>
 
         {/* ── Compact score + tension bar ──────────────────────────── */}
-        <ScoreBar score={score} comboStreak={comboStreak} bestScore={bestScore} compact />
+        <div className="shrink-0">
+          <ScoreBar score={score} comboStreak={comboStreak} bestScore={bestScore} compact />
+        </div>
       </>
     )}
 
-    {/* ── Canvas (fills remaining width) ──────────────────────────── */}
-    <div className={`w-full ${gameSession ? 'flex justify-center' : 'mx-auto max-w-[400px] px-4 pt-4'}`}>
+    {/* ── Canvas fills all remaining vertical space ────────────────── */}
+    <div className={`flex-1 min-h-0 ${gameSession ? 'overflow-hidden' : 'mx-auto max-w-[400px] px-4 pt-4'}`}>
       {canvasArea}
     </div>
   </div>

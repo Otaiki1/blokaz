@@ -72,7 +72,12 @@ const App: React.FC = () => {
         onViewChange={handleNavigate}
       />
 
-      <main className={`flex flex-col min-h-screen ${activeView === 'lobby' ? 'pt-[64px] pb-20' : activeView === 'tournament-play' ? 'pt-0' : 'pt-[64px] pb-20 lg:items-center lg:pb-12'}`}>
+      <main className={`flex flex-col ${
+        activeView === 'lobby' ? 'min-h-screen pt-[64px] pb-20'
+        : activeView === 'classic' ? 'h-screen overflow-hidden pt-16 pb-16 lg:h-auto lg:min-h-screen lg:overflow-visible lg:pt-[64px] lg:pb-20 lg:items-center'
+        : activeView === 'tournament-play' ? 'pt-0 min-h-screen'
+        : 'min-h-screen pt-[64px] pb-20 lg:items-center lg:pb-12'
+      }`}>
         {activeView === 'lobby' ? (
           <LobbyScreen
             onPlayClassic={() => handleNavigate('classic')}

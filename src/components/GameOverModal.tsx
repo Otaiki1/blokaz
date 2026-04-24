@@ -442,49 +442,89 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
                 {isRegistering ? (
                   <div className="brutal-loader" />
                 ) : (
-                  <svg
-                    width="24"
-                    height="24"
-                    viewBox="0 0 24 24"
-                    fill="currentColor"
-                  >
-                    <path d="M8 5v14l11-7z" />
-                  </svg>
+                  <BrutalIcon name="play" size={20} strokeWidth={2.5} />
                 )}
                  {isAllSuccess ? 'REPLAYING...' : 'SUBMIT + PLAY AGAIN'}
               </button>
 
               {/* GoodDollar Retry Option */}
               {gModeEnabled && mode === 'classic' && (
-                <div className="flex flex-col gap-2">
-                  {!isWhitelisted ? (
-                    <a
-                      href={verificationUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="brutal-btn flex w-full items-center justify-center gap-2 border-4 border-ink bg-accent-pink py-3 font-display text-[11px] uppercase tracking-wider text-white shadow-[4px_4px_0_var(--ink)]"
+                <div
+                  className="border-4 border-ink"
+                  style={{ background: 'var(--paper-2)', boxShadow: '6px 6px 0 var(--ink)' }}
+                >
+                  <div
+                    className="flex items-center justify-between border-b-4 border-ink px-4 py-2.5"
+                    style={{ background: 'var(--paper)' }}
+                  >
+                    <div className="flex items-center gap-2 font-display text-[10px] tracking-[0.18em] uppercase">
+                      <div
+                        className="flex h-5 w-5 items-center justify-center border-2 border-ink font-display text-[8px] font-bold"
+                        style={{ background: 'var(--accent-lime)', color: 'var(--ink-fixed)' }}
+                      >
+                        G$
+                      </div>
+                      GOODDOLLAR REVIVAL
+                    </div>
+                    <div
+                      className="border-2 border-ink px-2 py-0.5 font-display text-[8px] tracking-[0.15em] uppercase"
+                      style={{ background: 'var(--accent-yellow)', color: 'var(--ink-fixed)' }}
                     >
-                      VERIFY TO REVIVE WITH G$
-                    </a>
-                  ) : (
-                    <button
-                      onClick={handleGRetry}
-                      disabled={isPayingRetry || (gBalance?.value || 0n) < (10n * 10n**18n)}
-                      className="brutal-btn flex w-full items-center justify-center gap-2 border-4 border-ink bg-accent-lime py-3 font-display text-[11px] uppercase tracking-wider shadow-[4px_4px_0_var(--ink)] disabled:opacity-50"
-                      style={{ color: 'var(--ink-fixed)' }}
-                    >
-                      {isPayingRetry ? (
-                        <div className="brutal-loader" />
-                      ) : (
-                        <>
-                          <BrutalIcon name="zap" size={14} />
-                          REVIVE WITH 10 G$
-                        </>
-                      )}
-                    </button>
-                  )}
-                  <div className="text-center font-display text-[8px] tracking-[0.2em] text-ink/60 uppercase">
-                    Unlocks 3 clearance shapes
+                      LIVE
+                    </div>
+                  </div>
+
+                  <div className="p-3">
+                    {!isWhitelisted ? (
+                      <>
+                        <div className="mb-3 font-body text-[10px] text-ink/60 leading-relaxed">
+                          Verify your identity once to unlock G$ revival power.
+                        </div>
+                        <a
+                          href={verificationUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="brutal-btn flex w-full items-center justify-center gap-2 border-4 border-ink bg-accent-pink py-3 font-display text-[11px] uppercase tracking-wider shadow-[4px_4px_0_var(--ink)]"
+                          style={{ color: 'var(--ink-fixed)' }}
+                        >
+                          <BrutalIcon name="alert" size={13} />
+                          VERIFY TO REVIVE
+                        </a>
+                      </>
+                    ) : (
+                      <>
+                        <div className="mb-3 grid grid-cols-2 gap-2">
+                          <div className="border-[3px] border-ink p-2" style={{ background: 'var(--paper)' }}>
+                            <div className="mb-0.5 font-display text-[7px] tracking-[0.15em] uppercase opacity-60">BALANCE</div>
+                            <div className="font-display text-sm" style={{ letterSpacing: '-0.02em' }}>
+                              {gBalance ? (Number(gBalance.value) / 1e18).toFixed(1) : '0'} G$
+                            </div>
+                          </div>
+                          <div className="border-[3px] border-ink p-2" style={{ background: 'var(--accent-lime)', color: 'var(--ink-fixed)' }}>
+                            <div className="mb-0.5 font-display text-[7px] tracking-[0.15em] uppercase opacity-70">COST</div>
+                            <div className="font-display text-sm" style={{ letterSpacing: '-0.02em' }}>10 G$</div>
+                          </div>
+                        </div>
+                        <button
+                          onClick={handleGRetry}
+                          disabled={isPayingRetry || (gBalance?.value || 0n) < (10n * 10n**18n)}
+                          className="brutal-btn flex w-full items-center justify-center gap-2 border-4 border-ink bg-accent-lime py-3.5 font-display text-[11px] uppercase tracking-wider shadow-[4px_4px_0_var(--ink)] disabled:opacity-50"
+                          style={{ color: 'var(--ink-fixed)' }}
+                        >
+                          {isPayingRetry ? (
+                            <div className="brutal-loader" />
+                          ) : (
+                            <>
+                              <BrutalIcon name="zap" size={14} strokeWidth={2.5} />
+                              REVIVE — CONTINUE RUN
+                            </>
+                          )}
+                        </button>
+                        <div className="mt-2 text-center font-display text-[8px] tracking-[0.18em] text-ink/50 uppercase">
+                          RESTORES 3 CLEARANCE SHAPES
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
               )}
@@ -498,7 +538,7 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
                 </button>
                 <button
                   onClick={onOpenLeaderboard}
-                  className="brutal-btn border-4 border-ink bg-accent-orange py-3.5 font-display text-[11px] uppercase tracking-wider shadow-[4px_4px_0_var(--ink)] sm:py-4 sm:text-xs"
+                  className="brutal-btn border-4 border-ink bg-accent-cyan py-3.5 font-display text-[11px] uppercase tracking-wider shadow-[4px_4px_0_var(--ink)] sm:py-4 sm:text-xs"
                   style={{ color: accentTextColor }}
                 >
                   LEADERBOARD
