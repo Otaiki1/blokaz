@@ -148,32 +148,45 @@ export const useGoodDollar = () => {
     }
   }, [address, deleteFlow, setIsStreaming])
 
-  // 6. Retry Payment
+  // 6. Retry Payment (Split between Treasury and UBI Pool)
   const { writeContractAsync: transferG } = useWriteContract()
 
   const payForRetry = useCallback(async () => {
     if (!address || !isWhitelisted) return false
     
     try {
+      const halfAmount = G_GAME_ECONOMICS.RETRY_COST / 2n
+      const abi = [{
+        name: 'transfer',
+        type: 'function',
+        stateMutability: 'nonpayable',
+        inputs: [
+          { name: 'recipient', type: 'address' },
+          { name: 'amount', type: 'uint256' }
+        ],
+        outputs: [{ type: 'bool' }]
+      }]
+
+      // 1. Send half to Treasury
       await transferG({
         address: GOODDOLLAR_ADDRESSES.G_TOKEN,
-        abi: [{
-          name: 'transfer',
-          type: 'function',
-          stateMutability: 'nonpayable',
-          inputs: [
-            { name: 'recipient', type: 'address' },
-            { name: 'amount', type: 'uint256' }
-          ],
-          outputs: [{ type: 'bool' }]
-        }],
+        abi,
         functionName: 'transfer',
-        args: [GOODDOLLAR_ADDRESSES.TREASURY, G_GAME_ECONOMICS.RETRY_COST]
+        args: [GOODDOLLAR_ADDRESSES.TREASURY, halfAmount]
       })
+      
+      // 2. Send half to UBI Pool (The "Pool" address)
+      await transferG({
+        address: GOODDOLLAR_ADDRESSES.G_TOKEN,
+        abi,
+        functionName: 'transfer',
+        args: [GOODDOLLAR_ADDRESSES.UBI_POOL, halfAmount]
+      })
+
       setClearanceTurns(G_GAME_ECONOMICS.CLEARANCE_MODE_TURNS)
       return true
     } catch (error) {
-      console.error('Failed G$ retry payment:', error)
+      console.error('Failed G$ retry payment (split):', error)
       return false
     }
   }, [address, isWhitelisted, transferG, setClearanceTurns])

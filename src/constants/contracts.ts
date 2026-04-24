@@ -4,6 +4,9 @@ export const GOODDOLLAR_ADDRESSES = {
   
   // G$ Token (Celo Mainnet - Native SuperToken)
   G_TOKEN: '0x62B8B11039fcfE5AB0C56E502b1C372A3D2a9C7A' as `0x${string}`,
+
+  // GoodDollar UBI Pool (where UBI is claimed from)
+  UBI_POOL: '0x43d72Ff17701B2DA814620735C39C620Ce0ea4A1' as `0x${string}`,
   
   // Identity Contract (Celo Mainnet)
   IDENTITY: '0xC361A6E67822a0EDc17D899227dd9FC50BD62F42' as `0x${string}`,
@@ -22,7 +25,7 @@ export const G_GAME_ECONOMICS = {
   // Native G$ on Celo is 18 decimals.
   STREAM_RATE_PER_SECOND: BigInt(833333333333333), // Approx 0.05 G$/min in 18 decimals
   
-  RETRY_COST: BigInt(10 * 10 ** 18), // 10 G$ in 18 decimals
+  RETRY_COST: BigInt(10 * 10 ** 16), // 0.10 G$ in 18 decimals
   
   CLEARANCE_MODE_TURNS: 3
 }
