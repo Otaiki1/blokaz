@@ -18,6 +18,7 @@ interface GameState {
   isWhitelisted: boolean
   isStreaming: boolean
   clearanceTurns: number
+  verificationUrl: string | null
 
   startGame: (seed: bigint, preserveOnChain?: boolean) => void
   setOnChainData: (gameId: bigint, seed: `0x${string}`, status?: 'registered' | 'pending' | 'syncing' | 'failed') => void
@@ -28,6 +29,7 @@ interface GameState {
   setIsWhitelisted: (whitelisted: boolean) => void
   setIsStreaming: (streaming: boolean) => void
   setClearanceTurns: (turns: number) => void
+  setVerificationUrl: (url: string | null) => void
   placePiece: (index: number, r: number, c: number) => any
   resetGame: () => void
   reviveGame: () => void
@@ -48,6 +50,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   isWhitelisted: false,
   isStreaming: false,
   clearanceTurns: 0,
+  verificationUrl: null,
 
   startGame: (seed, preserveOnChain = false) => {
     const session = new GameSession(seed)
@@ -82,6 +85,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   setIsWhitelisted: (whitelisted) => set({ isWhitelisted: whitelisted }),
   setIsStreaming: (streaming) => set({ isStreaming: streaming }),
   setClearanceTurns: (turns) => set({ clearanceTurns: turns }),
+  setVerificationUrl: (url) => set({ verificationUrl: url }),
 
   placePiece: (index, r, c) => {
     const { gameSession } = get()

@@ -933,7 +933,7 @@ interface CanvasAreaProps {
   gModeEnabled: boolean
   setGModeEnabled: (v: boolean) => void
   isWhitelisted: boolean
-  verificationUrl: string
+  verificationUrl: string | null
   address: string | undefined
   entitlement: bigint
   claimUBI: () => void
@@ -955,7 +955,7 @@ const ClassicStartCard: React.FC<{
   gModeEnabled: boolean
   setGModeEnabled: (v: boolean) => void
   isWhitelisted: boolean
-  verificationUrl: string
+  verificationUrl: string | null
   address: string | undefined
   entitlement: bigint
   claimUBI: () => void
@@ -977,7 +977,11 @@ const ClassicStartCard: React.FC<{
   address,
   entitlement,
   claimUBI,
-}) => (
+}) => {
+  const isLinkReady = verificationUrl && verificationUrl.startsWith('https://goodid.gooddollar.org/auth?');
+  const displayUrl = verificationUrl || 'https://goodid.gooddollar.org';
+
+  return (
   <div
     className="relative z-10 flex w-full flex-col gap-5 rounded-[6px] border-4 border-ink bg-paper px-7 py-8"
     style={{ boxShadow: '10px 10px 0 var(--accent-yellow)' }}
@@ -1097,48 +1101,58 @@ const ClassicStartCard: React.FC<{
                   Revive power.
                 </div>
                 <a
-                  href={verificationUrl}
+                  href={isLinkReady ? displayUrl : '#'}
+                  onClick={(e) => {
+                    if (!isLinkReady) {
+                      e.preventDefault();
+                      alert('Generating verification link... please wait a moment.');
+                    }
+                  }}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="brutal-btn flex w-full items-center justify-center gap-2 border-4 border-ink bg-accent-pink py-3 font-display text-[10px] uppercase tracking-wider shadow-[4px_4px_0_var(--ink)]"
+                  className={`brutal-btn flex w-full items-center justify-center gap-2 border-4 border-ink bg-accent-pink py-3 font-display text-[10px] uppercase tracking-wider shadow-[4px_4px_0_var(--ink)] ${!isLinkReady ? 'opacity-50' : ''}`}
                   style={{ color: 'var(--ink-fixed)' }}
                 >
-                  <BrutalIcon name="alert" size={12} />
-                  VERIFY IDENTITY
+                  {!isLinkReady && <div className="brutal-loader !border-paper h-3 w-3" />}
+                  <BrutalIcon name={isLinkReady ? 'alert' : 'chevron-right'} size={12} />
+                  {isLinkReady ? 'VERIFY IDENTITY' : 'GENERATING LINK...'}
                 </a>
                 <div className="flex gap-2">
                   <button
                     onClick={() => {
-                      navigator.clipboard.writeText(verificationUrl)
+                      if (!isLinkReady) return;
+                      navigator.clipboard.writeText(displayUrl)
                       alert(
                         'Verification link copied! Send it to your phone to finish verification.'
                       )
                     }}
-                    className="hover:bg-accent-lime/10 flex-1 border-[3px] border-ink py-2 font-display text-[8px] uppercase tracking-wider shadow-[2px_2px_0_var(--ink)] transition-colors"
+                    className={`hover:bg-accent-lime/10 flex-1 border-[3px] border-ink py-2 font-display text-[8px] uppercase tracking-wider shadow-[2px_2px_0_var(--ink)] transition-colors ${!isLinkReady ? 'opacity-30 cursor-not-allowed' : ''}`}
                     style={{ background: 'var(--paper)' }}
                   >
                     COPY LINK
                   </button>
                   <div className="group relative">
                     <button
-                      className="hover:bg-accent-lime/10 border-[3px] border-ink px-3 py-2 font-display text-[8px] uppercase tracking-wider shadow-[2px_2px_0_var(--ink)] transition-colors"
+                      className={`hover:bg-accent-lime/10 border-[3px] border-ink px-3 py-2 font-display text-[8px] uppercase tracking-wider shadow-[2px_2px_0_var(--ink)] transition-colors ${!isLinkReady ? 'opacity-30 cursor-not-allowed' : ''}`}
                       style={{ background: 'var(--paper)' }}
                     >
                       QR CODE
                     </button>
-                    <div
-                      className="absolute bottom-full left-1/2 z-50 mb-3 hidden -translate-x-1/2 border-4 border-ink p-3 shadow-[6px_6px_0_var(--ink)] group-hover:block"
-                      style={{ background: 'var(--paper)' }}
-                    >
-                      <img
-                        src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(verificationUrl)}`}
-                        alt="Verification QR Code"
-                        className="h-32 w-32"
-                      />
-                      <div className="mt-2 whitespace-nowrap text-center font-display text-[7px] uppercase text-ink/50">
-                        SCAN TO VERIFY
+                    {isLinkReady && (
+                      <div
+                        className="absolute bottom-full left-1/2 z-50 mb-3 hidden -translate-x-1/2 border-4 border-ink p-3 shadow-[6px_6px_0_var(--ink)] group-hover:block"
+                        style={{ background: 'var(--paper)' }}
+                      >
+                        <img
+                          src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(displayUrl)}`}
+                          alt="Verification QR Code"
+                          className="h-32 w-32"
+                        />
+                        <div className="mt-2 whitespace-nowrap text-center font-display text-[7px] uppercase text-ink/50">
+                          SCAN TO VERIFY
+                        </div>
                       </div>
-                    </div>
+                    )}
                   </div>
                 </div>
                 <div
@@ -1217,7 +1231,6 @@ const ClassicStartCard: React.FC<{
         </button>
       </div>
     )}
-
     <div className="flex items-center justify-center gap-2 text-center font-display text-[10px] uppercase tracking-widest opacity-70">
       {isConnected ? (
         <>
@@ -1244,7 +1257,8 @@ const ClassicStartCard: React.FC<{
       </div>
     )}
   </div>
-)
+  )
+}
 
 const CanvasArea: React.FC<CanvasAreaProps> = ({
   canvasRef,

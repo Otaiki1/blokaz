@@ -23,9 +23,11 @@ export const useGoodDollar = () => {
     setIsWhitelisted,
     isStreaming,
     setIsStreaming,
-    setClearanceTurns
+    setClearanceTurns,
+    verificationUrl,
+    setVerificationUrl
   } = useGameStore()
-
+ 
   // 1. Check Identity whitelisting
   const { data: whitelistStatus, refetch: refetchIdentity } = useReadContract({
     address: GOODDOLLAR_ADDRESSES.IDENTITY,
@@ -34,18 +36,21 @@ export const useGoodDollar = () => {
     args: address ? [address] : undefined,
     query: { enabled: !!address && isConnected },
   })
-
+ 
   useEffect(() => {
     if (whitelistStatus !== undefined) setIsWhitelisted(!!whitelistStatus)
   }, [whitelistStatus, setIsWhitelisted])
-
-  // 2. Verification link — generate once per address, not on every re-render
-  const [verificationUrl, setVerificationUrl] = useState<string>('https://goodid.gooddollar.org')
+ 
+  // 2. Verification link — persist in store to survive remounts
   const urlAddressRef = useRef<string | undefined>(undefined)
-
+ 
   useEffect(() => {
-    if (!address || !publicClient || !walletClient) return
-    if (urlAddressRef.current === address) return
+    if (!address || !publicClient || !walletClient) {
+      if (!address) setVerificationUrl(null)
+      return
+    }
+    if (urlAddressRef.current === address && verificationUrl) return
+ 
     urlAddressRef.current = address
     new IdentitySDK({
       account: address,
@@ -54,9 +59,15 @@ export const useGoodDollar = () => {
       env: 'production',
     })
       .generateFVLink(false, window.location.origin, 42220)
-      .then(link => setVerificationUrl(link))
-      .catch(err => console.error('Failed to generate GoodDollar FV link:', err))
-  }, [address, publicClient, walletClient])
+      .then(link => {
+        setVerificationUrl(link)
+      })
+      .catch(err => {
+        console.error('Failed to generate GoodDollar FV link:', err)
+        // Only set fallback if we don't have a link at all
+        if (!verificationUrl) setVerificationUrl('https://goodid.gooddollar.org')
+      })
+  }, [address, publicClient, walletClient, verificationUrl, setVerificationUrl])
 
   // 3. G$ Balance
   const { data: gBalance, refetch: refetchBalance } = useBalance({
