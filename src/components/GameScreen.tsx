@@ -978,6 +978,8 @@ const ClassicStartCard: React.FC<{
   entitlement,
   claimUBI,
 }) => {
+  const [copied, setCopied] = React.useState(false)
+  const [showQR, setShowQR] = React.useState(false)
   const isLinkReady = !!verificationUrl && verificationUrl.startsWith('https://goodid');
   const displayUrl = verificationUrl || 'https://goodid.gooddollar.org';
 
@@ -1122,34 +1124,55 @@ const ClassicStartCard: React.FC<{
                     onClick={() => {
                       if (!isLinkReady) return;
                       navigator.clipboard.writeText(displayUrl)
-                      alert(
-                        'Verification link copied! Send it to your phone to finish verification.'
-                      )
+                      setCopied(true)
+                      setTimeout(() => setCopied(false), 2000)
                     }}
-                    className={`hover:bg-accent-lime/10 flex-1 border-[3px] border-ink py-2 font-display text-[8px] uppercase tracking-wider shadow-[2px_2px_0_var(--ink)] transition-colors ${!isLinkReady ? 'opacity-30 cursor-not-allowed' : ''}`}
+                    className={`hover:bg-accent-lime/10 relative flex-1 border-[3px] border-ink py-2 font-display text-[8px] uppercase tracking-wider shadow-[2px_2px_0_var(--ink)] transition-colors ${!isLinkReady ? 'opacity-30 cursor-not-allowed' : ''}`}
                     style={{ background: 'var(--paper)' }}
                   >
-                    COPY LINK
+                    {copied ? (
+                      <span className="text-accent-lime animate-pulse font-bold">COPIED TO CLIPBOARD!</span>
+                    ) : (
+                      'COPY LINK'
+                    )}
                   </button>
-                  <div className="group relative">
+                  <div className="relative">
                     <button
+                      onClick={() => isLinkReady && setShowQR(true)}
                       className={`hover:bg-accent-lime/10 border-[3px] border-ink px-3 py-2 font-display text-[8px] uppercase tracking-wider shadow-[2px_2px_0_var(--ink)] transition-colors ${!isLinkReady ? 'opacity-30 cursor-not-allowed' : ''}`}
                       style={{ background: 'var(--paper)' }}
                     >
                       QR CODE
                     </button>
-                    {isLinkReady && (
-                      <div
-                        className="absolute bottom-full left-1/2 z-50 mb-3 hidden -translate-x-1/2 border-4 border-ink p-3 shadow-[6px_6px_0_var(--ink)] group-hover:block"
-                        style={{ background: 'var(--paper)' }}
+                    {showQR && (
+                      <div 
+                        className="fixed inset-0 z-[100] flex items-center justify-center bg-ink/60 p-6 backdrop-blur-sm"
+                        onClick={() => setShowQR(false)}
                       >
-                        <img
-                          src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(displayUrl)}`}
-                          alt="Verification QR Code"
-                          className="h-32 w-32"
-                        />
-                        <div className="mt-2 whitespace-nowrap text-center font-display text-[7px] uppercase text-ink/50">
-                          SCAN TO VERIFY
+                        <div 
+                          className="w-full max-w-[300px] border-4 border-ink p-6 shadow-[10px_10px_0_var(--ink)]"
+                          style={{ background: 'var(--paper)' }}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <div className="mb-4 flex items-center justify-between border-b-2 border-ink pb-2">
+                            <span className="font-display text-[10px] uppercase tracking-widest">VERIFY ON PHONE</span>
+                            <button onClick={() => setShowQR(false)} className="font-bold">×</button>
+                          </div>
+                          <img
+                            src={`https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(displayUrl)}`}
+                            alt="Verification QR Code"
+                            className="mx-auto block aspect-square w-full border-4 border-ink"
+                          />
+                          <div className="mt-4 text-center font-display text-[8px] uppercase tracking-widest text-ink/50">
+                            SCAN THIS QR CODE WITH YOUR PHONE'S CAMERA
+                          </div>
+                          <button 
+                            onClick={() => setShowQR(false)} 
+                            className="mt-6 w-full border-[3px] border-ink py-2 font-display text-[9px] uppercase tracking-widest shadow-[4px_4px_0_var(--ink)] hover:bg-accent-lime transition-colors"
+                            style={{ background: 'var(--accent-lime)' }}
+                          >
+                            CLOSE
+                          </button>
                         </div>
                       </div>
                     )}
