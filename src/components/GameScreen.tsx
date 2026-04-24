@@ -978,7 +978,7 @@ const ClassicStartCard: React.FC<{
   entitlement,
   claimUBI,
 }) => {
-  const isLinkReady = verificationUrl && verificationUrl.startsWith('https://goodid.gooddollar.org/auth?');
+  const isLinkReady = !!verificationUrl && verificationUrl.startsWith('https://goodid');
   const displayUrl = verificationUrl || 'https://goodid.gooddollar.org';
 
   return (
