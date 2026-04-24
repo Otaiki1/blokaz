@@ -25,6 +25,7 @@ export const useGoodDollar = () => {
     setIsStreaming,
     setClearanceTurns,
     verificationUrl,
+    verificationAddress,
     setVerificationUrl
   } = useGameStore()
  
@@ -46,10 +47,19 @@ export const useGoodDollar = () => {
  
   useEffect(() => {
     if (!address || !publicClient || !walletClient) {
-      if (!address) setVerificationUrl(null)
+      if (!address) setVerificationUrl(null, null)
       return
     }
-    if (urlAddressRef.current === address && verificationUrl) return
+    
+    // If we already have a URL in the global store for THIS address, don't re-generate
+    // (This prevents the digital signature popup on every remount)
+    if (verificationUrl && verificationAddress === address) {
+      urlAddressRef.current = address
+      return
+    }
+
+    // Local address ref to prevent multiple calls in the same component instance
+    if (urlAddressRef.current === address) return
  
     urlAddressRef.current = address
     new IdentitySDK({
@@ -60,14 +70,14 @@ export const useGoodDollar = () => {
     })
       .generateFVLink(false, window.location.origin, 42220)
       .then(link => {
-        setVerificationUrl(link)
+        setVerificationUrl(link, address)
       })
       .catch(err => {
         console.error('Failed to generate GoodDollar FV link:', err)
         // Only set fallback if we don't have a link at all
-        if (!verificationUrl) setVerificationUrl('https://goodid.gooddollar.org')
+        if (!verificationUrl) setVerificationUrl('https://goodid.gooddollar.org', address)
       })
-  }, [address, publicClient, walletClient, verificationUrl, setVerificationUrl])
+  }, [address, publicClient, walletClient, verificationUrl, verificationAddress, setVerificationUrl])
 
   // 3. G$ Balance
   const { data: gBalance, refetch: refetchBalance } = useBalance({
