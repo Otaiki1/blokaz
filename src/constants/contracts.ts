@@ -1,6 +1,6 @@
 export const GOODDOLLAR_ADDRESSES = {
   // Blokaz Treasury - where G$ streams and retry fees are sent
-  TREASURY: '0x8186D9C6826FE9539270Be38FC3CE2cc950d60d0' as `0x${string}`, // Placeholder
+  TREASURY: '0x3E325B45F72dFCc3875f75b5933A5da183Ec4225' as `0x${string}`,
   
   // G$ Token (Celo Mainnet - Native SuperToken)
   G_TOKEN: '0x62B8B11039fcfE5AB0C56E502b1C372A3D2a9C7A' as `0x${string}`,

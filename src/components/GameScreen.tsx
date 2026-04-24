@@ -725,6 +725,8 @@ const GameScreen: React.FC<GameScreenProps> = ({ onOpenLeaderboard, onBack }) =>
     setGModeEnabled={setGModeEnabled}
     isWhitelisted={isWhitelisted}
     verificationUrl={verificationUrl}
+    entitlement={entitlement}
+    claimUBI={claimUBI}
   />
 
   if (isMobile) {
@@ -846,6 +848,8 @@ interface CanvasAreaProps {
   isWhitelisted: boolean
   verificationUrl: string
   address: string | undefined
+  entitlement: bigint
+  claimUBI: () => void
 }
 
 const ClassicStartCard: React.FC<{
@@ -1112,6 +1116,8 @@ const CanvasArea: React.FC<CanvasAreaProps> = ({
   setGModeEnabled,
   isWhitelisted,
   verificationUrl,
+  entitlement,
+  claimUBI,
 }) => {
   if (!gameSession) {
     return (
