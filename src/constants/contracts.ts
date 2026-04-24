@@ -3,7 +3,7 @@ export const GOODDOLLAR_ADDRESSES = {
   TREASURY: '0x3E325B45F72dFCc3875f75b5933A5da183Ec4225' as `0x${string}`,
   
   // G$ Token (Celo Mainnet - Native SuperToken)
-  G_TOKEN: '0x62B8B11039fcfE5AB0C56E502b1C372A3D2a9C7A' as `0x${string}`,
+  G_TOKEN: '0x62B8B11039FcfE5aB0C56E502b1C372A3d2a9c7A' as `0x${string}`,
 
   // GoodDollar UBI Pool (where UBI is claimed from)
   UBI_POOL: '0x43d72Ff17701B2DA814620735C39C620Ce0ea4A1' as `0x${string}`,
