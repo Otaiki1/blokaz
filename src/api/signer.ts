@@ -28,7 +28,8 @@ export async function requestSubmitSignature(
   gid: bigint,
   score: number,
   moves: any[],
-  seed: `0x${string}`
+  seed: `0x${string}`,
+  player: `0x${string}`
 ) {
   const response = await fetch(`${SIGNER_API_BASE}/sign-submit`, {
     method: 'POST',
@@ -39,6 +40,7 @@ export async function requestSubmitSignature(
       score,
       moves,
       seed,
+      player,
     }),
   });
 

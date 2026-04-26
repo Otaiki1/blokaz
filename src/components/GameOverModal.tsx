@@ -175,7 +175,8 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
           effectiveGameId!,
           gameSession.score,
           gameSession.moveHistory,
-          recoveredSeed
+          recoveredSeed,
+          address!
         )
         submitTournamentScore(
           tournamentId!,
