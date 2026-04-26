@@ -91,12 +91,26 @@ export function useLeaderboard(epoch?: bigint) {
 }
 
 /**
- * Hook to check if a player has an active game.
+ * Hook to check if a player has an active game (classic contract).
  */
 export function useActiveGame(address?: `0x${string}`) {
   const { data: gameId, isLoading, refetch } = useReadContract({
     address: GAME_ADDRESS,
     abi: BLOKZ_GAME_ABI,
+    functionName: 'activeGame',
+    args: address ? [address] : undefined,
+  })
+
+  return { gameId, isLoading, refetch }
+}
+
+/**
+ * Hook to check if a player has an active game in the tournament contract.
+ */
+export function useActiveTournamentGame(address?: `0x${string}`) {
+  const { data: gameId, isLoading, refetch } = useReadContract({
+    address: TOURNAMENT_ADDRESS,
+    abi: BLOKZ_TOURNAMENT_ABI,
     functionName: 'activeGame',
     args: address ? [address] : undefined,
   })

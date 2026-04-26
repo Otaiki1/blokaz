@@ -9,15 +9,11 @@ This server handles session signing and score verification for Blokz Tournaments
    npm install
    ```
 
-2. Configure environment:
-   Create a `.env` file in this directory with:
-   ```env
-   PORT=3001
-   SIGNER_PRIVATE_KEY=your_key_here
-   TOURNAMENT_ADDRESS=0xea6c2873830ed989d2df6da025663ae88d8cb5d6
-   CHAIN_ID=11142220
-   RPC_URL=https://forno.celo.org
+2. Configure environment — copy the example and fill in your signer key:
+   ```bash
+   cp .env.example .env
    ```
+   Then edit `.env` and set `SIGNER_PRIVATE_KEY` to the key that owns the signer role on the contract.
 
 ## Running
 

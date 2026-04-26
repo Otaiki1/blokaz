@@ -1,4 +1,4 @@
-const SIGNER_API_BASE = 'http://localhost:3001';
+const SIGNER_API_BASE = (import.meta.env.VITE_SIGNER_URL as string | undefined) ?? 'http://localhost:3001';
 
 export async function requestStartSignature(tid: bigint, seedHash: `0x${string}`, player: `0x${string}`) {
   const response = await fetch(`${SIGNER_API_BASE}/sign-start`, {
