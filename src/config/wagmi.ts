@@ -1,7 +1,7 @@
 import { getDefaultConfig } from '@rainbow-me/rainbowkit'
 import { injected } from 'wagmi/connectors'
 import { http, custom, fallback } from 'wagmi'
-import { celoSepolia } from 'wagmi/chains'
+import { celo } from 'wagmi/chains'
 
 // Use the Infura RPC from .env as the secondary fallback.
 const rpcUrl = import.meta.env.VITE_RPC as string | undefined
@@ -45,12 +45,12 @@ export const injectedConnector = injected({
 export const config = getDefaultConfig({
   appName: 'Blokaz',
   projectId: import.meta.env.VITE_WALLETCONNECT_PROJECT_ID ?? '',
-  chains: [celoSepolia],
+  chains: [celo],
   connectors: [injectedConnector],
   transports: {
-    [celoSepolia.id]: fallback([
+    [celo.id]: fallback([
       custom(lazyWindowEthereum),
-      rpcUrl ? http(rpcUrl) : http('https://forno.celo-sepolia.celo-testnet.org'),
+      rpcUrl ? http(rpcUrl) : http('https://forno.celo.org'),
     ]),
   },
   ssr: false,
