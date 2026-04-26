@@ -19,6 +19,7 @@ import {
   generateGameSeed,
   useActiveGame,
 } from '../hooks/useBlokzGame'
+import { requestStartSignature } from '../api/signer'
 import { useAccount } from 'wagmi'
 import { keccak256, encodePacked } from 'viem'
 import contractInfo from '../contract.json'
@@ -28,7 +29,8 @@ import {
   writeStoredGameSession,
 } from '../utils/gameSessionStorage'
 
-const CONTRACT_ADDRESS = contractInfo.address as `0x${string}`
+const CONTRACT_ADDRESS = contractInfo.game as `0x${string}`
+const TOURNAMENT_ADDRESS = contractInfo.tournament as `0x${string}`
 
 interface TournamentGameScreenProps {
   onBackToHall: () => void
@@ -83,7 +85,7 @@ const TournamentGameScreen: React.FC<TournamentGameScreenProps> = ({
     const storedSession = readStoredGameSession(
       TOURNAMENT_SESSION_STORAGE_KEY,
       address,
-      CONTRACT_ADDRESS
+      TOURNAMENT_ADDRESS
     )
 
     const contractActiveId = (onChainActiveGameId as bigint) || 0n
@@ -133,7 +135,7 @@ const TournamentGameScreen: React.FC<TournamentGameScreenProps> = ({
     const storedSession = readStoredGameSession(
       TOURNAMENT_SESSION_STORAGE_KEY,
       address,
-      CONTRACT_ADDRESS
+      TOURNAMENT_ADDRESS
     )
     if (storedSession?.tournamentId && !tournamentId) {
       setTournamentId(BigInt(storedSession.tournamentId))
@@ -148,7 +150,7 @@ const TournamentGameScreen: React.FC<TournamentGameScreenProps> = ({
   }, [tournamentId, onBackToHall])
 
   // 1. Handle Start (On-chain ONLY)
-  const handleStartGame = () => {
+  const handleStartGame = async () => {
     if (!isConnected || !address) return
 
     // ESSENTIAL: Pull freshest state from store to avoid stale closures during "Play Again"
@@ -185,10 +187,20 @@ const TournamentGameScreen: React.FC<TournamentGameScreenProps> = ({
       hash,
       gameId: null,
       tournamentId: tournamentId?.toString(),
-      contractAddress: CONTRACT_ADDRESS,
+      contractAddress: TOURNAMENT_ADDRESS,
     })
 
-    contractStartTournamentGame(tournamentId!, hash)
+    try {
+      const { signature, nonce, deadline } = await requestStartSignature(
+        tournamentId!,
+        hash,
+        address
+      )
+      contractStartTournamentGame(tournamentId!, hash, nonce, deadline, signature)
+    } catch (err) {
+      console.error('Failed to get start signature:', err)
+      hapticError()
+    }
   }
 
   // 2. Background Sync
@@ -208,7 +220,7 @@ const TournamentGameScreen: React.FC<TournamentGameScreenProps> = ({
             hash: currentSeed.hash,
             gameId: newGameId.toString(),
             tournamentId: tournamentId?.toString(),
-            contractAddress: CONTRACT_ADDRESS,
+            contractAddress: TOURNAMENT_ADDRESS,
           })
 
           clearInterval(timer)
