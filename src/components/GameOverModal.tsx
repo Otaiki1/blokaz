@@ -9,8 +9,9 @@ import {
   useSubmitTournamentScore,
 } from '../hooks/useBlokzGame'
 import { useAccount, useReadContract } from 'wagmi'
-import { BLOKZ_GAME_ABI } from '../constants/abi'
+import { BLOKZ_GAME_ABI, BLOKZ_TOURNAMENT_ABI } from '../constants/abi'
 import contractInfo from '../contract.json'
+import { requestSubmitSignature } from '../api/signer'
 import { keccak256, encodePacked } from 'viem'
 import {
   CLASSIC_SESSION_STORAGE_KEY,
@@ -20,7 +21,8 @@ import {
 } from '../utils/gameSessionStorage'
 import { BrutalIcon } from './BrutalIcon'
 
-const CONTRACT_ADDRESS = contractInfo.address as `0x${string}`
+const GAME_ADDRESS = contractInfo.game as `0x${string}`
+const TOURNAMENT_ADDRESS = contractInfo.tournament as `0x${string}`
 
 interface GameOverModalProps {
   score: number
@@ -91,7 +93,7 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
   const effectiveGameId = onChainGameId || activeGameId
 
   const { data: gameData, isLoading: isLoadingContract } = useReadContract({
-    address: CONTRACT_ADDRESS,
+    address: GAME_ADDRESS,
     abi: BLOKZ_GAME_ABI,
     functionName: 'games',
     args: effectiveGameId ? [effectiveGameId] : undefined,
@@ -102,7 +104,7 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
     if (onChainSeed) return onChainSeed
     if (!address) return null
     return (
-      readStoredGameSession(storageKey, address, CONTRACT_ADDRESS)?.seed ?? null
+      readStoredGameSession(storageKey, address, TOURNAMENT_ADDRESS)?.seed ?? null
     )
   }, [address, onChainSeed, storageKey])
 
@@ -139,20 +141,30 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
     onPlayAgain()
   }
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!gameSession || !recoveredSeed || !effectiveGameId || !isSeedMatch)
       return
     if (isPending || isConfirming || isSuccess) return
     const packed = packMoves(gameSession.moveHistory)
     if (isTournamentMode) {
-      submitTournamentScore(
-        tournamentId,
-        effectiveGameId,
-        recoveredSeed,
-        packed,
-        gameSession.score,
-        gameSession.moveHistory.length
-      )
+      try {
+        const { signature, deadline } = await requestSubmitSignature(
+          tournamentId!,
+          effectiveGameId!,
+          gameSession.score,
+          gameSession.moveHistory,
+          recoveredSeed
+        )
+        submitTournamentScore(
+          tournamentId!,
+          effectiveGameId!,
+          gameSession.score,
+          deadline,
+          signature
+        )
+      } catch (err) {
+        console.error('Failed to get submission signature:', err)
+      }
     } else {
       submitScore(
         effectiveGameId,
