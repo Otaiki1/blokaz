@@ -13,7 +13,7 @@ import {
 } from '../hooks/useBlokzGame'
 import { parseUnits, formatUnits } from 'viem'
 import { useChainId, useWaitForTransactionReceipt } from 'wagmi'
-import { celoSepolia } from 'wagmi/chains'
+import { celo } from 'wagmi/chains'
 
 const AdminDashboard: React.FC = () => {
   const {
@@ -43,7 +43,7 @@ const AdminDashboard: React.FC = () => {
   const { revenue, isLoading: isLoadingRevenue, refetch: refetchRevenue } = useProtocolRevenue()
   
   const chainId = useChainId()
-  const isWrongChain = chainId !== celoSepolia.id
+  const isWrongChain = chainId !== celo.id
 
   const [fee, setFee] = useState('0.1')
   const [duration, setDuration] = useState('24') // hours
@@ -100,7 +100,7 @@ const AdminDashboard: React.FC = () => {
 
       {isWrongChain && (
         <div className="mb-8 border-4 border-danger bg-danger px-6 py-3 font-display text-xs uppercase tracking-widest text-paper animate-pulse">
-          ⚠️ WRONG NETWORK: PLEASE SWITCH TO CELO SEPOLIA
+          ⚠️ WRONG NETWORK: PLEASE SWITCH TO CELO MAINNET
         </div>
       )}
 
