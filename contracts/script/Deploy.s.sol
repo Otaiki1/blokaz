@@ -15,26 +15,23 @@ contract DeployBlokz is Script {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
         address deployerAddress = vm.addr(deployerPrivateKey);
         
-        // Celo Alfajores USDC
-        address usdc = 0x01C5C0122039549AD1493B8220cABEdD739BC44E;
+        // Addresses
+        address usdc = vm.envOr("USDC_ADDRESS", address(0xcebA9300f2b948710d2653dD7B07f33A8B32118C));
+        address game = vm.envOr("GAME_ADDRESS", address(0x16C3A18FDcb6905f58311C5b8a6e91e447Fefe43));
         
-        // Trusted Signer (Set this in your .env, or defaults to deployer for testing)
+        // Trusted Signer 
         address trustedSigner = vm.envOr("TRUSTED_SIGNER", deployerAddress);
 
         vm.startBroadcast(deployerPrivateKey);
 
-        // 1. Deploy BlokzGame (Legacy/Registry)
-        BlokzGame game = new BlokzGame(deployerAddress);
-        console.log("BlokzGame deployed at:", address(game));
-
-        // 2. Deploy BlokzTournament Implementation
+        // 1. Deploy BlokzTournament Implementation
         BlokzTournament implementation = new BlokzTournament();
         console.log("Tournament Implementation deployed at:", address(implementation));
 
-        // 3. Deploy ERC1967 Proxy
+        // 2. Deploy ERC1967 Proxy
         bytes memory initData = abi.encodeWithSelector(
             BlokzTournament.initialize.selector,
-            address(game),
+            game,
             usdc,
             deployerAddress, // Admin
             trustedSigner   // Signer
