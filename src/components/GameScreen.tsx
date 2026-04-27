@@ -1685,7 +1685,7 @@ const MobileLayout: React.FC<MobileLayoutProps> = ({
   onBack,
   canvasArea,
 }) => (
-  <div className={`flex w-full flex-col ${gameSession ? 'h-full overflow-hidden' : 'h-auto overflow-visible'}`}>
+  <div className={`flex w-full flex-col flex-1 min-h-0 ${gameSession ? 'overflow-hidden' : 'h-auto overflow-visible'}`}>
     {gameSession && (
       <>
         {/* ── Game chrome: back / status / pause ──────────────────── */}
