@@ -7,6 +7,7 @@ import TournamentHall from './components/TournamentHall'
 import AdminDashboard from './components/AdminDashboard'
 import LobbyScreen from './components/LobbyScreen'
 import { useGameStore } from './stores/gameStore'
+import { useThemeStore, type ThemeMode } from './stores/themeStore'
 
 type AppView = 'lobby' | 'classic' | 'tournaments' | 'tournament-play' | 'admin'
 
@@ -23,6 +24,7 @@ const App: React.FC = () => {
   const [showLeaderboard, setShowLeaderboard] = useState(false)
   const { setTournamentId, forceReset } = useGameStore()
   const [activeView, setActiveView] = useState<AppView>('lobby')
+  const setThemeMode = useThemeStore((state) => state.setMode)
 
   useEffect(() => {
     const handleHashChange = () => {
@@ -41,6 +43,21 @@ const App: React.FC = () => {
     handleHashChange()
     return () => window.removeEventListener('hashchange', handleHashChange)
   }, [forceReset])
+
+  useEffect(() => {
+    const nextMode: ThemeMode = showLeaderboard
+      ? 'leaderboard'
+      : activeView === 'classic'
+        ? 'classic'
+        : activeView === 'tournaments'
+          ? 'tournaments'
+          : activeView === 'tournament-play'
+            ? 'tournament-play'
+            : activeView === 'admin'
+              ? 'admin'
+              : 'lobby'
+    setThemeMode(nextMode)
+  }, [activeView, setThemeMode, showLeaderboard])
 
   const handleNavigate = (view: AppView, clearTournament: boolean = true) => {
     if (view === 'lobby') {

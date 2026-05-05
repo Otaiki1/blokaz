@@ -15,19 +15,36 @@ export const COLOR_PALETTE = {
 
 export const TOURNAMENT_PALETTE = {
   0: 'transparent',
-  1: '#FF3BBD',  // hot pink  — singles
-  2: '#FF7A1A',  // orange    — L-shapes
-  3: '#FFD51F',  // yellow    — squares
-  4: '#B7FF3B',  // lime      — bigL
-  5: '#2CE66A',  // green     — (unused, safety net)
-  6: '#29E6E6',  // cyan      — lines
-  7: '#2F6BFF',  // blue      — (unused, safety net)
-  8: '#8A3DFF',  // purple    — T/other
-  9: '#FF3D3D',  // red       — zigzag
+  1: COLOR_PALETTE[9], // hot pink  — singles
+  2: COLOR_PALETTE[2], // orange    — L-shapes
+  3: COLOR_PALETTE[3], // yellow    — squares
+  4: COLOR_PALETTE[4], // lime      — bigL
+  5: COLOR_PALETTE[5], // green     — (unused, safety net)
+  6: COLOR_PALETTE[6], // cyan      — lines
+  7: COLOR_PALETTE[7], // blue      — (unused, safety net)
+  8: COLOR_PALETTE[8], // purple    — T/other
+  9: COLOR_PALETTE[1], // red       — zigzag
 }
 
-const getThemeColor = (name: string, fallback: string) => 
-  typeof window !== 'undefined' ? (getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback) : fallback
+const getThemeColor = (name: string) =>
+  getComputedStyle(document.documentElement).getPropertyValue(name).trim()
+
+const withAlpha = (color: string, alpha: number) => {
+  if (color.startsWith('#')) {
+    const normalized = color.length === 4
+      ? color
+          .slice(1)
+          .split('')
+          .map((part) => part + part)
+          .join('')
+      : color.slice(1)
+    const r = Number.parseInt(normalized.slice(0, 2), 16)
+    const g = Number.parseInt(normalized.slice(2, 4), 16)
+    const b = Number.parseInt(normalized.slice(4, 6), 16)
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`
+  }
+  return `color-mix(in srgb, ${color} ${Math.round(alpha * 100)}%, transparent)`
+}
 
 export class GridRenderer {
   private canvas: HTMLCanvasElement
@@ -35,6 +52,7 @@ export class GridRenderer {
   private gridSize: number
   private cellSize: number
   private stripeCache: { valid?: CanvasPattern; invalid?: CanvasPattern } = {}
+  private stripeThemeKey = ''
 
   constructor(canvas: HTMLCanvasElement, gridSize: number) {
     this.canvas = canvas
@@ -50,20 +68,46 @@ export class GridRenderer {
   ): void {
     this.ctx.clearRect(0, 0, this.gridSize, this.gridSize)
 
+    const css = getComputedStyle(document.documentElement)
+    const bg = css.getPropertyValue('--board').trim()
+    const empty = css.getPropertyValue('--empty-cell').trim()
+    const ink = css.getPropertyValue('--ink').trim()
+    const rule = css.getPropertyValue('--rule').trim()
+    const accent = css.getPropertyValue('--accent').trim()
+    const stripeThemeKey = `${accent}|${ink}`
+    if (stripeThemeKey !== this.stripeThemeKey) {
+      this.stripeThemeKey = stripeThemeKey
+      this.stripeCache = {}
+    }
+
     // Board background
-    const inkColor = getThemeColor('--ink', '#0C0C10')
-    this.ctx.fillStyle = isTournament ? inkColor : getThemeColor('--paper-lite', '#ffffff')
+    this.ctx.fillStyle = bg
     this.ctx.fillRect(0, 0, this.gridSize, this.gridSize)
 
     // Board border
-    this.ctx.strokeStyle = inkColor
+    this.ctx.strokeStyle = ink
     this.ctx.lineWidth = 6
     this.ctx.strokeRect(0, 0, this.gridSize, this.gridSize)
 
+    const palette = isTournament ? TOURNAMENT_PALETTE : COLOR_PALETTE
+    for (let r = 0; r < 9; r++) {
+      for (let c = 0; c < 9; c++) {
+        const val = Grid.getCell(grid, r, c)
+        if (val === 0) {
+          this.drawEmptyCell(r, c, empty)
+        } else {
+          this.drawCell(
+            r,
+            c,
+            palette[val as keyof typeof palette],
+            ink
+          )
+        }
+      }
+    }
+
     // Gridlines
-    this.ctx.strokeStyle = isTournament
-      ? 'rgba(245,239,227,0.15)'
-      : `${getThemeColor('--ink', '#000')}14`
+    this.ctx.strokeStyle = rule
     this.ctx.lineWidth = 1
     for (let i = 1; i < 9; i++) {
       const pos = i * this.cellSize
@@ -77,22 +121,6 @@ export class GridRenderer {
       this.ctx.stroke()
     }
 
-    // Filled cells
-    const palette = isTournament ? TOURNAMENT_PALETTE : COLOR_PALETTE
-    for (let r = 0; r < 9; r++) {
-      for (let c = 0; c < 9; c++) {
-        const val = Grid.getCell(grid, r, c)
-        if (val !== 0) {
-          this.drawCell(
-            r,
-            c,
-            palette[val as keyof typeof palette],
-            isTournament
-          )
-        }
-      }
-    }
-
     // Ghost preview
     if (ghostCells) {
       for (const ghost of ghostCells) {
@@ -101,12 +129,18 @@ export class GridRenderer {
     }
   }
 
-  private drawCell(
-    row: number,
-    col: number,
-    color: string,
-    isTournament: boolean
-  ): void {
+  private drawEmptyCell(row: number, col: number, fill: string): void {
+    const pad = 1.8
+    const x = col * this.cellSize + pad
+    const y = row * this.cellSize + pad
+    const size = this.cellSize - pad * 2
+    if (size <= 0) return
+
+    this.ctx.fillStyle = fill
+    this.ctx.fillRect(x, y, size, size)
+  }
+
+  private drawCell(row: number, col: number, color: string, ink: string): void {
     const pad = 1.8
     const x = col * this.cellSize + pad
     const y = row * this.cellSize + pad
@@ -117,7 +151,7 @@ export class GridRenderer {
     this.ctx.rect(x, y, size, size)
     this.ctx.fillStyle = color
     this.ctx.fill()
-    this.ctx.strokeStyle = getThemeColor('--ink', '#0C0C10')
+    this.ctx.strokeStyle = ink
     this.ctx.lineWidth = 3
     this.ctx.stroke()
 
@@ -129,12 +163,6 @@ export class GridRenderer {
     const shadowH = Math.floor(size * 0.28)
     this.ctx.fillStyle = 'rgba(0,0,0,0.12)'
     this.ctx.fillRect(x + 1, y + size - shadowH - 1, size - 2, shadowH)
-
-    if (isTournament) {
-      this.ctx.strokeStyle = color
-      this.ctx.lineWidth = 2
-      this.ctx.strokeRect(x - 1, y - 1, size + 2, size + 2)
-    }
   }
 
   private drawGhostCell(row: number, col: number, valid: boolean): void {
@@ -157,7 +185,7 @@ export class GridRenderer {
     }
 
     this.ctx.setLineDash([3, 3])
-    this.ctx.strokeStyle = getThemeColor('--ink', '#0C0C10')
+    this.ctx.strokeStyle = getThemeColor('--ink')
     this.ctx.lineWidth = 2
     this.ctx.strokeRect(x, y, size, size)
     this.ctx.setLineDash([])
@@ -168,9 +196,10 @@ export class GridRenderer {
     pc.width = 8
     pc.height = 8
     const pCtx = pc.getContext('2d')!
-    pCtx.fillStyle = valid ? '#B7FF3B33' : '#FF3D3D33'
+    const accent = getThemeColor('--accent')
+    pCtx.fillStyle = withAlpha(accent, valid ? 0.4 : 0.22)
     pCtx.fillRect(0, 0, 8, 8)
-    pCtx.strokeStyle = valid ? 'rgba(12,12,16,0.35)' : 'rgba(12,12,16,0.45)'
+    pCtx.strokeStyle = withAlpha(getThemeColor('--ink'), valid ? 0.22 : 0.3)
     pCtx.lineWidth = 2
     pCtx.beginPath()
     pCtx.moveTo(-1, 6)

@@ -6,10 +6,10 @@ interface ComboOverlayProps {
 }
 
 const FLOAT_PIECES = [
-  { cells: [[0,0],[1,0],[2,0],[2,1]], color: '#FF3D3D', rot: '-20deg', top: '55%', left: '8%' },
-  { cells: [[0,0],[0,1],[1,0],[1,1]], color: '#FF3BBD', rot: '25deg', top: '62%', right: '10%' },
-  { cells: [[0,0],[0,1],[0,2]], color: '#29E6E6', rot: '15deg', top: '72%', left: '18%' },
-  { cells: [[0,0],[0,1],[0,2]], color: '#8A3DFF', rot: '-12deg', top: '68%', right: '20%' },
+  { cells: [[0,0],[1,0],[2,0],[2,1]], color: 'var(--piece-red)', rot: '-20deg', top: '55%', left: '8%' },
+  { cells: [[0,0],[0,1],[1,0],[1,1]], color: 'var(--piece-pink)', rot: '25deg', top: '62%', right: '10%' },
+  { cells: [[0,0],[0,1],[0,2]], color: 'var(--piece-cyan)', rot: '15deg', top: '72%', left: '18%' },
+  { cells: [[0,0],[0,1],[0,2]], color: 'var(--piece-purple)', rot: '-12deg', top: '68%', right: '20%' },
 ]
 
 export const ComboOverlay: React.FC<ComboOverlayProps> = ({ streak, trigger }) => {
@@ -31,18 +31,18 @@ export const ComboOverlay: React.FC<ComboOverlayProps> = ({ streak, trigger }) =
         className="absolute inset-0"
         style={{
           background: `conic-gradient(from 0deg at 50% 55%,
-            var(--accent-yellow) 0deg 15deg, var(--paper) 15deg 30deg,
-            var(--accent-yellow) 30deg 45deg, var(--paper) 45deg 60deg,
-            var(--accent-yellow) 60deg 75deg, var(--paper) 75deg 90deg,
-            var(--accent-yellow) 90deg 105deg, var(--paper) 105deg 120deg,
-            var(--accent-yellow) 120deg 135deg, var(--paper) 135deg 150deg,
-            var(--accent-yellow) 150deg 165deg, var(--paper) 165deg 180deg,
-            var(--accent-yellow) 180deg 195deg, var(--paper) 195deg 210deg,
-            var(--accent-yellow) 210deg 225deg, var(--paper) 225deg 240deg,
-            var(--accent-yellow) 240deg 255deg, var(--paper) 255deg 270deg,
-            var(--accent-yellow) 270deg 285deg, var(--paper) 285deg 300deg,
-            var(--accent-yellow) 300deg 315deg, var(--paper) 315deg 330deg,
-            var(--accent-yellow) 330deg 345deg, var(--paper) 345deg 360deg)`,
+            var(--combo-burst-strong) 0deg 15deg, var(--combo-burst-soft) 15deg 30deg,
+            var(--combo-burst-strong) 30deg 45deg, var(--combo-burst-soft) 45deg 60deg,
+            var(--combo-burst-strong) 60deg 75deg, var(--combo-burst-soft) 75deg 90deg,
+            var(--combo-burst-strong) 90deg 105deg, var(--combo-burst-soft) 105deg 120deg,
+            var(--combo-burst-strong) 120deg 135deg, var(--combo-burst-soft) 135deg 150deg,
+            var(--combo-burst-strong) 150deg 165deg, var(--combo-burst-soft) 165deg 180deg,
+            var(--combo-burst-strong) 180deg 195deg, var(--combo-burst-soft) 195deg 210deg,
+            var(--combo-burst-strong) 210deg 225deg, var(--combo-burst-soft) 225deg 240deg,
+            var(--combo-burst-strong) 240deg 255deg, var(--combo-burst-soft) 255deg 270deg,
+            var(--combo-burst-strong) 270deg 285deg, var(--combo-burst-soft) 285deg 300deg,
+            var(--combo-burst-strong) 300deg 315deg, var(--combo-burst-soft) 315deg 330deg,
+            var(--combo-burst-strong) 330deg 345deg, var(--combo-burst-soft) 345deg 360deg)`,
           animation: 'comboSunburst 1.2s ease-out forwards',
         }}
       />
@@ -71,7 +71,7 @@ export const ComboOverlay: React.FC<ComboOverlayProps> = ({ streak, trigger }) =
           transform: 'translateX(-50%) rotate(3deg)',
           fontSize: 40,
           padding: '6px 20px',
-          boxShadow: '5px 5px 0 var(--ink)',
+          boxShadow: '5px 5px 0 var(--shadow)',
           letterSpacing: '-0.02em',
           animation: 'comboMult 1.2s cubic-bezier(0.34,1.56,0.64,1) 0.12s forwards',
           opacity: 0,

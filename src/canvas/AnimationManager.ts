@@ -7,8 +7,19 @@ interface Animation {
   params: any
 }
 
-const getThemeColor = (name: string, fallback: string) => 
-  typeof window !== 'undefined' ? (getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback) : fallback
+const getThemeColor = (name: string) =>
+  getComputedStyle(document.documentElement).getPropertyValue(name).trim()
+
+const withAlpha = (color: string, alpha: number) => {
+  if (color.startsWith('#')) {
+    const normalized = color.slice(1)
+    const r = Number.parseInt(normalized.slice(0, 2), 16)
+    const g = Number.parseInt(normalized.slice(2, 4), 16)
+    const b = Number.parseInt(normalized.slice(4, 6), 16)
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`
+  }
+  return color
+}
 
 export class AnimationManager {
   private animations: Animation[] = []
@@ -43,8 +54,8 @@ export class AnimationManager {
           
           // Draw "CLEAR!" sticker at the start of each row
           if (anim.progress < 0.6) {
-            const inkColor = getThemeColor('--ink', '#0C0C10')
-            const limeColor = getThemeColor('--accent-lime', '#B7FF3B')
+            const inkColor = getThemeColor('--ink')
+            const limeColor = getThemeColor('--accent-lime')
             ctx.save()
             ctx.translate(cellSize * 1.5, r * cellSize + cellSize / 2)
             ctx.rotate(-0.1)
@@ -66,8 +77,8 @@ export class AnimationManager {
         })
       } else if (anim.type === 'SCORE') {
         const { x, y, score } = anim.params
-        const inkColor = getThemeColor('--ink', '#0C0C10')
-        ctx.fillStyle = isTournament ? getThemeColor('--accent-cyan', '#8CEEF0') : inkColor
+        const inkColor = getThemeColor('--ink')
+        ctx.fillStyle = isTournament ? getThemeColor('--accent-cyan') : inkColor
         ctx.globalAlpha = 1 - anim.progress
         ctx.font = '22px "Archivo Black"'
         ctx.shadowColor = 'rgba(0,0,0,0.3)'
@@ -76,19 +87,20 @@ export class AnimationManager {
       } else if (anim.type === 'COMBO') {
         const { streak } = anim.params
         const center = ctx.canvas.width / 2
+        const accentColor = getThemeColor('--accent')
         
         // Sunburst/Flash effect
         if (anim.progress < 0.5) {
-          ctx.fillStyle = `rgba(255, 213, 31, ${0.2 * (1 - anim.progress * 2)})`
+          ctx.fillStyle = withAlpha(accentColor, Math.max(0, 0.2 - anim.progress * 0.4))
           ctx.beginPath()
           ctx.arc(center, ctx.canvas.height / 2, anim.progress * 800, 0, Math.PI * 2)
           ctx.fill()
         }
 
         ctx.textAlign = 'center'
-        const pinkColor = getThemeColor('--accent-pink', '#FF3BBD')
-        const redColor = getThemeColor('--danger', '#FF3D3D')
-        const inkColor = getThemeColor('--ink', '#0C0C10')
+        const pinkColor = getThemeColor('--accent-pink')
+        const redColor = getThemeColor('--danger')
+        const inkColor = getThemeColor('--ink')
 
         ctx.fillStyle = isTournament ? pinkColor : redColor
         ctx.strokeStyle = inkColor
@@ -103,7 +115,7 @@ export class AnimationManager {
         
         // Subtext xN
         ctx.font = `${Math.floor(28 * scale)}px "Archivo Black"`
-        ctx.fillStyle = isTournament ? getThemeColor('--accent-lime', '#B7FF3B') : getThemeColor('--accent-yellow', '#FFD51F')
+        ctx.fillStyle = isTournament ? getThemeColor('--accent-lime') : getThemeColor('--accent-yellow')
         ctx.strokeText(`x${streak}`, center, yPos + 40)
         ctx.fillText(`x${streak}`, center, yPos + 40)
       }

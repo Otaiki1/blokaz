@@ -105,7 +105,7 @@ const LandingPage: React.FC<LandingPageProps> = ({
           <div
             className="border-4 border-ink p-1"
             style={{
-              background: '#FFD51F',
+              background: 'var(--piece-yellow)',
               width: 38,
               height: 38,
             }}
@@ -125,8 +125,8 @@ const LandingPage: React.FC<LandingPageProps> = ({
           onClick={onOpenLeaderboard}
           className="border-2 border-ink px-2.5 py-1.5 font-display text-[9px] font-black tracking-[0.1em] text-ink"
           style={{
-            background: '#B7FF3B',
-            boxShadow: '2px 2px 0 var(--ink)',
+            background: 'var(--piece-lime)',
+            boxShadow: '2px 2px 0 var(--shadow)',
           }}
         >
           {formatAddress(address)}
@@ -149,8 +149,8 @@ const LandingPage: React.FC<LandingPageProps> = ({
         <div
           className="mb-6 border-4 border-ink p-5 relative"
           style={{
-            background: '#FFD51F',
-            boxShadow: '4px 4px 0 var(--ink)',
+            background: 'var(--piece-yellow)',
+            boxShadow: '4px 4px 0 var(--shadow)',
           }}
         >
           <div className="relative leading-none mb-2">
@@ -168,9 +168,9 @@ const LandingPage: React.FC<LandingPageProps> = ({
           {/* Decorative squares */}
           <div className="absolute top-3 right-3 flex gap-1">
             {[
-              { bg: '#FF3D3D' },
+              { bg: 'var(--piece-red)' },
               { bg: '#FFB8D6' },
-              { bg: '#2F6BFF' },
+              { bg: 'var(--piece-blue)' },
             ].map((item, i) => (
               <div
                 key={i}
@@ -192,7 +192,7 @@ const LandingPage: React.FC<LandingPageProps> = ({
             className="border-4 border-ink p-3"
             style={{
               background: 'var(--paper-2)',
-              boxShadow: '3px 3px 0 var(--ink)',
+              boxShadow: '3px 3px 0 var(--shadow)',
             }}
           >
             <div className="font-display text-[8px] font-black tracking-[0.14em] text-ink/70 mb-2">
@@ -208,7 +208,7 @@ const LandingPage: React.FC<LandingPageProps> = ({
             className="border-4 border-ink p-3"
             style={{
               background: '#FFB8D6',
-              boxShadow: '3px 3px 0 var(--ink)',
+              boxShadow: '3px 3px 0 var(--shadow)',
             }}
           >
             <div className="font-display text-[8px] font-black tracking-[0.14em] text-ink/70 mb-2">
@@ -223,8 +223,8 @@ const LandingPage: React.FC<LandingPageProps> = ({
           <div
             className="border-4 border-ink p-3"
             style={{
-              background: '#B7FF3B',
-              boxShadow: '3px 3px 0 var(--ink)',
+              background: 'var(--piece-lime)',
+              boxShadow: '3px 3px 0 var(--shadow)',
             }}
           >
             <div className="font-display text-[8px] font-black tracking-[0.14em] text-ink/70 mb-2">
@@ -241,8 +241,8 @@ const LandingPage: React.FC<LandingPageProps> = ({
           onClick={onPlayClassic}
           className="w-full mb-3 border-4 border-ink p-4 flex items-center justify-between active:translate-x-[2px] active:translate-y-[2px]"
           style={{
-            background: '#FF3D3D',
-            boxShadow: '4px 4px 0 var(--ink)',
+            background: 'var(--piece-red)',
+            boxShadow: '4px 4px 0 var(--shadow)',
             transition: 'all 80ms cubic-bezier(0.34, 1.56, 0.64, 1)',
           }}
         >
@@ -252,7 +252,7 @@ const LandingPage: React.FC<LandingPageProps> = ({
               style={{
                 width: 32,
                 height: 32,
-                background: '#000',
+                background: 'var(--ink)',
               }}
             >
               <BrutalIcon name="play" size={16} className="text-white ml-0.5" strokeWidth={2.5} />
@@ -274,8 +274,8 @@ const LandingPage: React.FC<LandingPageProps> = ({
           onClick={onOpenTournaments}
           className="w-full mb-3 border-4 border-ink p-4 flex items-center justify-between active:translate-x-[2px] active:translate-y-[2px]"
           style={{
-            background: '#2F6BFF',
-            boxShadow: '4px 4px 0 var(--ink)',
+            background: 'var(--piece-blue)',
+            boxShadow: '4px 4px 0 var(--shadow)',
             transition: 'all 80ms cubic-bezier(0.34, 1.56, 0.64, 1)',
           }}
         >
@@ -285,7 +285,7 @@ const LandingPage: React.FC<LandingPageProps> = ({
               style={{
                 width: 32,
                 height: 32,
-                background: '#000',
+                background: 'var(--ink)',
               }}
             >
               <BrutalIcon name="trophy" size={16} className="text-white" strokeWidth={2.5} />
@@ -300,7 +300,7 @@ const LandingPage: React.FC<LandingPageProps> = ({
             </div>
           </div>
           <div className="text-right flex flex-col items-end gap-1">
-            <div className="text-[8px] font-display font-black text-black px-2 py-0.5" style={{ background: '#FFD51F', border: '2px solid #000' }}>
+            <div className="text-[8px] font-display font-black text-black px-2 py-0.5" style={{ background: 'var(--piece-yellow)', border: '2px solid var(--ink)' }}>
               +$247 POOL
             </div>
             <span className="text-[24px] text-white font-black">→</span>
@@ -312,12 +312,12 @@ const LandingPage: React.FC<LandingPageProps> = ({
           className="border-4 border-ink overflow-hidden"
           style={{
             background: 'var(--paper-2)',
-            boxShadow: '3px 3px 0 var(--ink)',
+            boxShadow: '3px 3px 0 var(--shadow)',
           }}
         >
           <div
             className="border-b-4 border-ink px-4 py-2.5 flex items-center justify-between"
-            style={{ background: '#FF7A1A' }}
+            style={{ background: 'var(--piece-orange)' }}
           >
             <div className="flex items-center gap-2 font-display text-[11px] font-black tracking-[0.14em] text-paper-2">
               <BrutalIcon name="flame" size={16} /> DAILY STREAK
@@ -332,7 +332,7 @@ const LandingPage: React.FC<LandingPageProps> = ({
                     className="w-full border-2 border-ink"
                     style={{
                       height: 20,
-                      background: i < 6 ? '#B7FF3B' : '#E8E8E8',
+                      background: i < 6 ? 'var(--piece-lime)' : 'var(--paper-2)',
                     }}
                   />
                   <span className="font-display text-[8px] font-black text-ink/60">{day}</span>
@@ -346,7 +346,7 @@ const LandingPage: React.FC<LandingPageProps> = ({
                   className="flex-1 border-2 border-ink"
                   style={{
                     height: 14,
-                    background: i < 6 ? '#B7FF3B' : '#E8E8E8',
+                    background: i < 6 ? 'var(--piece-lime)' : 'var(--paper-2)',
                   }}
                 />
               ))}

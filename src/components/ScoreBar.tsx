@@ -12,8 +12,7 @@ interface ScoreBarProps {
 const TensionBar: React.FC<{
   comboStreak: number
   accentColor: string
-  dark?: boolean
-}> = ({ comboStreak, accentColor, dark = false }) => {
+}> = ({ comboStreak, accentColor }) => {
   const tensionPct = comboStreak > 0 ? Math.min(100, comboStreak * 20 + 30) : 28
   const tensionActive = comboStreak >= 4
 
@@ -34,7 +33,7 @@ const TensionBar: React.FC<{
           style={{
             width: `${tensionPct}%`,
             transition: 'width 200ms linear',
-            backgroundImage: `repeating-linear-gradient(45deg, ${accentColor}, ${accentColor} 4px, #FF7A1A 4px 8px)`,
+            backgroundImage: `repeating-linear-gradient(45deg, ${accentColor}, ${accentColor} 4px, var(--accent-2) 4px 8px)`,
           }}
         />
       </div>
@@ -133,7 +132,6 @@ const ScoreBar: React.FC<ScoreBarProps> = ({
       <TensionBar
         comboStreak={comboStreak}
         accentColor={accentColor}
-        dark={true}
       />
     </div>
   )

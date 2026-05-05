@@ -5,7 +5,6 @@ import {
   useSetUsername,
 } from '../hooks/useBlokzGame'
 import { useAccount } from 'wagmi'
-import { useTheme } from '../hooks/useTheme'
 import contractInfo from '../contract.json'
 import { BrutalIcon } from './BrutalIcon'
 
@@ -49,7 +48,7 @@ const UsernameRegistration: React.FC = () => {
   return (
     <div
       className="relative z-20 mx-4 mb-4 border-4 border-ink p-4"
-      style={{ background: 'var(--paper-2)', boxShadow: '4px 4px 0 var(--ink)' }}
+      style={{ background: 'var(--paper-2)', boxShadow: '4px 4px 0 var(--shadow)' }}
     >
       <div className="mb-3 flex items-center justify-between">
         <div className="font-display text-[10px] tracking-[0.14em]">
@@ -78,7 +77,7 @@ const UsernameRegistration: React.FC = () => {
           style={{
             background: 'var(--accent-lime)',
             color: 'var(--ink-fixed)',
-            boxShadow: '4px 4px 0 var(--ink)',
+            boxShadow: '4px 4px 0 var(--shadow)',
           }}
         >
           {isPending || isConfirming ? (
@@ -106,7 +105,6 @@ const RANK_ACCENT: Record<number, string> = {
 const Leaderboard: React.FC<LeaderboardProps> = ({ isOpen, onClose }) => {
   const { address } = useAccount()
   const { leaderboard, isLoading, currentEpoch } = useLeaderboard()
-  const { isDark } = useTheme()
 
   return (
     <>
@@ -123,7 +121,7 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ isOpen, onClose }) => {
         style={{
           background: 'var(--paper)',
           transform: isOpen ? 'translateX(0)' : 'translateX(100%)',
-          boxShadow: '-8px 0 0 var(--ink)',
+          boxShadow: '-8px 0 0 var(--shadow)',
         }}
       >
         {/* Background Pattern Layer */}
@@ -149,7 +147,7 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ isOpen, onClose }) => {
           <button
             onClick={onClose}
             className="brutal-btn flex h-10 w-10 items-center justify-center border-[3px] border-paper bg-paper font-display text-ink"
-            style={{ boxShadow: '4px 4px 0 var(--paper)', color: 'var(--ink)' }}
+            style={{ boxShadow: '4px 4px 0 var(--shadow)', color: 'var(--ink)' }}
           >
             <BrutalIcon name="back" size={20} />
           </button>
@@ -159,7 +157,7 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ isOpen, onClose }) => {
           <UsernameRegistration />
 
           <div className="mt-4 flex flex-col gap-4">
-            <div className="px-2 pb-2 font-display text-[10px] tracking-[0.16em] opacity-70">
+            <div className="brutal-label px-2 pb-2 opacity-100">
               CLASSIC PLAYERS
             </div>
 
@@ -182,7 +180,7 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ isOpen, onClose }) => {
                     ? 'var(--ink)'
                     : (RANK_ACCENT[rank] ?? 'var(--paper-2)')
                   const textColor = isCurrentUser 
-                    ? (isDark ? 'var(--paper)' : 'var(--paper)') 
+                    ? 'var(--paper)' 
                     : (RANK_ACCENT[rank] ? 'var(--ink-fixed)' : 'var(--ink)')
 
                   return (
@@ -193,8 +191,8 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ isOpen, onClose }) => {
                         background: rowBg,
                         transform: isCurrentUser ? 'scale(1.03)' : 'none',
                         boxShadow: isCurrentUser
-                          ? '0 0 0 3px var(--accent-yellow), 6px 6px 0 var(--ink)'
-                          : '4px 4px 0 var(--ink)',
+                          ? '0 0 0 3px var(--accent-yellow), 6px 6px 0 var(--shadow)'
+                          : '4px 4px 0 var(--shadow)',
                         color: textColor,
                       }}
                     >

@@ -434,12 +434,12 @@ const TournamentGameScreen: React.FC<TournamentGameScreenProps> = ({
         <div className="flex items-center gap-3">
           <div
             className="flex h-9 w-9 items-center justify-center border-4 border-ink font-display text-lg"
-            style={{ background: 'var(--accent-pink)', boxShadow: '3px 3px 0 var(--ink)', color: 'var(--ink-fixed)' }}
+            style={{ background: 'var(--accent-pink)', boxShadow: '3px 3px 0 var(--shadow)', color: 'var(--ink-fixed)' }}
           >
             T
           </div>
           <div>
-            <div className="font-display text-[9px] uppercase tracking-[0.2em] text-danger">
+            <div className="font-display text-[9px] uppercase tracking-[0.2em]" style={{ color: 'var(--label)' }}>
               TOURNAMENT MATCH
             </div>
             <div className="font-display text-base" style={{ letterSpacing: '-0.03em' }}>
@@ -455,7 +455,7 @@ const TournamentGameScreen: React.FC<TournamentGameScreenProps> = ({
               {onChainStatus === 'pending' || isPending || isConfirming ? (
                 <div
                   className="flex items-center gap-1.5 border-2 border-ink px-2 py-1 font-display text-[9px] uppercase tracking-[0.12em]"
-                  style={{ background: 'var(--accent-yellow)', color: 'var(--ink-fixed)', boxShadow: '2px 2px 0 var(--ink)' }}
+                  style={{ background: 'var(--accent-yellow)', color: 'var(--ink-fixed)', boxShadow: '2px 2px 0 var(--shadow)' }}
                 >
                   <div className="h-1.5 w-1.5 animate-pulse bg-ink" />
                   REGISTERING
@@ -463,7 +463,7 @@ const TournamentGameScreen: React.FC<TournamentGameScreenProps> = ({
               ) : onChainStatus === 'syncing' ? (
                 <div
                   className="flex items-center gap-1.5 border-2 border-ink px-2 py-1 font-display text-[9px] uppercase tracking-[0.12em]"
-                  style={{ background: 'var(--accent-cyan)', color: 'var(--ink-fixed)', boxShadow: '2px 2px 0 var(--ink)' }}
+                  style={{ background: 'var(--accent-cyan)', color: 'var(--ink-fixed)', boxShadow: '2px 2px 0 var(--shadow)' }}
                 >
                   <div className="brutal-loader" />
                   SYNCING
@@ -471,7 +471,7 @@ const TournamentGameScreen: React.FC<TournamentGameScreenProps> = ({
               ) : onChainStatus === 'registered' ? (
                 <div
                   className="flex items-center gap-1.5 border-2 border-ink px-2 py-1 font-display text-[9px] uppercase tracking-[0.12em]"
-                  style={{ background: 'var(--accent-lime)', color: 'var(--ink-fixed)', boxShadow: '2px 2px 0 var(--ink)' }}
+                  style={{ background: 'var(--accent-lime)', color: 'var(--ink-fixed)', boxShadow: '2px 2px 0 var(--shadow)' }}
                 >
                   <div className="h-1.5 w-1.5 bg-ink" />
                   VERIFIED
@@ -483,7 +483,7 @@ const TournamentGameScreen: React.FC<TournamentGameScreenProps> = ({
           <button
             onClick={() => setIsLeaderboardOpen(true)}
             className="brutal-btn border-3 border-ink px-3 py-2 font-display text-[9px] uppercase tracking-[0.14em]"
-            style={{ background: 'var(--accent-cyan)', boxShadow: '3px 3px 0 var(--ink)', color: 'var(--ink-fixed)' }}
+            style={{ background: 'var(--accent-cyan)', boxShadow: '3px 3px 0 var(--shadow)', color: 'var(--ink-fixed)' }}
           >
             RANKS
           </button>
@@ -492,7 +492,7 @@ const TournamentGameScreen: React.FC<TournamentGameScreenProps> = ({
             <button
               onClick={onBackToHall}
               className="brutal-btn border-3 border-ink px-3 py-2 font-display text-[9px] uppercase tracking-[0.14em] text-paper"
-              style={{ background: 'var(--danger)', boxShadow: '3px 3px 0 var(--ink)' }}
+              style={{ background: 'var(--danger)', boxShadow: '3px 3px 0 var(--shadow)' }}
             >
               EXIT
             </button>
@@ -506,13 +506,13 @@ const TournamentGameScreen: React.FC<TournamentGameScreenProps> = ({
         <div className="z-10 flex flex-1 items-center justify-center p-4">
           <div
             className="w-full max-w-xs border-4 border-ink bg-paper p-8 text-center"
-            style={{ boxShadow: '8px 8px 0 var(--accent-pink)' }}
+            style={{ boxShadow: '8px 8px 0 var(--shadow)' }}
           >
             <div
               className="mb-4 inline-block border-4 border-ink bg-accent-yellow px-4 py-1 font-display text-[11px] tracking-[0.14em]"
               style={{
                 transform: 'rotate(-3deg)',
-                boxShadow: '4px 4px 0 var(--ink)',
+                boxShadow: '4px 4px 0 var(--shadow)',
                 color: 'var(--ink-fixed)',
               }}
             >
@@ -548,7 +548,7 @@ const TournamentGameScreen: React.FC<TournamentGameScreenProps> = ({
                 sessionConflict
               }
               className="brutal-btn w-full border-4 border-ink bg-accent-lime py-4 font-display text-sm uppercase tracking-[0.14em] disabled:opacity-50"
-              style={{ boxShadow: '6px 6px 0 var(--ink)', color: 'var(--ink-fixed)' }}
+              style={{ boxShadow: '6px 6px 0 var(--shadow)', color: 'var(--ink-fixed)' }}
             >
               {isSyncingContract ? (
                 <div className="flex items-center justify-center gap-2">
@@ -579,7 +579,7 @@ const TournamentGameScreen: React.FC<TournamentGameScreenProps> = ({
                     setSessionConflict(false)
                   }}
                   className="brutal-btn w-full border-4 border-ink bg-danger py-2 font-display text-[10px] uppercase tracking-[0.14em] text-paper"
-                  style={{ boxShadow: '4px 4px 0 var(--ink)' }}
+                  style={{ boxShadow: '4px 4px 0 var(--shadow)' }}
                 >
                   RESET SESSION
                 </button>
@@ -607,27 +607,27 @@ const TournamentGameScreen: React.FC<TournamentGameScreenProps> = ({
                 <div
                   className="pointer-events-none absolute left-0 top-0 border-[4px] border-ink"
                   style={{
-                    background: 'var(--ink)',
+                    background: 'var(--board)',
                     width: canvasDims.gridSize,
                     height: canvasDims.gridSize,
-                    boxShadow: '8px 8px 0 var(--accent-pink)',
+                    boxShadow: '8px 8px 0 var(--shadow)',
                   }}
                 />
                 <div
                   className="pointer-events-none absolute left-0 z-[1] grid grid-cols-3 border-[3px] border-ink"
                   style={{
-                    background: 'var(--ink)',
+                    background: 'var(--piece-tray-bg)',
                     top: canvasDims.trayY,
                     width: canvasDims.gridSize,
                     height: canvasDims.trayH,
-                    boxShadow: '6px 6px 0 var(--accent-pink)',
+                    boxShadow: '6px 6px 0 var(--shadow)',
                   }}
                 >
                   {Array.from({ length: 3 }).map((_, i) => (
                     <div
                       key={i}
                       className="flex items-center justify-center border-r-[3px] last:border-r-0"
-                      style={{ borderColor: 'rgba(245,239,227,0.2)' }}
+                      style={{ borderColor: 'var(--rule)' }}
                     />
                   ))}
                 </div>

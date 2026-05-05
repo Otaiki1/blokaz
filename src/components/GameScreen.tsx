@@ -55,7 +55,7 @@ const DailyStreakPanel: React.FC = () => {
       className="border-4 border-ink"
       style={{
         background: 'var(--paper-2)',
-        boxShadow: '4px 4px 0 var(--ink)',
+        boxShadow: '4px 4px 0 var(--shadow)',
       }}
     >
       <div
@@ -86,11 +86,19 @@ const DailyStreakPanel: React.FC = () => {
                   background: i < today ? 'var(--accent-lime)' : 'var(--rule)',
                 }}
               />
-              <span className="font-display text-[8px] text-ink/60">{d}</span>
+              <span
+                className="font-display text-[8px]"
+                style={{ color: 'var(--ink-soft)' }}
+              >
+                {d}
+              </span>
             </div>
           ))}
         </div>
-        <div className="font-body text-[10px] uppercase tracking-[0.08em] text-ink/70">
+        <div
+          className="font-body text-[10px] uppercase tracking-[0.08em]"
+          style={{ color: 'var(--ink-soft)' }}
+        >
           2× BONUS ACTIVE ON ALL CLEARS
         </div>
       </div>
@@ -102,14 +110,14 @@ const DANGER_DEFS = [
   {
     name: '3×3 SQUARE',
     risk: 'HIGH',
-    color: '#FF3D3D',
+    color: 'var(--piece-red)',
     weight: SHAPES.find((shape) => shape.id === 'O3')?.spawnWeight ?? 0,
     match: (shape: ShapeDefinition) => shape.id === 'O3',
   },
   {
     name: '5-LONG LINE',
     risk: 'MED',
-    color: '#FF7A1A',
+    color: 'var(--piece-orange)',
     weight: SHAPES.filter(
       (shape) => shape.id === 'I5H' || shape.id === 'I5V'
     ).reduce((sum, shape) => sum + shape.spawnWeight, 0),
@@ -118,7 +126,7 @@ const DANGER_DEFS = [
   {
     name: 'Z-ZIGZAG',
     risk: 'LOW',
-    color: '#B7FF3B',
+    color: 'var(--piece-lime)',
     weight: SHAPES.filter((shape) => shape.family === 'zigzag').reduce(
       (sum, shape) => sum + shape.spawnWeight,
       0
@@ -135,7 +143,7 @@ const DangerWatch: React.FC<{ currentPieces?: (ShapeDefinition | null)[] }> = ({
       className="border-4 border-ink"
       style={{
         background: 'var(--paper-2)',
-        boxShadow: '4px 4px 0 var(--ink)',
+        boxShadow: '4px 4px 0 var(--shadow)',
       }}
     >
       <div className="border-b-4 border-ink bg-paper px-4 py-3 font-display text-[11px] uppercase tracking-[0.2em]">
@@ -152,7 +160,7 @@ const DangerWatch: React.FC<{ currentPieces?: (ShapeDefinition | null)[] }> = ({
               className="flex items-center justify-between border-[3px] border-ink px-2 py-2 transition-colors"
               style={{
                 background: isLive ? 'var(--accent-yellow)' : 'var(--paper-2)',
-                boxShadow: isLive ? '3px 3px 0 var(--ink)' : 'none',
+                boxShadow: isLive ? '3px 3px 0 var(--shadow)' : 'none',
                 color: isLive ? 'var(--ink-fixed)' : 'inherit',
               }}
             >
@@ -201,7 +209,7 @@ const LiveLadder: React.FC<{ currentScore: number }> = ({ currentScore }) => {
       className="border-4 border-ink"
       style={{
         background: 'var(--paper-2)',
-        boxShadow: '8px 8px 0 var(--ink)',
+        boxShadow: '8px 8px 0 var(--shadow)',
       }}
     >
       <div
@@ -212,7 +220,12 @@ const LiveLadder: React.FC<{ currentScore: number }> = ({ currentScore }) => {
           <BrutalIcon name="trending" size={12} className="mr-2" /> WEEKLY
           LADDER
         </span>
-        <span className="font-display text-[9px] text-ink/80">2D 14H</span>
+        <span
+          className="font-display text-[9px]"
+          style={{ color: 'var(--ink-soft)' }}
+        >
+          2D 14H
+        </span>
       </div>
       {isLoading ? (
         <div className="space-y-2 p-4">
@@ -275,7 +288,7 @@ const LiveLadder: React.FC<{ currentScore: number }> = ({ currentScore }) => {
 const ShareCard: React.FC<{ score: number }> = ({ score }) => (
   <div
     className="border-4 border-ink bg-accent-pink p-5"
-    style={{ boxShadow: '6px 6px 0 var(--ink)', color: 'var(--ink-fixed)' }}
+    style={{ boxShadow: '6px 6px 0 var(--shadow)', color: 'var(--ink-fixed)' }}
   >
     <div className="mb-4 flex items-center justify-between">
       <div className="font-display text-[10px] uppercase tracking-widest opacity-80">
@@ -284,7 +297,7 @@ const ShareCard: React.FC<{ score: number }> = ({ score }) => (
       <div className="h-2 w-2 animate-pulse rounded-full bg-ink" />
     </div>
 
-    <div className="relative overflow-hidden border-4 border-ink bg-paper-2 p-5 shadow-[4px_4px_0_var(--ink)]">
+    <div className="relative overflow-hidden border-4 border-ink bg-paper-2 p-5 shadow-[4px_4px_0_var(--shadow)]">
       {/* Decorative dots */}
       <div className="absolute -right-4 -top-4 opacity-10">
         <svg width="60" height="60" viewBox="0 0 60 60">
@@ -305,7 +318,10 @@ const ShareCard: React.FC<{ score: number }> = ({ score }) => (
       <div className="font-display text-3xl tracking-tighter text-ink">
         BLOKAZ.
       </div>
-      <div className="mt-4 font-display text-[10px] uppercase tracking-widest text-ink/80">
+      <div
+        className="mt-4 font-display text-[10px] uppercase tracking-widest"
+        style={{ color: 'var(--ink-soft)' }}
+      >
         CLASSIC RUN SCORE
       </div>
       <div
@@ -327,32 +343,35 @@ const StatBlock: React.FC<{ label: string; value: string; bg: string }> = ({
   label,
   value,
   bg,
-}) => (
-  <div
-    className="flex flex-col justify-between border-4 border-ink p-3"
-    style={{
-      background: bg,
-      boxShadow: '4px 4px 0 var(--ink)',
-      height: 74,
-      color:
-        bg.includes('accent') && !bg.includes('pink') && !bg.includes('purple')
-          ? 'var(--ink-fixed)'
-          : 'inherit',
-    }}
-  >
+}) => {
+  const isColoredTile = bg !== 'var(--paper)' && bg !== 'var(--paper-2)'
+  const labelColor = isColoredTile ? 'var(--ink-fixed)' : 'var(--ink-soft)'
+  const valueColor = isColoredTile ? 'var(--ink-fixed)' : 'var(--ink)'
+
+  return (
     <div
-      className={`font-display text-[9px] uppercase tracking-[0.2em] ${bg.includes('accent') && !bg.includes('pink') && !bg.includes('purple') ? 'text-black/70' : 'text-ink/80'}`}
+      className="flex flex-col justify-between border-4 border-ink p-3"
+      style={{
+        background: bg,
+        boxShadow: '4px 4px 0 var(--shadow)',
+        height: 74,
+      }}
     >
-      {label}
+      <div
+        className="font-display text-[9px] uppercase tracking-[0.2em]"
+        style={{ color: labelColor, opacity: isColoredTile ? 0.7 : 1 }}
+      >
+        {label}
+      </div>
+      <div
+        className="font-display text-2xl uppercase"
+        style={{ letterSpacing: '-0.02em', lineHeight: 1, color: valueColor }}
+      >
+        {value}
+      </div>
     </div>
-    <div
-      className="font-display text-2xl uppercase"
-      style={{ letterSpacing: '-0.02em', lineHeight: 1 }}
-    >
-      {value}
-    </div>
-  </div>
-)
+  )
+}
 
 // ─── Main component ──────────────────────────────────────────────────────────
 
@@ -904,7 +923,7 @@ const SyncStatusChip: React.FC<SyncChipProps> = ({
         style={{
           background: 'var(--accent-yellow)',
           color: 'var(--ink-fixed)',
-          boxShadow: '2px 2px 0 var(--ink)',
+          boxShadow: '2px 2px 0 var(--shadow)',
         }}
       >
         <div className="h-2 w-2 animate-pulse bg-ink" />
@@ -919,7 +938,7 @@ const SyncStatusChip: React.FC<SyncChipProps> = ({
         style={{
           background: 'var(--accent-cyan)',
           color: 'var(--ink-fixed)',
-          boxShadow: '2px 2px 0 var(--ink)',
+          boxShadow: '2px 2px 0 var(--shadow)',
         }}
       >
         <div className="brutal-loader" />
@@ -934,7 +953,7 @@ const SyncStatusChip: React.FC<SyncChipProps> = ({
         style={{
           background: 'var(--accent-lime)',
           color: 'var(--ink-fixed)',
-          boxShadow: '2px 2px 0 var(--ink)',
+          boxShadow: '2px 2px 0 var(--shadow)',
         }}
       >
         <div className="h-2 w-2" style={{ background: 'var(--ink)' }} />
@@ -1028,13 +1047,13 @@ const ClassicStartCard: React.FC<{
   >
     <div
       className="w-fit border-4 border-ink bg-accent-yellow px-6 py-2 font-display text-sm tracking-[0.15em]"
-      style={{ boxShadow: '4px 4px 0 var(--ink)', color: 'var(--ink-fixed)' }}
+      style={{ boxShadow: '4px 4px 0 var(--shadow)', color: 'var(--ink-fixed)' }}
     >
       CLASSIC MODE
     </div>
 
     {/* Hero Image */}
-    <div className="relative overflow-hidden border-4 border-ink bg-paper-2 shadow-[6px_6px_0_var(--ink)]">
+    <div className="relative overflow-hidden border-4 border-ink bg-paper-2 shadow-[6px_6px_0_var(--shadow)]">
       <img
         src="/hero.png"
         alt="Blokaz Game Preview"
@@ -1058,7 +1077,7 @@ const ClassicStartCard: React.FC<{
           display: 'inline-block',
           transform: 'rotate(-2deg)',
           border: '3px solid var(--ink)',
-          boxShadow: '3px 3px 0 var(--ink)',
+          boxShadow: '3px 3px 0 var(--shadow)',
         }}
       >
         CLASSIC
@@ -1074,7 +1093,7 @@ const ClassicStartCard: React.FC<{
         isMiniPayConnecting ||
         sessionConflict
       }
-      className="brutal-btn flex w-full items-center justify-center gap-3 border-4 border-ink bg-accent-lime py-5 font-display text-sm uppercase tracking-[0.15em] shadow-[6px_6px_0_var(--ink)] disabled:opacity-70"
+      className="brutal-btn flex w-full items-center justify-center gap-3 border-4 border-ink bg-accent-lime py-5 font-display text-sm uppercase tracking-[0.15em] shadow-[6px_6px_0_var(--shadow)] disabled:opacity-70"
       style={{ color: 'var(--ink-fixed)' }}
     >
       {isMiniPayConnecting ? (
@@ -1100,7 +1119,7 @@ const ClassicStartCard: React.FC<{
         className="border-4 border-ink"
         style={{
           background: 'var(--paper-2)',
-          boxShadow: '4px 4px 0 var(--ink)',
+          boxShadow: '4px 4px 0 var(--shadow)',
         }}
       >
         {/* Header */}
@@ -1123,7 +1142,7 @@ const ClassicStartCard: React.FC<{
           <button
             onClick={() => setGModeEnabled(!gModeEnabled)}
             className={`relative h-7 w-14 border-[3px] border-ink transition-colors ${gModeEnabled ? 'bg-accent-lime' : 'bg-paper-2'}`}
-            style={{ boxShadow: '2px 2px 0 var(--ink)' }}
+            style={{ boxShadow: '2px 2px 0 var(--shadow)' }}
           >
             <div
               className={`absolute top-0.5 h-4 w-4 border-2 border-ink transition-transform ${gModeEnabled ? 'translate-x-[30px]' : 'translate-x-0.5'}`}
@@ -1136,7 +1155,10 @@ const ClassicStartCard: React.FC<{
           <div className="p-4">
             {!isWhitelisted ? (
               <div className="flex flex-col gap-3">
-                <div className="font-body text-[10px] leading-relaxed text-ink/60">
+                <div
+                  className="font-body text-[10px] leading-relaxed"
+                  style={{ color: 'var(--ink-soft)' }}
+                >
                   Face-verify once to earn G$ while you play and unlock the
                   Revive power.
                 </div>
@@ -1150,7 +1172,7 @@ const ClassicStartCard: React.FC<{
                   }}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className={`brutal-btn flex w-full items-center justify-center gap-2 border-4 border-ink bg-accent-pink py-3 font-display text-[10px] uppercase tracking-wider shadow-[4px_4px_0_var(--ink)] ${!isLinkReady ? 'opacity-50' : ''}`}
+                  className={`brutal-btn flex w-full items-center justify-center gap-2 border-4 border-ink bg-accent-pink py-3 font-display text-[10px] uppercase tracking-wider shadow-[4px_4px_0_var(--shadow)] ${!isLinkReady ? 'opacity-50' : ''}`}
                   style={{ color: 'var(--ink-fixed)' }}
                 >
                   {!isLinkReady && <div className="brutal-loader !border-paper h-3 w-3" />}
@@ -1165,7 +1187,7 @@ const ClassicStartCard: React.FC<{
                       setCopied(true)
                       setTimeout(() => setCopied(false), 2000)
                     }}
-                    className={`hover:bg-accent-lime/10 relative flex-1 border-[3px] border-ink py-2 font-display text-[8px] uppercase tracking-wider shadow-[2px_2px_0_var(--ink)] transition-colors ${!isLinkReady ? 'opacity-30 cursor-not-allowed' : ''}`}
+                    className={`hover:bg-accent-lime/10 relative flex-1 border-[3px] border-ink py-2 font-display text-[8px] uppercase tracking-wider shadow-[2px_2px_0_var(--shadow)] transition-colors ${!isLinkReady ? 'opacity-30 cursor-not-allowed' : ''}`}
                     style={{ background: 'var(--paper)' }}
                   >
                     {copied ? (
@@ -1177,7 +1199,7 @@ const ClassicStartCard: React.FC<{
                   <div className="relative">
                     <button
                       onClick={() => isLinkReady && setShowQR(true)}
-                      className={`hover:bg-accent-lime/10 border-[3px] border-ink px-3 py-2 font-display text-[8px] uppercase tracking-wider shadow-[2px_2px_0_var(--ink)] transition-colors ${!isLinkReady ? 'opacity-30 cursor-not-allowed' : ''}`}
+                      className={`hover:bg-accent-lime/10 border-[3px] border-ink px-3 py-2 font-display text-[8px] uppercase tracking-wider shadow-[2px_2px_0_var(--shadow)] transition-colors ${!isLinkReady ? 'opacity-30 cursor-not-allowed' : ''}`}
                       style={{ background: 'var(--paper)' }}
                     >
                       QR CODE
@@ -1188,7 +1210,7 @@ const ClassicStartCard: React.FC<{
                         onClick={() => setShowQR(false)}
                       >
                         <div 
-                          className="w-full max-w-[300px] border-4 border-ink p-6 shadow-[10px_10px_0_var(--ink)]"
+                          className="w-full max-w-[300px] border-4 border-ink p-6 shadow-[10px_10px_0_var(--shadow)]"
                           style={{ background: 'var(--paper)' }}
                           onClick={(e) => e.stopPropagation()}
                         >
@@ -1201,12 +1223,15 @@ const ClassicStartCard: React.FC<{
                             alt="Verification QR Code"
                             className="mx-auto block aspect-square w-full border-4 border-ink"
                           />
-                          <div className="mt-4 text-center font-display text-[8px] uppercase tracking-widest text-ink/50">
+                          <div
+                            className="mt-4 text-center font-display text-[8px] uppercase tracking-widest"
+                            style={{ color: 'var(--ink-soft)' }}
+                          >
                             SCAN THIS QR CODE WITH YOUR PHONE'S CAMERA
                           </div>
                           <button 
                             onClick={() => setShowQR(false)} 
-                            className="mt-6 w-full border-[3px] border-ink py-2 font-display text-[9px] uppercase tracking-widest shadow-[4px_4px_0_var(--ink)] hover:bg-accent-lime transition-colors"
+                            className="mt-6 w-full border-[3px] border-ink py-2 font-display text-[9px] uppercase tracking-widest shadow-[4px_4px_0_var(--shadow)] hover:bg-accent-lime transition-colors"
                             style={{ background: 'var(--accent-lime)' }}
                           >
                             CLOSE
@@ -1220,7 +1245,10 @@ const ClassicStartCard: React.FC<{
                   className="border-[3px] border-ink/20 p-2"
                   style={{ background: 'var(--paper)' }}
                 >
-                  <div className="break-all font-mono text-[8px] text-ink/40">
+                  <div
+                    className="break-all font-mono text-[8px]"
+                    style={{ color: 'var(--ink-soft)' }}
+                  >
                     {isConnected && address ? address : 'No wallet connected'}
                   </div>
                 </div>
@@ -1243,7 +1271,7 @@ const ClassicStartCard: React.FC<{
                   {entitlement > 0n && (
                     <button
                       onClick={claimUBI}
-                      className="border-[3px] border-ink px-3 py-1.5 font-display text-[9px] uppercase tracking-wider shadow-[2px_2px_0_var(--ink)] transition-all active:translate-x-[2px] active:translate-y-[2px] active:shadow-none"
+                      className="border-[3px] border-ink px-3 py-1.5 font-display text-[9px] uppercase tracking-wider shadow-[2px_2px_0_var(--shadow)] transition-all active:translate-x-[2px] active:translate-y-[2px] active:shadow-none"
                       style={{
                         background: 'var(--accent-yellow)',
                         color: 'var(--ink-fixed)',
@@ -1261,7 +1289,10 @@ const ClassicStartCard: React.FC<{
                     className="h-1.5 w-1.5 animate-pulse rounded-full"
                     style={{ background: 'var(--accent-lime)' }}
                   />
-                  <span className="font-display text-[9px] uppercase tracking-[0.15em] text-ink/70">
+                  <span
+                    className="font-display text-[9px] uppercase tracking-[0.15em]"
+                    style={{ color: 'var(--ink-soft)' }}
+                  >
                     STREAMING 0.05 G$/MIN WHILE ACTIVE
                   </span>
                 </div>
@@ -1273,11 +1304,14 @@ const ClassicStartCard: React.FC<{
     )}
 
     {sessionConflict && (
-      <div className="mt-6 border-4 border-danger bg-paper-2 p-4 shadow-[4px_4px_0_var(--ink)]">
+      <div className="mt-6 border-4 border-danger bg-paper-2 p-4 shadow-[4px_4px_0_var(--shadow)]">
         <div className="mb-2 flex items-center font-display text-xs uppercase tracking-widest text-piece-red">
           <BrutalIcon name="alert" size={14} className="mr-2" /> DESYNC DETECTED
         </div>
-        <div className="mb-4 font-body text-[11px] leading-relaxed text-ink/70">
+        <div
+          className="mb-4 font-body text-[11px] leading-relaxed"
+          style={{ color: 'var(--ink-soft)' }}
+        >
           Blockchain has an active game that doesn't match your browser. You
           must reset.
         </div>
@@ -1286,13 +1320,16 @@ const ClassicStartCard: React.FC<{
             forceReset()
             setSessionConflict(false)
           }}
-          className="brutal-btn w-full border-[3px] border-ink bg-danger py-2 font-display text-[10px] uppercase tracking-widest text-white shadow-[3px_3px_0_var(--ink)]"
+          className="brutal-btn w-full border-[3px] border-ink bg-danger py-2 font-display text-[10px] uppercase tracking-widest text-white shadow-[3px_3px_0_var(--shadow)]"
         >
           RESET SESSION
         </button>
       </div>
     )}
-    <div className="flex items-center justify-center gap-2 text-center font-display text-[10px] uppercase tracking-widest opacity-70">
+    <div
+      className="flex items-center justify-center gap-2 text-center font-display text-[10px] uppercase tracking-widest"
+      style={{ color: 'var(--ink-soft)' }}
+    >
       {isConnected ? (
         <>
           <BrutalIcon name="zap" size={10} strokeWidth={2} /> Score flows into
@@ -1387,17 +1424,17 @@ const CanvasArea: React.FC<CanvasAreaProps> = ({
               style={{
                 width: canvasDims.gridSize,
                 height: canvasDims.gridSize,
-                boxShadow: '8px 8px 0 var(--ink)',
+                boxShadow: '8px 8px 0 var(--shadow)',
               }}
             />
             <div
               className="pointer-events-none absolute left-0 z-[1] grid grid-cols-3 border-[3px] border-ink p-5"
               style={{
-                background: 'var(--accent-yellow)',
+                background: 'var(--piece-tray-bg)',
                 top: canvasDims.trayY,
                 width: canvasDims.gridSize,
                 height: canvasDims.trayH,
-                boxShadow: '6px 6px 0 var(--ink)',
+                boxShadow: '6px 6px 0 var(--shadow)',
               }}
             >
               {Array.from({ length: 3 }).map((_, index) => (
@@ -1467,12 +1504,15 @@ const ClassicTabStrip: React.FC<{
       className="border-4 border-ink px-4 py-2 font-display text-sm tracking-[0.1em]"
       style={{
         background: 'var(--accent-yellow)',
-        boxShadow: '4px 4px 0 var(--ink)',
+        boxShadow: '4px 4px 0 var(--shadow)',
       }}
     >
       CLASSIC MODE
     </div>
-    <span className="font-display text-[10px] uppercase tracking-[0.2em] opacity-60">
+    <span
+      className="font-display text-[10px] uppercase tracking-[0.2em]"
+      style={{ color: 'var(--ink-soft)' }}
+    >
       WEEKLY LEADERBOARD RUN
     </span>
     {onOpenLeaderboard && (
@@ -1481,7 +1521,7 @@ const ClassicTabStrip: React.FC<{
         className="brutal-btn ml-auto border-4 border-ink px-4 py-2 font-display text-[10px] tracking-[0.1em]"
         style={{
           background: 'var(--paper-2)',
-          boxShadow: '4px 4px 0 var(--ink)',
+          boxShadow: '4px 4px 0 var(--shadow)',
         }}
       >
         RANKINGS
@@ -1498,11 +1538,10 @@ const LeftRail: React.FC<{
   <div className="flex w-full flex-col gap-5">
     <div
       className="border-4 border-ink p-5"
-      style={{ background: 'var(--ink)', boxShadow: '6px 6px 0 var(--ink)' }}
+      style={{ background: 'var(--ink)', boxShadow: '6px 6px 0 var(--shadow)' }}
     >
       <div
-        className="mb-2 font-display text-[10px] tracking-[0.2em] opacity-60"
-        style={{ color: 'var(--accent-yellow)' }}
+        className="brutal-label mb-2 opacity-100"
       >
         LIVE SCORE
       </div>
@@ -1529,10 +1568,10 @@ const LeftRail: React.FC<{
       className="border-4 border-ink p-4"
       style={{
         background: 'var(--paper-2)',
-        boxShadow: '5px 5px 0 var(--ink)',
+        boxShadow: '5px 5px 0 var(--shadow)',
       }}
     >
-      <div className="mb-3 font-display text-[10px] uppercase tracking-[0.2em] text-ink/70">
+      <div className="brutal-label mb-3">
         NEXT CLEAR CHAIN
       </div>
       <div
@@ -1549,7 +1588,10 @@ const LeftRail: React.FC<{
           }}
         />
       </div>
-      <div className="mt-3 flex justify-between font-display text-[10px] uppercase tracking-widest text-ink/70">
+      <div
+        className="mt-3 flex justify-between font-display text-[10px] uppercase tracking-widest"
+        style={{ color: 'var(--ink-soft)' }}
+      >
         <span>×{comboStreak + 1} NEXT</span>
         <span>+220 BONUS</span>
       </div>
@@ -1629,7 +1671,7 @@ const RightRail: React.FC<{
           className="border-4 border-ink"
           style={{
             background: 'var(--paper-2)',
-            boxShadow: '5px 5px 0 var(--ink)',
+            boxShadow: '5px 5px 0 var(--shadow)',
           }}
         >
           <div
@@ -1644,7 +1686,7 @@ const RightRail: React.FC<{
               className="brutal-btn flex h-7 w-7 items-center justify-center border-2 border-ink"
               style={{
                 background: 'var(--paper-2)',
-                boxShadow: '2px 2px 0 var(--ink)',
+                boxShadow: '2px 2px 0 var(--shadow)',
               }}
             >
               <BrutalIcon name="back" size={12} strokeWidth={3} />
@@ -1659,7 +1701,7 @@ const RightRail: React.FC<{
             </div>
             <button
               onClick={handleShareWarpcast}
-              className="brutal-btn flex w-full items-center justify-between border-4 border-ink px-4 py-3 font-display text-[11px] uppercase tracking-wider shadow-[4px_4px_0_var(--ink)]"
+              className="brutal-btn flex w-full items-center justify-between border-4 border-ink px-4 py-3 font-display text-[11px] uppercase tracking-wider shadow-[4px_4px_0_var(--shadow)]"
               style={{
                 background: 'var(--accent-pink)',
                 color: 'var(--ink-fixed)',
@@ -1681,7 +1723,7 @@ const RightRail: React.FC<{
             </button>
             <button
               onClick={handleShareTwitter}
-              className="brutal-btn flex w-full items-center justify-between border-4 border-ink px-4 py-3 font-display text-[11px] uppercase tracking-wider shadow-[4px_4px_0_var(--ink)]"
+              className="brutal-btn flex w-full items-center justify-between border-4 border-ink px-4 py-3 font-display text-[11px] uppercase tracking-wider shadow-[4px_4px_0_var(--shadow)]"
               style={{ background: 'var(--ink)', color: 'var(--paper)' }}
             >
               <span className="flex items-center gap-2">
@@ -1700,7 +1742,7 @@ const RightRail: React.FC<{
       ) : (
         <button
           onClick={() => setShowShare(true)}
-          className="brutal-btn flex w-full items-center justify-between border-4 border-ink bg-accent-lime p-5 font-display text-xs uppercase tracking-[0.2em] shadow-[5px_5px_0_var(--ink)]"
+          className="brutal-btn flex w-full items-center justify-between border-4 border-ink bg-accent-lime p-5 font-display text-xs uppercase tracking-[0.2em] shadow-[5px_5px_0_var(--shadow)]"
           style={{ color: 'var(--ink-fixed)' }}
         >
           <span className="flex items-center">
@@ -1730,7 +1772,7 @@ const MobileLayout: React.FC<MobileLayoutProps> = ({
         <div className="flex shrink-0 items-center justify-between border-b-4 border-ink bg-paper px-3 py-1.5">
           <button
             className="brutal-btn border-[3px] border-ink bg-paper p-1.5"
-            style={{ boxShadow: '2px 2px 0 var(--ink)' }}
+            style={{ boxShadow: '2px 2px 0 var(--shadow)' }}
             onClick={onBack ?? (() => window.history.back())}
           >
             <BrutalIcon name="back" size={16} strokeWidth={3} />
@@ -1740,7 +1782,7 @@ const MobileLayout: React.FC<MobileLayoutProps> = ({
             className="flex items-center gap-2 border-[3px] border-ink px-3 py-1 font-display text-[10px] uppercase tracking-[0.18em]"
             style={{
               background: 'var(--accent-lime)',
-              boxShadow: '2px 2px 0 var(--ink)',
+              boxShadow: '2px 2px 0 var(--shadow)',
               color: 'var(--ink-fixed)',
             }}
           >
@@ -1753,7 +1795,7 @@ const MobileLayout: React.FC<MobileLayoutProps> = ({
 
           <button
             className="brutal-btn border-[3px] border-ink bg-paper p-1.5"
-            style={{ boxShadow: '2px 2px 0 var(--ink)' }}
+            style={{ boxShadow: '2px 2px 0 var(--shadow)' }}
           >
             <BrutalIcon name="pause" size={16} strokeWidth={3} />
           </button>
@@ -1797,11 +1839,12 @@ const DesktopLayout: React.FC<DesktopLayoutProps> = ({
   onOpenLeaderboard,
   canvasArea,
 }) => (
-  <div className="min-h-screen bg-paper">
+  <div className="min-h-screen" style={{ background: 'var(--page)' }}>
     <div
       className="mx-auto grid w-full max-w-[1600px] items-start px-10 py-6"
       style={{
-        gridTemplateColumns: '280px minmax(600px, 1fr) 280px',
+        gridTemplateColumns:
+          'minmax(250px, 280px) minmax(520px, 1fr) minmax(250px, 280px)',
         gap: 40,
         paddingTop: 124,
       }}
@@ -1810,14 +1853,16 @@ const DesktopLayout: React.FC<DesktopLayoutProps> = ({
         <ClassicTabStrip onOpenLeaderboard={onOpenLeaderboard} />
       </div>
 
-      <LeftRail
-        score={score}
-        comboStreak={comboStreak}
-        gameSession={gameSession}
-      />
+      <div className="flex min-w-0 flex-col">
+        <LeftRail
+          score={score}
+          comboStreak={comboStreak}
+          gameSession={gameSession}
+        />
+      </div>
 
       <div
-        className="w-full"
+        className="w-full min-w-0"
         style={
           gameSession
             ? { height: 'calc(100vh - 240px)', minHeight: 520 }
@@ -1827,11 +1872,13 @@ const DesktopLayout: React.FC<DesktopLayoutProps> = ({
         {canvasArea}
       </div>
 
-      <RightRail
-        score={score}
-        gameSession={gameSession}
-        bestScore={bestScore}
-      />
+      <div className="flex min-w-0 flex-col">
+        <RightRail
+          score={score}
+          gameSession={gameSession}
+          bestScore={bestScore}
+        />
+      </div>
     </div>
   </div>
 )

@@ -4,6 +4,7 @@ import { useAccount, useConnect } from 'wagmi'
 import { useOwner } from '../hooks/useBlokzGame'
 import { useTheme } from '../hooks/useTheme'
 import { BrutalIcon } from './BrutalIcon'
+import ThemeToggle from './ThemeToggle'
 import { IS_MINIPAY } from '../utils/miniPay'
 import { useGoodDollar } from '../hooks/useGoodDollar'
 import { web3AuthConnector } from '../config/web3auth'
@@ -20,22 +21,32 @@ interface HeaderProps {
 
 const MiniPayWalletBadge: React.FC = () => {
   const { address, isConnected } = useAccount()
+  const { effectiveTheme } = useTheme()
   const { isGSupported, gModeEnabled, isWhitelisted, gBalance, verificationUrl } = useGoodDollar()
+  const isDarkTheme = effectiveTheme !== 'light'
+  const walletBg = isDarkTheme ? 'var(--accent)' : 'var(--accent-soft)'
+  const walletColor = isDarkTheme ? '#FFFFFF' : 'var(--ink-fixed)'
 
   return (
     <div className="flex items-center gap-2">
-
       <div
-        className="flex items-center gap-2 border-[3px] border-ink bg-accent-lime px-4 py-[10px] font-display text-[12px] tracking-[0.08em] text-ink uppercase"
-        style={{ boxShadow: '4px 4px 0 var(--ink)' }}
+        className="flex items-center gap-2 border-[3px] border-ink px-4 py-[10px] font-display text-[12px] tracking-[0.08em] uppercase"
+        style={{
+          background: walletBg,
+          color: walletColor,
+          boxShadow: '4px 4px 0 var(--shadow)',
+        }}
       >
-        <div className="h-2 w-2 rounded-full bg-ink animate-pulse" />
+        <div
+          className="h-2 w-2 rounded-full animate-pulse"
+          style={{ background: walletColor }}
+        />
         {isConnected && address ? truncateAddress(address) : 'MINIPAY'}
       </div>
 
       {isGSupported && gModeEnabled && isConnected && (
         <div 
-          className={`flex items-center gap-2 border-[3px] border-ink px-3 py-[10px] font-display text-[10px] tracking-widest uppercase shadow-[3px_3px_0_var(--ink)] ${isWhitelisted ? 'bg-paper text-ink' : 'bg-accent-pink text-white'}`}
+          className={`flex items-center gap-2 border-[3px] border-ink px-3 py-[10px] font-display text-[10px] tracking-widest uppercase shadow-[3px_3px_0_var(--shadow)] ${isWhitelisted ? 'bg-paper text-ink' : 'bg-accent-pink text-white'}`}
         >
           {isWhitelisted ? (
              <span className="flex items-center gap-1">
@@ -54,6 +65,13 @@ const MiniPayWalletBadge: React.FC = () => {
   )
 }
 
+const HeaderDivider: React.FC = () => (
+  <div
+    className="hidden h-8 w-px lg:block"
+    style={{ background: 'var(--rule)' }}
+  />
+)
+
 /**
  * Single LOGIN button that opens a dropdown with two connection options:
  *  • Social  (Web3Auth — Google / Twitter / email) — marked as RECOMMENDED
@@ -64,8 +82,12 @@ const MiniPayWalletBadge: React.FC = () => {
 const LoginDropdown: React.FC<{ onConnectWallet: () => void }> = ({ onConnectWallet }) => {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
+  const { effectiveTheme } = useTheme()
   const { connect, isPending, variables } = useConnect()
   const isSocialBusy = isPending && (variables?.connector as any)?.id === 'web3auth'
+  const isDarkTheme = effectiveTheme !== 'light'
+  const buttonBg = isDarkTheme ? 'var(--accent)' : 'var(--accent-soft)'
+  const buttonColor = isDarkTheme ? '#FFFFFF' : 'var(--ink-fixed)'
 
   // Close on click outside
   useEffect(() => {
@@ -81,8 +103,12 @@ const LoginDropdown: React.FC<{ onConnectWallet: () => void }> = ({ onConnectWal
       {/* Trigger */}
       <button
         onClick={() => setOpen((o) => !o)}
-        className="brutal-btn flex items-center gap-2 border-[3px] border-ink bg-accent-yellow px-4 py-[10px] font-display text-[12px] tracking-[0.08em] uppercase"
-        style={{ boxShadow: '4px 4px 0 var(--ink)', color: 'var(--ink-fixed)' }}
+        className="brutal-btn flex items-center gap-2 border-[3px] border-ink px-4 py-[10px] font-display text-[12px] tracking-[0.08em] uppercase"
+        style={{
+          background: buttonBg,
+          boxShadow: '4px 4px 0 var(--shadow)',
+          color: buttonColor,
+        }}
       >
         LOGIN
         <span className="text-[10px] leading-none">{open ? '▴' : '▾'}</span>
@@ -92,7 +118,7 @@ const LoginDropdown: React.FC<{ onConnectWallet: () => void }> = ({ onConnectWal
       {open && (
         <div
           className="absolute right-0 top-[calc(100%+6px)] z-[200] w-56 border-[3px] border-ink bg-paper"
-          style={{ boxShadow: '4px 4px 0 var(--ink)' }}
+          style={{ boxShadow: '4px 4px 0 var(--shadow)' }}
         >
           {/* ── Social (recommended) ── */}
           <button
@@ -186,7 +212,7 @@ const MobileBottomNav: React.FC<{
   return (
     <nav
       className="fixed bottom-0 left-0 right-0 z-50 flex h-16 border-t-4 border-ink bg-paper lg:hidden"
-      style={{ boxShadow: '0 -3px 0 var(--ink)' }}
+      style={{ boxShadow: '0 -3px 0 var(--shadow)' }}
     >
       {tabs.map((tab) => (
         <button
@@ -217,7 +243,7 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   const { address } = useAccount()
   const { owner } = useOwner()
-  const { isDark, toggle } = useTheme()
+  const { effectiveTheme } = useTheme()
   const { isGSupported, gModeEnabled, isWhitelisted, gBalance, verificationUrl } = useGoodDollar()
   const { isConnected } = useAccount()
 
@@ -225,153 +251,206 @@ export const Header: React.FC<HeaderProps> = ({
     address && owner && address.toLowerCase() === owner.toLowerCase()
   const isTournamentView =
     activeView === 'tournaments' || activeView === 'tournament-play'
+  const isDarkTheme = effectiveTheme !== 'light'
+  const connectedChipBg = isDarkTheme ? 'var(--accent)' : 'var(--accent-soft)'
+  const connectedChipColor = isDarkTheme ? '#FFFFFF' : 'var(--ink-fixed)'
 
   const safeNavigate = (view: 'lobby' | 'classic' | 'tournaments' | 'admin') => {
     if (typeof onViewChange === 'function') onViewChange(view)
   }
 
+  const navTabs = [
+    {
+      label: 'CLASSIC',
+      active: activeView === 'classic',
+      view: 'classic' as const,
+    },
+    {
+      label: 'TOURNAMENTS',
+      active: isTournamentView,
+      view: 'tournaments' as const,
+    },
+    {
+      label: 'LEADERBOARD',
+      active: isLeaderboardOpen,
+      onClick: onShowLeaderboard,
+    },
+    {
+      label: 'MY STATS',
+      active: false,
+    },
+    ...(isOwner
+      ? [
+          {
+            label: 'ADMIN',
+            active: activeView === 'admin',
+            view: 'admin' as const,
+          },
+        ]
+      : []),
+  ]
+
   return (
     <>
-    <header className="fixed left-0 right-0 top-0 z-50 flex items-center justify-between border-b-4 border-ink bg-paper px-4 py-3 lg:px-6 lg:py-4" style={{ borderBottomColor: 'var(--ink)' }}>
-      {/* Logo */}
-      <div
-        className="flex cursor-pointer items-center gap-2 group"
-        onClick={() => safeNavigate('lobby')}
+      <header
+        className="fixed left-0 right-0 top-0 z-50 border-b-4 border-ink bg-paper px-4 py-3 lg:px-6 lg:py-4"
+        style={{ borderBottomColor: 'var(--ink)' }}
       >
-        <div
-          className="flex h-9 w-9 items-center justify-center border-[3px] border-ink font-display text-lg transition-transform group-hover:-rotate-3"
-          style={{ background: 'var(--accent-yellow)', boxShadow: '3px 3px 0 var(--ink)', color: 'var(--ink-fixed)' }}
-        >
-          B
-        </div>
-        <span className="font-display text-xl tracking-tight text-ink">
-          BLOKAZ
-        </span>
-      </div>
-
-      {/* Nav tabs */}
-      <div className="flex items-center gap-3">
-        {[
-          {
-            label: 'CLASSIC',
-            active: activeView === 'classic',
-            view: 'classic' as const,
-          },
-          {
-            label: 'TOURNAMENTS',
-            active: isTournamentView,
-            view: 'tournaments' as const,
-          },
-          {
-            label: 'LEADERBOARD',
-            active: isLeaderboardOpen,
-            onClick: onShowLeaderboard
-          },
-          {
-            label: 'MY STATS',
-            active: false,
-          },
-          ...(isOwner
-            ? [
-                {
-                  label: 'ADMIN',
-                  active: activeView === 'admin',
-                  view: 'admin' as const,
-                },
-              ]
-            : []),
-        ].map((tab) => (
-          <button
-            key={tab.label}
-            onClick={() => tab.onClick ? tab.onClick() : tab.view && safeNavigate(tab.view)}
-            className={`hidden font-display uppercase lg:block ${
-              tab.active
-                ? 'border-[3px] border-ink bg-ink px-[18px] py-[10px] text-[13px] tracking-[0.08em]'
-                : 'brutal-btn border-[3px] border-ink bg-paper-2 px-4 py-2 text-[12px] tracking-[0.12em] text-ink'
-            }`}
-            style={{ boxShadow: tab.active ? 'none' : '4px 4px 0 var(--ink)' }}
+        <div className="mx-auto flex w-full max-w-[1440px] items-center justify-between gap-6">
+          <div
+            className="group flex min-w-[210px] cursor-pointer items-center gap-[14px] lg:basis-[320px]"
+            onClick={() => safeNavigate('lobby')}
           >
-            <span style={{ color: tab.active ? 'var(--paper)' : 'inherit' }}>
-              {tab.label}
-            </span>
-          </button>
-        ))}
-
-        {/* Theme Toggle */}
-        <button
-          onClick={toggle}
-          className="brutal-btn ml-2 border-[3px] border-ink bg-paper-2 p-2"
-          style={{ boxShadow: '4px 4px 0 var(--ink)' }}
-          title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
-        >
-          <BrutalIcon name={isDark ? 'sun' : 'moon'} size={18} />
-        </button>
-
-        {/* Desktop G$ Info */}
-        {!IS_MINIPAY && isGSupported && gModeEnabled && isConnected && (
-          <div className="hidden lg:flex items-center gap-2">
-            <div 
-              className={`flex items-center gap-2 border-[3px] border-ink px-4 py-2 font-display text-[11px] tracking-widest uppercase shadow-[4px_4px_0_var(--ink)] ${isWhitelisted ? 'bg-paper-2 text-ink' : 'bg-accent-pink text-white'}`}
+            <div
+              className="flex h-[46px] w-[46px] items-center justify-center border-[3px] border-ink font-display text-[22px] transition-transform group-hover:-rotate-3"
+              style={{
+                background: 'var(--accent-yellow)',
+                boxShadow: '3px 3px 0 var(--shadow)',
+                color: 'var(--ink-fixed)',
+              }}
             >
-              {isWhitelisted ? (
-                <>
-                  <img src="https://docs.gooddollar.org/~gitbook/image?url=https%3A%2F%2F1693836101-files.gitbook.io%2F~%2Ffiles%2Fv0%2Fb%2Fgitbook-x-prod.appspot.com%2Fo%2Fspaces%252F-LfsEjhezedCgGFXCkms%252Ficon%252F7UuO7n9qO2vO6Z3z7N2N%252FGoodDollar_Icon_Green.png%3Falt%3Dmedia%26token%3D7f3b8b1b-7f1b-4f1b-8f1b-7f1b8f1b7f1b&width=32&dpr=2" alt="G$" className="w-4 h-4" />
-                  {gBalance?.formatted?.slice(0, 6)} G$
-                  <div className="ml-1 h-1.5 w-1.5 rounded-full bg-accent-lime" title="Verified Human" />
-                </>
-              ) : (
-                <a href={verificationUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2">
-                  <BrutalIcon name="alert" size={14} />
-                  VERIFY IDENTITY
-                </a>
-              )}
+              B
+            </div>
+            <span className="font-display text-[24px] leading-none tracking-tight text-ink">
+              BLOKAZ
+            </span>
+          </div>
+
+          <div className="hidden flex-1 justify-center lg:flex">
+            <div className="flex items-center gap-2">
+              {navTabs.map((tab) => (
+                <button
+                  key={tab.label}
+                  onClick={() =>
+                    tab.onClick ? tab.onClick() : tab.view && safeNavigate(tab.view)
+                  }
+                  className="font-display uppercase"
+                  style={{
+                    padding: '8px 14px',
+                    border: '3px solid var(--ink)',
+                    background: tab.active ? 'var(--ink)' : 'var(--paper)',
+                    color: tab.active ? 'var(--label)' : 'var(--ink)',
+                    boxShadow: tab.active
+                      ? '4px 4px 0 var(--shadow)'
+                      : '3px 3px 0 var(--shadow)',
+                    letterSpacing: tab.active ? '0.08em' : '0.1em',
+                    fontSize: tab.active ? 13 : 12,
+                  }}
+                >
+                  {tab.label}
+                </button>
+              ))}
             </div>
           </div>
-        )}
-      </div>
 
-      {/* Wallet connect */}
-      {IS_MINIPAY ? (
-        <MiniPayWalletBadge />
-      ) : (
-        <ConnectButton.Custom>
-          {({
-            account,
-            chain,
-            mounted,
-            openAccountModal,
-            openChainModal,
-            openConnectModal,
-          }) => {
-            const ready = mounted
-            const connected = ready && account && chain
+          <div className="flex min-w-0 items-center justify-end gap-2 lg:basis-[320px] lg:gap-3">
+            <ThemeToggle />
+            <HeaderDivider />
 
-            const handleClick = () => {
-              if (chain?.unsupported) return openChainModal()
-              openAccountModal()
-            }
+            {IS_MINIPAY ? (
+              <>
+                <MiniPayWalletBadge />
+              </>
+            ) : (
+              <ConnectButton.Custom>
+                {({
+                  account,
+                  chain,
+                  mounted,
+                  openAccountModal,
+                  openChainModal,
+                  openConnectModal,
+                }) => {
+                  const ready = mounted
+                  const connected = ready && account && chain
 
-            return (
-              <div className="flex items-center gap-2" style={{ opacity: ready ? 1 : 0 }}>
-                {connected ? (
-                  /* Connected — show truncated address / wrong-network pill */
-                  <button
-                    onClick={handleClick}
-                    className="brutal-btn min-w-[88px] border-[3px] border-ink bg-paper px-4 py-[10px] font-display text-[12px] tracking-[0.08em] text-ink uppercase"
-                    style={{ boxShadow: '4px 4px 0 var(--ink)' }}
-                  >
-                    {chain?.unsupported ? 'NETWORK ⚠' : truncateAddress(account.address)}
-                  </button>
-                ) : (
-                  /* Not connected — single dropdown with Social + Wallet options */
-                  <LoginDropdown onConnectWallet={openConnectModal} />
-                )}
-              </div>
-            )
-          }}
-        </ConnectButton.Custom>
-      )}
-    </header>
+                  const handleClick = () => {
+                    if (chain?.unsupported) return openChainModal()
+                    openAccountModal()
+                  }
+
+                  return (
+                    <div
+                      className="flex items-center gap-2 lg:gap-3"
+                      style={{ opacity: ready ? 1 : 0 }}
+                    >
+                      {!connected ? (
+                        <LoginDropdown onConnectWallet={openConnectModal} />
+                      ) : (
+                        <>
+                          {isGSupported && gModeEnabled && (
+                            <>
+                              <div
+                                className={`hidden items-center gap-2 border-[3px] border-ink px-3 py-[10px] font-display text-[10px] tracking-[0.12em] uppercase lg:flex ${
+                                  isWhitelisted ? '' : 'text-white'
+                                }`}
+                                style={{
+                                  background: isWhitelisted
+                                    ? 'var(--paper)'
+                                    : 'var(--accent-pink)',
+                                  color: isWhitelisted ? 'var(--ink)' : '#FFFFFF',
+                                  boxShadow: '3px 3px 0 var(--shadow)',
+                                }}
+                              >
+                                {isWhitelisted ? (
+                                  <>
+                                    <img
+                                      src="https://docs.gooddollar.org/~gitbook/image?url=https%3A%2F%2F1693836101-files.gitbook.io%2F~%2Ffiles%2Fv0%2Fb%2Fgitbook-x-prod.appspot.com%2Fo%2Fspaces%252F-LfsEjhezedCgGFXCkms%252Ficon%252F7UuO7n9qO2vO6Z3z7N2N%252FGoodDollar_Icon_Green.png%3Falt%3Dmedia%26token%3D7f3b8b1b-7f1b-4f1b-8f1b-7f1b8f1b7f1b&width=32&dpr=2"
+                                      alt="G$"
+                                      className="h-4 w-4"
+                                    />
+                                    {gBalance?.formatted?.slice(0, 6)} G$
+                                  </>
+                                ) : (
+                                  <a
+                                    href={verificationUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center gap-2"
+                                  >
+                                    <BrutalIcon name="alert" size={14} />
+                                    VERIFY IDENTITY
+                                  </a>
+                                )}
+                              </div>
+                              <HeaderDivider />
+                            </>
+                          )}
+
+                          <button
+                            onClick={handleClick}
+                            className="min-w-[104px] border-[3px] border-ink px-4 py-[10px] font-display text-[12px] tracking-[0.08em] uppercase"
+                            style={{
+                              background: connectedChipBg,
+                              color: connectedChipColor,
+                              boxShadow: '4px 4px 0 var(--shadow)',
+                            }}
+                          >
+                            {chain?.unsupported
+                              ? 'NETWORK ⚠'
+                              : truncateAddress(account.address)}
+                          </button>
+                          <button
+                            onClick={handleClick}
+                            className="flex h-10 w-10 items-center justify-center border-[3px] border-ink bg-paper font-display text-[11px] uppercase"
+                            style={{
+                              color: 'var(--ink)',
+                              boxShadow: '3px 3px 0 var(--shadow)',
+                            }}
+                            aria-label="Open account"
+                          >
+                            {account.displayName?.slice(0, 1) ?? 'W'}
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  )
+                }}
+              </ConnectButton.Custom>
+            )}
+          </div>
+        </div>
+      </header>
     <MobileBottomNav
       activeView={activeView}
       isLeaderboardOpen={isLeaderboardOpen ?? false}
@@ -384,4 +463,3 @@ export const Header: React.FC<HeaderProps> = ({
 }
 
 export default Header
-

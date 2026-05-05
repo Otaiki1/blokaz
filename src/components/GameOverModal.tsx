@@ -246,7 +246,7 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
 
   const shadowColor = isTournamentMode
     ? 'var(--accent-pink)'
-    : 'var(--accent-yellow)'
+    : 'var(--game-over-shadow)'
   const accentTextColor = 'var(--ink-fixed)'
   const stats = useMemo(() => {
     const moves = gameSession?.moveHistory ?? []
@@ -372,7 +372,7 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
           <button
             onClick={handleAbandon}
             className="brutal-btn absolute right-2 top-2 z-50 flex h-11 w-11 items-center justify-center border-4 border-ink bg-paper-2 p-2 text-ink sm:h-12 sm:w-12"
-            style={{ boxShadow: '4px 4px 0 var(--ink)' }}
+            style={{ boxShadow: '4px 4px 0 var(--shadow)' }}
           >
             <BrutalIcon name="back" size={20} strokeWidth={4} />
           </button>
@@ -387,7 +387,7 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
                 letterSpacing: '-0.03em',
                 lineHeight: 0.9,
                 transform: 'rotate(-4deg) scale(1.02)',
-                boxShadow: `8px 8px 0 var(--ink)`,
+                boxShadow: `8px 8px 0 var(--game-over-shadow)`,
                 zIndex: 30,
               }}
             >
@@ -423,13 +423,13 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
 
               <div className="mb-5 flex flex-wrap gap-2">
                 <div
-                  className="border-4 border-ink bg-accent-lime px-3 py-1 font-display text-[10px] uppercase tracking-widest shadow-[3px_3px_0_var(--ink)]"
+                  className="border-4 border-ink bg-accent-lime px-3 py-1 font-display text-[10px] uppercase tracking-widest shadow-[3px_3px_0_var(--shadow)]"
                   style={{ color: accentTextColor }}
                 >
                   NEW HIGH SCORE
                 </div>
                 <div
-                  className="border-4 border-ink bg-accent-pink px-3 py-1 font-display text-[10px] uppercase tracking-widest shadow-[3px_3px_0_var(--ink)]"
+                  className="border-4 border-ink bg-accent-pink px-3 py-1 font-display text-[10px] uppercase tracking-widest shadow-[3px_3px_0_var(--shadow)]"
                   style={{ color: accentTextColor }}
                 >
                   {achievementChips[1]}
@@ -486,12 +486,12 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
             <div
               className="border-4 border-ink bg-accent-yellow p-4"
               style={{
-                boxShadow: '6px 6px 0 var(--ink)',
+                boxShadow: '6px 6px 0 var(--shadow)',
                 color: accentTextColor,
               }}
             >
               <div className="mb-2 flex items-center justify-between font-display text-[10px] uppercase tracking-widest">
-                <span>WEEKLY LADDER</span>
+                <span style={{ color: 'var(--label)' }}>WEEKLY LADDER</span>
                 <span>#{rankData.currentRank} NEXT</span>
               </div>
               <div className="relative h-4 border-4 border-ink bg-paper-2">
@@ -521,7 +521,7 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
 
           <div
             className="shrink-0 border-4 border-ink bg-paper p-3"
-            style={{ boxShadow: '8px 8px 0 var(--ink)' }}
+            style={{ boxShadow: '8px 8px 0 var(--shadow)' }}
           >
             <div className="flex flex-col gap-3">
               <button
@@ -529,7 +529,7 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
                 disabled={!canSubmit}
                 className="brutal-btn flex w-full items-center justify-center gap-3 border-4 border-ink bg-accent-lime py-4 font-display text-sm uppercase tracking-[0.15em] disabled:opacity-50 sm:py-5 sm:text-base"
                 style={{
-                  boxShadow: '6px 6px 0 var(--ink)',
+                  boxShadow: '6px 6px 0 var(--shadow)',
                   color: accentTextColor,
                 }}
               >
@@ -547,7 +547,7 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
                   className="border-4 border-ink"
                   style={{
                     background: 'var(--paper-2)',
-                    boxShadow: '6px 6px 0 var(--ink)',
+                    boxShadow: '6px 6px 0 var(--shadow)',
                   }}
                 >
                   <div
@@ -587,7 +587,7 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
                           href={verificationUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="brutal-btn flex w-full items-center justify-center gap-2 border-4 border-ink bg-accent-pink py-3 font-display text-[11px] uppercase tracking-wider shadow-[4px_4px_0_var(--ink)]"
+                          className="brutal-btn flex w-full items-center justify-center gap-2 border-4 border-ink bg-accent-pink py-3 font-display text-[11px] uppercase tracking-wider shadow-[4px_4px_0_var(--shadow)]"
                           style={{ color: 'var(--ink-fixed)' }}
                         >
                           <BrutalIcon name="alert" size={13} />
@@ -638,7 +638,7 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
                             isPayingRetry ||
                             (gBalance?.value || 0n) < 10n * 10n ** 18n
                           }
-                          className="brutal-btn flex w-full items-center justify-center gap-2 border-4 border-ink bg-accent-lime py-3.5 font-display text-[11px] uppercase tracking-wider shadow-[4px_4px_0_var(--ink)] disabled:opacity-50"
+                          className="brutal-btn flex w-full items-center justify-center gap-2 border-4 border-ink bg-accent-lime py-3.5 font-display text-[11px] uppercase tracking-wider shadow-[4px_4px_0_var(--shadow)] disabled:opacity-50"
                           style={{ color: 'var(--ink-fixed)' }}
                         >
                           {isPayingRetry ? (
@@ -668,7 +668,7 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
                   className="border-4 border-ink"
                   style={{
                     background: 'var(--paper-2)',
-                    boxShadow: '6px 6px 0 var(--ink)',
+                    boxShadow: '6px 6px 0 var(--shadow)',
                   }}
                 >
                   <div
@@ -683,7 +683,7 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
                       className="brutal-btn flex h-7 w-7 items-center justify-center border-2 border-ink"
                       style={{
                         background: 'var(--paper-2)',
-                        boxShadow: '2px 2px 0 var(--ink)',
+                        boxShadow: '2px 2px 0 var(--shadow)',
                       }}
                     >
                       <BrutalIcon name="back" size={12} strokeWidth={3} />
@@ -692,7 +692,7 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
                   <div className="flex flex-col gap-2 p-3">
                     <button
                       onClick={handleShareWarpcast}
-                      className="brutal-btn flex w-full items-center justify-between border-4 border-ink px-4 py-3 font-display text-[11px] uppercase tracking-wider shadow-[4px_4px_0_var(--ink)]"
+                      className="brutal-btn flex w-full items-center justify-between border-4 border-ink px-4 py-3 font-display text-[11px] uppercase tracking-wider shadow-[4px_4px_0_var(--shadow)]"
                       style={{
                         background: 'var(--accent-pink)',
                         color: 'var(--ink-fixed)',
@@ -714,7 +714,7 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
                     </button>
                     <button
                       onClick={handleShareTwitter}
-                      className="brutal-btn flex w-full items-center justify-between border-4 border-ink px-4 py-3 font-display text-[11px] uppercase tracking-wider shadow-[4px_4px_0_var(--ink)]"
+                      className="brutal-btn flex w-full items-center justify-between border-4 border-ink px-4 py-3 font-display text-[11px] uppercase tracking-wider shadow-[4px_4px_0_var(--shadow)]"
                       style={{
                         background: 'var(--ink)',
                         color: 'var(--paper)',
@@ -743,14 +743,14 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
                 <div className="grid grid-cols-2 gap-3">
                   <button
                     onClick={() => setShowShareSheet(true)}
-                    className="brutal-btn flex items-center justify-center gap-1.5 border-4 border-ink bg-paper-2 py-3.5 font-display text-[11px] uppercase tracking-wider text-ink shadow-[4px_4px_0_var(--ink)] sm:py-4 sm:text-xs"
+                    className="brutal-btn flex items-center justify-center gap-1.5 border-4 border-ink bg-paper-2 py-3.5 font-display text-[11px] uppercase tracking-wider text-ink shadow-[4px_4px_0_var(--shadow)] sm:py-4 sm:text-xs"
                   >
                     <BrutalIcon name="rocket" size={13} strokeWidth={2} />
                     SHARE RUN
                   </button>
                   <button
                     onClick={onOpenLeaderboard}
-                    className="brutal-btn border-4 border-ink bg-accent-cyan py-3.5 font-display text-[11px] uppercase tracking-wider shadow-[4px_4px_0_var(--ink)] sm:py-4 sm:text-xs"
+                    className="brutal-btn border-4 border-ink bg-accent-cyan py-3.5 font-display text-[11px] uppercase tracking-wider shadow-[4px_4px_0_var(--shadow)] sm:py-4 sm:text-xs"
                     style={{ color: accentTextColor }}
                   >
                     LEADERBOARD

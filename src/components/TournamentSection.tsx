@@ -14,7 +14,12 @@ import { useAccount } from 'wagmi'
 import { formatUnits } from 'viem'
 import { useGameStore } from '../stores/gameStore'
 
-const ROW_COLORS = ['#FF3D3D', '#B7FF3B', '#8A3DFF', '#29E6E6']
+const ROW_COLORS = [
+  'var(--piece-red)',
+  'var(--piece-lime)',
+  'var(--piece-purple)',
+  'var(--piece-cyan)',
+]
 const TAG_STYLES = [
   { bg: 'var(--accent-yellow)', label: 'HOT' },
   { bg: 'var(--paper-2)', label: 'CASUAL' },
@@ -111,7 +116,7 @@ const TournamentCard: React.FC<TournamentCardProps> = ({
         style={{
           background: ROW_COLORS[index % 4],
           height: 120,
-          boxShadow: '7px 7px 0 var(--ink)',
+          boxShadow: '7px 7px 0 var(--shadow)',
         }}
       />
     )
@@ -169,7 +174,7 @@ const TournamentCard: React.FC<TournamentCardProps> = ({
     letterSpacing: '0.08em',
     textTransform: 'uppercase' as const,
     fontFamily: "'Archivo Black'",
-    boxShadow: '4px 4px 0 var(--ink)',
+    boxShadow: '4px 4px 0 var(--shadow)',
   }
 
   return (
@@ -179,7 +184,7 @@ const TournamentCard: React.FC<TournamentCardProps> = ({
       style={{
         background: rowBg,
         border: '4px solid var(--ink)',
-        boxShadow: `${offset}px ${offset}px 0 var(--ink)`,
+        boxShadow: `${offset}px ${offset}px 0 var(--shadow)`,
         transform: `translate(${7 - offset}px, ${7 - offset}px)`,
         transition: 'all 100ms',
         padding: '14px 16px',
@@ -208,7 +213,7 @@ const TournamentCard: React.FC<TournamentCardProps> = ({
               fontSize: 9,
               letterSpacing: '0.1em',
               transform: 'rotate(-3deg)',
-              boxShadow: '3px 3px 0 var(--ink)',
+              boxShadow: '3px 3px 0 var(--shadow)',
               marginBottom: 6,
             }}
           >
@@ -313,7 +318,7 @@ const TournamentCard: React.FC<TournamentCardProps> = ({
                   padding: '10px 0',
                   fontSize: 12,
                   letterSpacing: '0.1em',
-                  boxShadow: '4px 4px 0 var(--ink)',
+                  boxShadow: '4px 4px 0 var(--shadow)',
                 }}
               >
                 START MATCH
@@ -330,7 +335,7 @@ const TournamentCard: React.FC<TournamentCardProps> = ({
                   fontSize: 11,
                   textTransform: 'uppercase',
                   fontFamily: "'Archivo Black'",
-                  boxShadow: '4px 4px 0 var(--ink)',
+                  boxShadow: '4px 4px 0 var(--shadow)',
                 }}
               >
                 RANKS
@@ -353,7 +358,7 @@ const TournamentCard: React.FC<TournamentCardProps> = ({
                   letterSpacing: '0.1em',
                   textTransform: 'uppercase',
                   fontFamily: "'Archivo Black'",
-                  boxShadow: '4px 4px 0 var(--ink)',
+                  boxShadow: '4px 4px 0 var(--shadow)',
                 }}
               >
                 {isFinalizing ? 'FINALIZING...' : 'FINALIZE'}
@@ -370,7 +375,7 @@ const TournamentCard: React.FC<TournamentCardProps> = ({
                   fontSize: 11,
                   textTransform: 'uppercase',
                   fontFamily: "'Archivo Black'",
-                  boxShadow: '4px 4px 0 var(--ink)',
+                  boxShadow: '4px 4px 0 var(--shadow)',
                 }}
               >
                 BOARD
@@ -497,7 +502,7 @@ const TournamentSection: React.FC<TournamentSectionProps> = ({
               style={{
                 background: ROW_COLORS[i % 4],
                 height: 120,
-                boxShadow: '7px 7px 0 var(--ink)',
+                boxShadow: '7px 7px 0 var(--shadow)',
               }}
             />
           ))
@@ -514,7 +519,7 @@ const TournamentSection: React.FC<TournamentSectionProps> = ({
         ) : (
           <div
             className="border-4 border-ink p-8 text-center"
-            style={{ background: 'var(--paper-2)', boxShadow: '6px 6px 0 var(--ink)' }}
+            style={{ background: 'var(--paper-2)', boxShadow: '6px 6px 0 var(--shadow)' }}
           >
             <div
               className="mb-2 font-display text-2xl"

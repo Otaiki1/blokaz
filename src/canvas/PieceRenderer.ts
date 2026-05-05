@@ -1,8 +1,8 @@
 import type { ShapeDefinition } from '../engine/shapes'
 import { COLOR_PALETTE, TOURNAMENT_PALETTE } from './GridRenderer'
 
-const getThemeColor = (name: string, fallback: string) => 
-  typeof window !== 'undefined' ? (getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback) : fallback
+const getThemeColor = (name: string) =>
+  getComputedStyle(document.documentElement).getPropertyValue(name).trim()
 
 export class PieceRenderer {
   private ctx: CanvasRenderingContext2D
@@ -29,7 +29,7 @@ export class PieceRenderer {
     pieces.forEach((shape, index) => {
       // Draw slot divider (except before the first slot)
       if (index > 0) {
-        this.ctx.strokeStyle = getThemeColor('--ink', '#0C0C10')
+        this.ctx.strokeStyle = getThemeColor('--ink')
         this.ctx.lineWidth = 4
         this.ctx.beginPath()
         this.ctx.moveTo(index * slotWidth, this.trayY)
@@ -51,7 +51,7 @@ export class PieceRenderer {
       const y = this.trayY + (slotWidth - pieceHeight) / 2
 
       this.ctx.save()
-      this.ctx.shadowColor = 'rgba(12,12,16,0.15)'
+      this.ctx.shadowColor = 'rgba(0,0,0,0.15)'
       this.ctx.shadowOffsetX = 2
       this.ctx.shadowOffsetY = 2
       this.ctx.shadowBlur = 0
@@ -102,7 +102,7 @@ export class PieceRenderer {
       this.ctx.fillRect(cx, cy + size - sh, size, sh)
 
       // Ink border
-      this.ctx.strokeStyle = getThemeColor('--ink', '#0C0C10')
+      this.ctx.strokeStyle = getThemeColor('--ink')
       this.ctx.lineWidth = 2.5
       this.ctx.strokeRect(cx, cy, size, size)
     }

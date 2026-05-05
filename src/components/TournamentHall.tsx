@@ -63,7 +63,7 @@ const TournamentHall: React.FC<TournamentHallProps> = ({
         {/* Hero */}
         <div
           className="mb-6 border-4 border-ink p-6"
-          style={{ background: 'var(--ink)', boxShadow: '6px 6px 0 var(--ink)' }}
+          style={{ background: 'var(--ink)', boxShadow: '6px 6px 0 var(--shadow)' }}
         >
           <div
             className="mb-2 font-display text-[10px] tracking-[0.18em]"
@@ -111,7 +111,7 @@ const TournamentHall: React.FC<TournamentHallProps> = ({
           <button
             onClick={onBack}
             className="brutal-btn flex items-center gap-2 border-4 border-ink bg-paper px-6 py-3 font-display text-[11px] tracking-[0.14em] text-ink"
-            style={{ boxShadow: '4px 4px 0 var(--ink)' }}
+            style={{ boxShadow: '4px 4px 0 var(--shadow)' }}
           >
             <BrutalIcon name="back" size={14} /> BACK TO CLASSIC
           </button>

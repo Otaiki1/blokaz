@@ -51,7 +51,7 @@ const NoGasModal: React.FC<NoGasModalProps> = ({ address, onDismiss }) => {
       {/* Panel — stop propagation so clicks inside don't close */}
       <div
         className="relative w-full max-w-sm border-[4px] border-ink bg-paper"
-        style={{ boxShadow: '8px 8px 0 var(--ink)' }}
+        style={{ boxShadow: '8px 8px 0 var(--shadow)' }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* ── Header bar ── */}
@@ -71,7 +71,7 @@ const NoGasModal: React.FC<NoGasModalProps> = ({ address, onDismiss }) => {
           <button
             onClick={onDismiss}
             className="brutal-btn border-[2px] border-ink bg-paper p-1"
-            style={{ boxShadow: '2px 2px 0 var(--ink)' }}
+            style={{ boxShadow: '2px 2px 0 var(--shadow)' }}
             aria-label="Dismiss"
           >
             <BrutalIcon name="close" size={14} strokeWidth={2.5} />
@@ -90,7 +90,7 @@ const NoGasModal: React.FC<NoGasModalProps> = ({ address, onDismiss }) => {
           {/* Step-by-step tip */}
           <div
             className="border-[3px] border-ink"
-            style={{ background: 'var(--paper-2)', boxShadow: '3px 3px 0 var(--ink)' }}
+            style={{ background: 'var(--paper-2)', boxShadow: '3px 3px 0 var(--shadow)' }}
           >
             {/* Tip header */}
             <div
@@ -136,7 +136,7 @@ const NoGasModal: React.FC<NoGasModalProps> = ({ address, onDismiss }) => {
                 className="brutal-btn flex w-full items-center justify-between border-[3px] border-ink px-3 py-2.5 text-left"
                 style={{
                   background: copied ? 'var(--accent-yellow)' : 'var(--paper-2)',
-                  boxShadow: '3px 3px 0 var(--ink)',
+                  boxShadow: '3px 3px 0 var(--shadow)',
                   transition: 'background 0.15s ease',
                 }}
               >
@@ -169,7 +169,7 @@ const NoGasModal: React.FC<NoGasModalProps> = ({ address, onDismiss }) => {
             className="brutal-btn flex w-full items-center justify-center gap-2 border-[3px] border-ink py-3 font-display text-[13px] tracking-[0.1em] uppercase"
             style={{
               background: 'var(--accent-yellow)',
-              boxShadow: '4px 4px 0 var(--ink)',
+              boxShadow: '4px 4px 0 var(--shadow)',
               color: 'var(--ink-fixed)',
             }}
           >
@@ -193,7 +193,7 @@ const NoGasModal: React.FC<NoGasModalProps> = ({ address, onDismiss }) => {
           <button
             onClick={onDismiss}
             className="brutal-btn w-full border-[3px] border-ink bg-paper py-2.5 font-display text-[11px] tracking-[0.12em] text-ink uppercase"
-            style={{ boxShadow: '3px 3px 0 var(--ink)' }}
+            style={{ boxShadow: '3px 3px 0 var(--shadow)' }}
           >
             DISMISS
           </button>

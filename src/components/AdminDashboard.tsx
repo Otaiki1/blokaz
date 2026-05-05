@@ -75,7 +75,7 @@ const AdminDashboard: React.FC = () => {
       <div className="mb-12">
         <div
           className="inline-block border-4 border-ink bg-accent-yellow px-4 py-2 font-display text-[11px] tracking-[0.16em]"
-          style={{ boxShadow: '4px 4px 0 var(--ink)', transform: 'rotate(-2deg)' }}
+          style={{ boxShadow: '4px 4px 0 var(--shadow)', transform: 'rotate(-2deg)' }}
         >
           OWNER CONTROLS
         </div>
@@ -107,7 +107,7 @@ const AdminDashboard: React.FC = () => {
       <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
         <div
           className="border-4 border-ink bg-accent-cyan p-8"
-          style={{ boxShadow: '8px 8px 0 var(--ink)' }}
+          style={{ boxShadow: '8px 8px 0 var(--shadow)' }}
         >
           <h2
             className="mb-6 font-display text-[28px]"
@@ -160,7 +160,7 @@ const AdminDashboard: React.FC = () => {
               onClick={handleCreate}
               disabled={isCreating}
               className="brutal-btn w-full border-4 border-ink bg-danger py-4 font-display text-[12px] tracking-[0.14em] text-paper disabled:opacity-50"
-              style={{ boxShadow: '6px 6px 0 var(--ink)' }}
+              style={{ boxShadow: '6px 6px 0 var(--shadow)' }}
             >
               {isCreating ? 'DEPLOYING...' : 'FIRE TOURNAMENT'}
             </button>
@@ -185,7 +185,7 @@ const AdminDashboard: React.FC = () => {
 
         <div
           className="border-4 border-ink bg-accent-pink p-8"
-          style={{ boxShadow: '8px 8px 0 var(--ink)' }}
+          style={{ boxShadow: '8px 8px 0 var(--shadow)' }}
         >
           <h2
             className="mb-6 font-display text-[28px]"
@@ -196,7 +196,7 @@ const AdminDashboard: React.FC = () => {
 
           <div
             className="mb-8 border-4 border-ink bg-paper-2 p-6"
-            style={{ boxShadow: '5px 5px 0 var(--ink)' }}
+            style={{ boxShadow: '5px 5px 0 var(--shadow)' }}
           >
             <div className="mb-2 font-display text-[10px] uppercase tracking-[0.14em] text-ink/60">
               Accumulated Revenue
@@ -216,7 +216,7 @@ const AdminDashboard: React.FC = () => {
 
           <div
             className="mb-8 border-4 border-ink bg-paper-2 p-6"
-            style={{ boxShadow: '5px 5px 0 var(--ink)' }}
+            style={{ boxShadow: '5px 5px 0 var(--shadow)' }}
           >
             <div className="mb-4 font-display text-[10px] uppercase tracking-[0.14em] text-ink/60">
               Protocol Configuration
@@ -282,7 +282,7 @@ const AdminDashboard: React.FC = () => {
             onClick={() => withdraw()}
             disabled={isWithdrawing}
             className="brutal-btn w-full border-4 border-ink bg-accent-lime py-4 font-display text-[12px] tracking-[0.14em] text-ink disabled:opacity-50"
-            style={{ boxShadow: '6px 6px 0 var(--ink)' }}
+            style={{ boxShadow: '6px 6px 0 var(--shadow)' }}
           >
             {isWithdrawing ? 'PROCESSING...' : 'WITHDRAW REVENUE'}
           </button>

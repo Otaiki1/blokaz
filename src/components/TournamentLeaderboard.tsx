@@ -57,7 +57,7 @@ const TournamentLeaderboard: React.FC<TournamentLeaderboardProps> = ({ tournamen
         style={{
           background: 'var(--paper)',
           transform: isOpen ? 'translateX(0)' : 'translateX(100%)',
-          boxShadow: '-8px 0 0 var(--ink)',
+          boxShadow: '-8px 0 0 var(--shadow)',
         }}
       >
         {/* Header */}
@@ -67,7 +67,8 @@ const TournamentLeaderboard: React.FC<TournamentLeaderboardProps> = ({ tournamen
               TOURNAMENT #{tournamentId?.toString()}
             </div>
             <div
-              className="font-display text-accent-yellow text-[10px] tracking-[0.2em] mt-1"
+              className="font-display text-[10px] tracking-[0.2em] mt-1"
+              style={{ color: 'var(--label)' }}
             >
               OFFICIAL STANDINGS
             </div>
@@ -75,7 +76,7 @@ const TournamentLeaderboard: React.FC<TournamentLeaderboardProps> = ({ tournamen
           <button
             onClick={onClose}
             className="w-10 h-10 border-4 border-paper font-display text-ink bg-paper flex items-center justify-center brutal-btn"
-            style={{ boxShadow: '3px 3px 0 var(--paper)' }}
+            style={{ boxShadow: '3px 3px 0 var(--shadow)' }}
           >
             <BrutalIcon name="back" size={18} />
           </button>
@@ -83,7 +84,7 @@ const TournamentLeaderboard: React.FC<TournamentLeaderboardProps> = ({ tournamen
 
         <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-3">
           <div className="flex items-center justify-between px-2 pb-1">
-            <div className="font-display text-[10px] tracking-[0.14em] opacity-70">GLOBAL CONTENDERS</div>
+            <div className="brutal-label opacity-100">GLOBAL CONTENDERS</div>
             <div className="font-display text-[10px] tracking-[0.12em] opacity-60">
               {leaderboard?.length || 0} JOINED
             </div>
@@ -113,7 +114,7 @@ const TournamentLeaderboard: React.FC<TournamentLeaderboardProps> = ({ tournamen
                       background: rowBg,
                       color: textColor,
                       transform: isCurrentUser ? 'scale(1.03)' : 'none',
-                      boxShadow: isCurrentUser ? '0 0 0 3px var(--accent-yellow), 6px 6px 0 var(--ink)' : '4px 4px 0 var(--ink)',
+                      boxShadow: isCurrentUser ? '0 0 0 3px var(--accent-yellow), 6px 6px 0 var(--shadow)' : '4px 4px 0 var(--shadow)',
                     }}
                   >
                     {/* Rank */}

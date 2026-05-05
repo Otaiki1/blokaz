@@ -1,23 +1,13 @@
-import { useCallback, useState } from 'react'
-
-const STORAGE_KEY = 'blokaz:theme'
+import { useThemeStore } from '../stores/themeStore'
 
 export function useTheme() {
-  const [isDark, setIsDark] = useState(
-    () => document.documentElement.dataset.theme === 'dark'
-  )
-
-  const toggle = useCallback(() => {
-    setIsDark((prev) => {
-      const next = !prev
-      const html = document.documentElement
-      html.classList.add('theme-transitioning')
-      html.dataset.theme = next ? 'dark' : 'light'
-      localStorage.setItem(STORAGE_KEY, next ? 'dark' : 'light')
-      setTimeout(() => html.classList.remove('theme-transitioning'), 180)
-      return next
-    })
-  }, [])
-
-  return { isDark, toggle }
+  return useThemeStore((state) => ({
+    userTheme: state.userTheme,
+    modeTheme: state.modeTheme,
+    effectiveTheme: state.effectiveTheme,
+    isDark: state.effectiveTheme !== 'light',
+    setUserTheme: state.setUserTheme,
+    cycleTheme: state.cycleTheme,
+    setMode: state.setMode,
+  }))
 }
