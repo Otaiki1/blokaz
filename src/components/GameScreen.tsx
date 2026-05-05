@@ -640,9 +640,13 @@ const GameScreen: React.FC<GameScreenProps> = ({
 
     const canvas = canvasRef.current
 
+    // Fallback used only when the container hasn't been measured yet.
+    // On mobile the board fills full width; subtract nothing for margins.
+    // Height fraction ≈ dvh minus header(64) + scorebar(~48) + bottomnav(64)
+    // expressed as a ratio so it works across screen sizes.
     const vpFallback = Math.min(
-      window.innerWidth - 32,
-      Math.round(window.innerHeight * 0.75)
+      window.innerWidth,
+      Math.round(window.innerHeight * 0.58)
     )
 
     const computeDims = (containerWidth: number, containerHeight = 0) => {
@@ -1414,7 +1418,7 @@ const CanvasArea: React.FC<CanvasAreaProps> = ({
   return (
     <div
       ref={boardContainerRef}
-      className="flex h-full w-full select-none items-center justify-center"
+      className="flex flex-1 min-h-0 w-full select-none items-center justify-center"
     >
       <div className="relative inline-flex flex-col">
         {canvasDims && (
@@ -1765,7 +1769,7 @@ const MobileLayout: React.FC<MobileLayoutProps> = ({
   onBack,
   canvasArea,
 }) => (
-  <div className={`flex w-full flex-col flex-1 min-h-0 ${gameSession ? 'overflow-hidden' : 'h-auto overflow-visible'}`}>
+  <div className="flex w-full flex-col flex-1 min-h-0 overflow-hidden">
     {gameSession && (
       <>
         {/* ── Game chrome: back / status / pause ──────────────────── */}
@@ -1814,9 +1818,9 @@ const MobileLayout: React.FC<MobileLayoutProps> = ({
     )}
 
     {/* ── Canvas fills all remaining vertical space ────────────────── */}
-    <div
-      className={`min-h-0 flex-1 ${gameSession ? 'overflow-hidden' : 'mx-auto max-w-[400px] px-4 pt-4'}`}
-    >
+    {/* overflow-hidden during gameplay keeps canvas crisp.          */}
+    {/* overflow-auto on the start-card lets short phones scroll it.  */}
+    <div className={`flex flex-col min-h-0 flex-1 ${gameSession ? 'overflow-hidden' : 'overflow-auto'}`}>
       {canvasArea}
     </div>
   </div>
