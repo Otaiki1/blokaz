@@ -76,6 +76,13 @@ const ERC20_ABI = [
     ],
     outputs: [{ name: '', type: 'bool' }],
     stateMutability: 'nonpayable'
+  },
+  {
+    type: 'function',
+    name: 'balanceOf',
+    inputs: [{ name: 'account', type: 'address' }],
+    outputs: [{ name: '', type: 'uint256' }],
+    stateMutability: 'view'
   }
 ] as const
 
@@ -235,6 +242,20 @@ export function useUSDCAllowance(ownerAddress?: `0x${string}`) {
   return { allowance: allowance as bigint | undefined, isLoading, refetch }
 }
 
+/**
+ * Hook to check the user's USDC balance on Celo mainnet.
+ */
+export function useUSDCBalance(ownerAddress?: `0x${string}`) {
+  const { data: balance, isLoading, refetch } = useReadContract({
+    address: USDC_ADDRESS,
+    abi: ERC20_ABI,
+    functionName: 'balanceOf',
+    args: ownerAddress ? [ownerAddress] : undefined,
+    query: { enabled: !!ownerAddress, refetchInterval: 15_000 }
+  })
+
+  return { balance: balance as bigint | undefined, isLoading, refetch }
+}
 
 /**
  * Hook to get a player's registered username.

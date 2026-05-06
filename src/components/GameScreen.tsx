@@ -1059,7 +1059,7 @@ const ClassicStartCard: React.FC<{
     {/* Hero Image */}
     <div className="relative overflow-hidden border-4 border-ink bg-paper-2 shadow-[6px_6px_0_var(--shadow)]">
       <img
-        src="/hero.png"
+        src="/hero.webp"
         alt="Blokaz Game Preview"
         className="block h-auto w-full"
       />

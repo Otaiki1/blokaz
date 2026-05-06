@@ -6,6 +6,7 @@ import Leaderboard from './components/Leaderboard'
 import TournamentHall from './components/TournamentHall'
 import AdminDashboard from './components/AdminDashboard'
 import LobbyScreen from './components/LobbyScreen'
+import AppFooter from './components/AppFooter'
 import { useGameStore } from './stores/gameStore'
 import { useThemeStore, type ThemeMode } from './stores/themeStore'
 
@@ -123,6 +124,11 @@ const App: React.FC = () => {
         isOpen={showLeaderboard}
         onClose={() => setShowLeaderboard(false)}
       />
+
+      {/* Footer — always visible; provides ToS, Privacy, Support links (MiniPay requirement) */}
+      {activeView !== 'classic' && activeView !== 'tournament-play' && (
+        <AppFooter />
+      )}
     </div>
   )
 }
