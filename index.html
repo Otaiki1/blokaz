@@ -8,6 +8,30 @@
         if(!t) t=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';
         document.documentElement.dataset.theme=t;
       })();
+      // Pre-define window.ethereum as configurable so multiple wallet extensions
+      // can set it without throwing "Cannot redefine property: ethereum".
+      (function(){
+        try {
+          var desc = Object.getOwnPropertyDescriptor(window, 'ethereum');
+          if (!desc) {
+            Object.defineProperty(window, 'ethereum', {
+              configurable: true,
+              enumerable: true,
+              writable: true,
+              value: undefined,
+            });
+          } else if (!desc.configurable) {
+            // Already defined non-configurable by an extension — nothing we can do.
+            // Suppress the downstream throw from competing extensions.
+            window.addEventListener('error', function(e){
+              if (e.message && e.message.indexOf('Cannot redefine property: ethereum') !== -1) {
+                e.stopImmediatePropagation();
+                e.preventDefault();
+              }
+            }, true);
+          }
+        } catch(_) {}
+      })();
     </script>
     <link rel="icon" type="image/png" href="/Blokaz_logo.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
