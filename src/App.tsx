@@ -10,6 +10,7 @@ import AppFooter from './components/AppFooter'
 import SplashScreen from './components/SplashScreen'
 import { useGameStore } from './stores/gameStore'
 import { useThemeStore, type ThemeMode } from './stores/themeStore'
+import { IS_MINIPAY } from './utils/miniPay'
 
 type AppView = 'lobby' | 'classic' | 'tournaments' | 'tournament-play' | 'admin'
 
@@ -27,8 +28,10 @@ const App: React.FC = () => {
   // so navigating between views never re-triggers it.
   const [showSplash, setShowSplash] = useState(true)
   const [showLeaderboard, setShowLeaderboard] = useState(false)
-  const { setTournamentId, forceReset } = useGameStore()
+  const { setTournamentId, forceReset, gameSession } = useGameStore()
   const [activeView, setActiveView] = useState<AppView>('lobby')
+  // Hide the header bar while actively playing — the game chrome has its own back/pause
+  const isPlayingGame = !!gameSession && (activeView === 'classic' || activeView === 'tournament-play')
   const setThemeMode = useThemeStore((state) => state.setMode)
   const handleSplashDone = useCallback(() => setShowSplash(false), [])
 
@@ -89,17 +92,23 @@ const App: React.FC = () => {
     <div className="min-h-screen bg-paper text-ink">
       {showSplash && <SplashScreen onDone={handleSplashDone} />}
 
-      <Header
-        onShowLeaderboard={() => setShowLeaderboard(true)}
-        showLeaderboardAction={true}
-        isLeaderboardOpen={showLeaderboard}
-        activeView={activeView}
-        onViewChange={handleNavigate}
-      />
+      {/* Header: hidden during active gameplay — game chrome has its own back/pause */}
+      {!isPlayingGame && (
+        <Header
+          onShowLeaderboard={() => setShowLeaderboard(true)}
+          showLeaderboardAction={true}
+          isLeaderboardOpen={showLeaderboard}
+          activeView={activeView}
+          onViewChange={handleNavigate}
+        />
+      )}
 
       <main className={`flex flex-col ${
         activeView === 'lobby' ? 'min-h-screen pt-[64px] pb-20'
-        : activeView === 'classic' ? 'h-dvh overflow-hidden pt-16 pb-16 lg:min-h-screen lg:h-auto lg:overflow-visible lg:pt-[64px] lg:pb-20 lg:items-center'
+        : activeView === 'classic'
+          ? isPlayingGame
+            ? 'h-dvh overflow-hidden pt-0 pb-16 lg:min-h-screen lg:h-auto lg:overflow-visible lg:pt-0 lg:pb-20 lg:items-center'
+            : 'h-dvh overflow-hidden pt-16 pb-16 lg:min-h-screen lg:h-auto lg:overflow-visible lg:pt-[64px] lg:pb-20 lg:items-center'
         : activeView === 'tournament-play' ? 'pt-0 min-h-screen'
         : 'min-h-screen pt-[64px] pb-20 lg:items-center lg:pb-12'
       }`}>

@@ -1782,20 +1782,8 @@ const MobileLayout: React.FC<MobileLayoutProps> = ({
             <BrutalIcon name="back" size={16} strokeWidth={3} />
           </button>
 
-          <div
-            className="flex items-center gap-1.5 border-[3px] border-ink px-2 py-1 font-display text-[9px] uppercase tracking-[0.1em]"
-            style={{
-              background: 'var(--accent-lime)',
-              boxShadow: '2px 2px 0 var(--shadow)',
-              color: 'var(--ink-fixed)',
-            }}
-          >
-            <div
-              className="h-1.5 w-1.5 animate-pulse"
-              style={{ background: 'var(--ink-fixed)', borderRadius: '50%' }}
-            />
-            ON-CHAIN
-          </div>
+          {/* centre — intentionally empty; sync state shows via canvas overlay */}
+          <div />
 
           <button
             className="brutal-btn border-[3px] border-ink bg-paper p-1.5 text-ink"

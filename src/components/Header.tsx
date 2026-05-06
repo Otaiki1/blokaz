@@ -8,6 +8,7 @@ import ThemeToggle from './ThemeToggle'
 import { IS_MINIPAY } from '../utils/miniPay'
 import { useGoodDollar } from '../hooks/useGoodDollar'
 import { web3AuthConnector } from '../config/web3auth'
+import { useThemeStore, type UserTheme, type ThemeName } from '../stores/themeStore'
 
 type HeaderView = 'lobby' | 'classic' | 'tournaments' | 'tournament-play' | 'admin'
 
@@ -165,6 +166,163 @@ const LoginDropdown: React.FC<{ onConnectWallet: () => void }> = ({ onConnectWal
   )
 }
 
+// ─── Settings sheet ─────────────────────────────────────────────────────────
+
+const TELEGRAM_SUPPORT = 'https://t.me/+ulIKRKsI1HYxNmQ0'
+const TOS_URL = '/blokaz-terms.pdf'
+const PRIVACY_URL = '/blokaz-privacy.pdf'
+const ABOUT_URL = 'https://crackedstudios.xyz'
+
+const THEME_OPTIONS: { value: UserTheme; label: string; icon: string }[] = [
+  { value: 'auto',         label: 'AUTO',   icon: 'A' },
+  { value: 'light',        label: 'CREAM',  icon: '☀' },
+  { value: 'dark-navy',    label: 'NAVY',   icon: '◗' },
+  { value: 'dark-forest',  label: 'FOREST', icon: '❋' },
+]
+
+const SettingsSheet: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+  const { userTheme, setUserTheme } = useThemeStore((s) => ({
+    userTheme: s.userTheme,
+    setUserTheme: s.setUserTheme,
+  }))
+
+  return (
+    <div className="fixed inset-0 z-[200] flex flex-col lg:hidden">
+      {/* Backdrop — tap to close */}
+      <button
+        className="absolute inset-0 cursor-default"
+        style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(6px)' }}
+        onClick={onClose}
+        aria-label="Close settings"
+      />
+
+      {/* Full-height sheet sliding from bottom */}
+      <div
+        className="relative mt-auto flex max-h-[92dvh] w-full flex-col border-t-4 border-ink"
+        style={{ background: 'var(--paper)', boxShadow: '0 -8px 0 var(--shadow)' }}
+      >
+        {/* ── Header ── */}
+        <div
+          className="flex shrink-0 items-center justify-between border-b-4 border-ink px-6 py-4"
+          style={{ background: 'var(--paper-2)' }}
+        >
+          <div className="flex items-center gap-3">
+            <div
+              className="flex h-9 w-9 items-center justify-center border-[3px] border-ink"
+              style={{ background: 'var(--accent-yellow)' }}
+            >
+              <BrutalIcon name="wrench" size={18} strokeWidth={2.5} style={{ color: 'var(--ink-fixed)' }} />
+            </div>
+            <span className="font-display text-[16px] uppercase tracking-[0.15em]">SETTINGS</span>
+          </div>
+          <button
+            onClick={onClose}
+            className="brutal-btn flex h-10 w-10 items-center justify-center border-[3px] border-ink text-ink"
+            style={{ background: 'var(--paper)', boxShadow: '3px 3px 0 var(--shadow)' }}
+          >
+            <BrutalIcon name="close" size={16} strokeWidth={3} />
+          </button>
+        </div>
+
+        {/* ── Scrollable body ── */}
+        <div
+          className="flex-1 overflow-y-auto overscroll-contain"
+          style={{ WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
+        >
+          <div className="px-6 py-6 space-y-8" style={{ paddingBottom: 'max(32px, env(safe-area-inset-bottom))' }}>
+
+            {/* ── Theme ── */}
+            <section>
+              <div
+                className="mb-4 border-l-4 border-ink pl-3 font-display text-[11px] uppercase tracking-[0.2em]"
+                style={{ color: 'var(--ink-soft)' }}
+              >
+                APPEARANCE
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                {THEME_OPTIONS.map((opt) => {
+                  const isActive = userTheme === opt.value
+                  return (
+                    <button
+                      key={opt.value}
+                      onClick={() => setUserTheme(opt.value)}
+                      className="brutal-btn flex items-center gap-4 border-[3px] border-ink px-5 py-4 font-display"
+                      style={{
+                        background: isActive ? 'var(--accent-yellow)' : 'var(--paper-2)',
+                        color: isActive ? 'var(--ink-fixed)' : 'var(--ink)',
+                        boxShadow: isActive ? '4px 4px 0 var(--shadow)' : '3px 3px 0 var(--shadow)',
+                      }}
+                    >
+                      <span className="text-2xl leading-none">{opt.icon}</span>
+                      <div className="text-left">
+                        <div className="text-[12px] uppercase tracking-[0.14em]">{opt.label}</div>
+                        {isActive && (
+                          <div className="mt-0.5 text-[9px] tracking-widest opacity-60">ACTIVE</div>
+                        )}
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            </section>
+
+            {/* ── Divider ── */}
+            <div className="border-t-[3px] border-ink border-dashed" />
+
+            {/* ── Legal & Support ── */}
+            <section>
+              <div
+                className="mb-4 border-l-4 border-ink pl-3 font-display text-[11px] uppercase tracking-[0.2em]"
+                style={{ color: 'var(--ink-soft)' }}
+              >
+                LEGAL & SUPPORT
+              </div>
+              <div className="flex flex-col gap-3">
+                {[
+                  { label: 'Terms of Service',     sub: 'blokaz-terms.pdf',         href: TOS_URL },
+                  { label: 'Privacy Policy',        sub: 'blokaz-privacy.pdf',       href: PRIVACY_URL },
+                  { label: 'About Cracked Studios', sub: 'crackedstudios.xyz',       href: ABOUT_URL },
+                  { label: 'Support',               sub: 'Chat with us on Telegram', href: TELEGRAM_SUPPORT },
+                ].map(({ label, sub, href }) => (
+                  <a
+                    key={label}
+                    href={href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-between border-[3px] border-ink px-5 py-4"
+                    style={{
+                      background: 'var(--paper-2)',
+                      color: 'var(--ink)',
+                      boxShadow: '4px 4px 0 var(--shadow)',
+                    }}
+                  >
+                    <div>
+                      <div className="font-display text-[12px] uppercase tracking-[0.12em]">{label}</div>
+                      <div className="mt-0.5 font-body text-[10px]" style={{ color: 'var(--ink-soft)' }}>{sub}</div>
+                    </div>
+                    <span className="ml-4 text-xl opacity-40">→</span>
+                  </a>
+                ))}
+              </div>
+            </section>
+
+            {/* ── Version stamp ── */}
+            <div
+              className="border-[3px] border-ink px-5 py-4 text-center font-display text-[10px] uppercase tracking-[0.16em]"
+              style={{ background: 'var(--paper-2)', color: 'var(--ink-soft)' }}
+            >
+              BLOKAZ · © {new Date().getFullYear()} CRACKED STUDIOS
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Mobile bottom nav ───────────────────────────────────────────────────────
+
 const MobileBottomNav: React.FC<{
   activeView: HeaderView
   isLeaderboardOpen: boolean
@@ -172,62 +330,73 @@ const MobileBottomNav: React.FC<{
   onShowLeaderboard?: () => void
   isOwner: boolean
 }> = ({ activeView, isLeaderboardOpen, onViewChange, onShowLeaderboard, isOwner }) => {
+  const [settingsOpen, setSettingsOpen] = useState(false)
+
   const tabs = [
     {
       label: 'HOME',
       icon: 'home' as const,
-      active: activeView === 'lobby',
-      onClick: () => onViewChange('lobby'),
+      active: activeView === 'lobby' && !settingsOpen,
+      onClick: () => { setSettingsOpen(false); onViewChange('lobby') },
     },
     {
       label: 'CLASSIC',
       icon: 'zap' as const,
-      active: activeView === 'classic' && !isLeaderboardOpen,
-      onClick: () => onViewChange('classic'),
+      active: activeView === 'classic' && !isLeaderboardOpen && !settingsOpen,
+      onClick: () => { setSettingsOpen(false); onViewChange('classic') },
     },
     {
       label: 'TOURNEY',
       icon: 'trophy' as const,
-      active: activeView === 'tournaments' || activeView === 'tournament-play',
-      onClick: () => onViewChange('tournaments'),
+      active: (activeView === 'tournaments' || activeView === 'tournament-play') && !settingsOpen,
+      onClick: () => { setSettingsOpen(false); onViewChange('tournaments') },
     },
     {
       label: 'RANKS',
       icon: 'trending' as const,
-      active: isLeaderboardOpen,
-      onClick: onShowLeaderboard,
+      active: isLeaderboardOpen && !settingsOpen,
+      onClick: () => { setSettingsOpen(false); onShowLeaderboard?.() },
+    },
+    {
+      label: 'SETTINGS',
+      icon: 'wrench' as const,
+      active: settingsOpen,
+      onClick: () => setSettingsOpen((v) => !v),
     },
     ...(isOwner
       ? [
           {
             label: 'ADMIN',
             icon: 'alert' as const,
-            active: activeView === 'admin',
-            onClick: () => onViewChange('admin'),
+            active: activeView === 'admin' && !settingsOpen,
+            onClick: () => { setSettingsOpen(false); onViewChange('admin') },
           },
         ]
       : []),
   ]
 
   return (
-    <nav
-      className="fixed bottom-0 left-0 right-0 z-50 flex h-16 border-t-4 border-ink bg-paper lg:hidden"
-      style={{ boxShadow: '0 -3px 0 var(--shadow)' }}
-    >
-      {tabs.map((tab) => (
-        <button
-          key={tab.label}
-          onClick={tab.onClick}
-          className={`flex flex-1 flex-col items-center justify-center gap-1 font-display text-[8px] tracking-[0.14em] uppercase ${
-            tab.active ? 'bg-ink' : ''
-          }`}
-          style={{ color: tab.active ? 'var(--paper)' : 'var(--ink)' }}
-        >
-          <BrutalIcon name={tab.icon} size={18} strokeWidth={2.5} />
-          {tab.label}
-        </button>
-      ))}
-    </nav>
+    <>
+      {settingsOpen && <SettingsSheet onClose={() => setSettingsOpen(false)} />}
+      <nav
+        className="fixed bottom-0 left-0 right-0 z-[210] flex h-16 border-t-4 border-ink bg-paper lg:hidden"
+        style={{ boxShadow: '0 -3px 0 var(--shadow)' }}
+      >
+        {tabs.map((tab) => (
+          <button
+            key={tab.label}
+            onClick={tab.onClick}
+            className={`flex flex-1 flex-col items-center justify-center gap-1 font-display text-[8px] tracking-[0.14em] uppercase ${
+              tab.active ? 'bg-ink' : ''
+            }`}
+            style={{ color: tab.active ? 'var(--paper)' : 'var(--ink)' }}
+          >
+            <BrutalIcon name={tab.icon} size={18} strokeWidth={2.5} />
+            {tab.label}
+          </button>
+        ))}
+      </nav>
+    </>
   )
 }
 
@@ -344,7 +513,10 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
 
           <div className="flex min-w-0 items-center justify-end gap-2 lg:basis-[320px] lg:gap-3">
-            <ThemeToggle />
+            {/* ThemeToggle moved to Settings sheet on mobile; keep for desktop only */}
+            <div className="hidden lg:block">
+              <ThemeToggle />
+            </div>
             <HeaderDivider />
 
             {IS_MINIPAY ? null : (
