@@ -140,7 +140,7 @@ export class GridRenderer {
     this.ctx.fillRect(x, y, size, size)
   }
 
-  private drawCell(row: number, col: number, color: string, ink: string): void {
+  private drawCell(row: number, col: number, color: string, _ink: string): void {
     const pad = 1.8
     const x = col * this.cellSize + pad
     const y = row * this.cellSize + pad
@@ -151,17 +151,21 @@ export class GridRenderer {
     this.ctx.rect(x, y, size, size)
     this.ctx.fillStyle = color
     this.ctx.fill()
-    this.ctx.strokeStyle = ink
-    this.ctx.lineWidth = 3
+
+    // Border: always a dark semi-transparent overlay so it contrasts with the
+    // piece colour in every theme (--ink goes light in dark themes which
+    // creates white outlines on coloured cells — bad).
+    this.ctx.strokeStyle = 'rgba(0,0,0,0.45)'
+    this.ctx.lineWidth = 2.5
     this.ctx.stroke()
 
-    // Top highlight (glassy)
-    this.ctx.fillStyle = 'rgba(255,255,255,0.4)'
-    this.ctx.fillRect(x + 1, y + 1, size - 2, Math.floor(size * 0.28))
+    // Top highlight — kept subtle so it reads as depth, not a white band
+    this.ctx.fillStyle = 'rgba(255,255,255,0.18)'
+    this.ctx.fillRect(x + 1, y + 1, size - 2, Math.floor(size * 0.26))
 
     // Inner shadow for depth
-    const shadowH = Math.floor(size * 0.28)
-    this.ctx.fillStyle = 'rgba(0,0,0,0.12)'
+    const shadowH = Math.floor(size * 0.26)
+    this.ctx.fillStyle = 'rgba(0,0,0,0.14)'
     this.ctx.fillRect(x + 1, y + size - shadowH - 1, size - 2, shadowH)
   }
 

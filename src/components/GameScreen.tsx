@@ -1542,7 +1542,7 @@ const LeftRail: React.FC<{
   <div className="flex w-full flex-col gap-5">
     <div
       className="border-4 border-ink p-5"
-      style={{ background: 'var(--ink)', boxShadow: '6px 6px 0 var(--shadow)' }}
+      style={{ background: 'var(--ink-fixed)', boxShadow: '6px 6px 0 var(--shadow)' }}
     >
       <div
         className="brutal-label mb-2 opacity-100"
@@ -1550,8 +1550,8 @@ const LeftRail: React.FC<{
         LIVE SCORE
       </div>
       <div
-        className="font-display tabular-nums text-paper"
-        style={{ fontSize: 64, letterSpacing: '-0.04em', lineHeight: 0.95 }}
+        className="font-display tabular-nums"
+        style={{ fontSize: 64, letterSpacing: '-0.04em', lineHeight: 0.95, color: '#ffffff' }}
       >
         {score.toLocaleString()}
       </div>
@@ -1687,7 +1687,7 @@ const RightRail: React.FC<{
             </span>
             <button
               onClick={() => setShowShare(false)}
-              className="brutal-btn flex h-7 w-7 items-center justify-center border-2 border-ink"
+              className="brutal-btn flex h-7 w-7 items-center justify-center border-2 border-ink text-ink"
               style={{
                 background: 'var(--paper-2)',
                 boxShadow: '2px 2px 0 var(--shadow)',
@@ -1775,7 +1775,7 @@ const MobileLayout: React.FC<MobileLayoutProps> = ({
         {/* ── Game chrome: back / status / pause ──────────────────── */}
         <div className="flex shrink-0 items-center justify-between border-b-4 border-ink bg-paper px-3 py-1.5">
           <button
-            className="brutal-btn border-[3px] border-ink bg-paper p-1.5"
+            className="brutal-btn border-[3px] border-ink bg-paper p-1.5 text-ink"
             style={{ boxShadow: '2px 2px 0 var(--shadow)' }}
             onClick={onBack ?? (() => window.history.back())}
           >
@@ -1798,7 +1798,7 @@ const MobileLayout: React.FC<MobileLayoutProps> = ({
           </div>
 
           <button
-            className="brutal-btn border-[3px] border-ink bg-paper p-1.5"
+            className="brutal-btn border-[3px] border-ink bg-paper p-1.5 text-ink"
             style={{ boxShadow: '2px 2px 0 var(--shadow)' }}
           >
             <BrutalIcon name="pause" size={16} strokeWidth={3} />

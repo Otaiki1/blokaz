@@ -347,11 +347,7 @@ export const Header: React.FC<HeaderProps> = ({
             <ThemeToggle />
             <HeaderDivider />
 
-            {IS_MINIPAY ? (
-              <>
-                <MiniPayWalletBadge />
-              </>
-            ) : (
+            {IS_MINIPAY ? null : (
               <ConnectButton.Custom>
                 {({
                   account,

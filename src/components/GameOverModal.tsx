@@ -680,7 +680,7 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
                     </span>
                     <button
                       onClick={() => setShowShareSheet(false)}
-                      className="brutal-btn flex h-7 w-7 items-center justify-center border-2 border-ink"
+                      className="brutal-btn flex h-7 w-7 items-center justify-center border-2 border-ink text-ink"
                       style={{
                         background: 'var(--paper-2)',
                         boxShadow: '2px 2px 0 var(--shadow)',

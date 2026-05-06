@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import GameScreen from './components/GameScreen'
 import TournamentGameScreen from './components/TournamentGameScreen'
 import Header from './components/Header'
@@ -7,6 +7,7 @@ import TournamentHall from './components/TournamentHall'
 import AdminDashboard from './components/AdminDashboard'
 import LobbyScreen from './components/LobbyScreen'
 import AppFooter from './components/AppFooter'
+import SplashScreen from './components/SplashScreen'
 import { useGameStore } from './stores/gameStore'
 import { useThemeStore, type ThemeMode } from './stores/themeStore'
 
@@ -22,10 +23,14 @@ const getViewFromHash = (hash: string): AppView | null => {
 }
 
 const App: React.FC = () => {
+  // Show splash on every fresh page load. App only mounts once per load,
+  // so navigating between views never re-triggers it.
+  const [showSplash, setShowSplash] = useState(true)
   const [showLeaderboard, setShowLeaderboard] = useState(false)
   const { setTournamentId, forceReset } = useGameStore()
   const [activeView, setActiveView] = useState<AppView>('lobby')
   const setThemeMode = useThemeStore((state) => state.setMode)
+  const handleSplashDone = useCallback(() => setShowSplash(false), [])
 
   useEffect(() => {
     const handleHashChange = () => {
@@ -82,6 +87,8 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-paper text-ink">
+      {showSplash && <SplashScreen onDone={handleSplashDone} />}
+
       <Header
         onShowLeaderboard={() => setShowLeaderboard(true)}
         showLeaderboardAction={true}

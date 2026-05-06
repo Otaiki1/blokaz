@@ -1,12 +1,14 @@
 import React from 'react'
 
 const TELEGRAM_SUPPORT = 'https://t.me/+ulIKRKsI1HYxNmQ0'
-const TOS_URL = 'https://blokaz.xyz/terms'
-const PRIVACY_URL = 'https://blokaz.xyz/privacy'
+const TOS_URL = '/blokaz-terms.pdf'
+const PRIVACY_URL = '/blokaz-privacy.pdf'
+const ABOUT_URL = 'https://crackedstudios.xyz'
 
 /**
  * Persistent app footer — provides in-app links to Terms of Service,
- * Privacy Policy, and support channel. Required for MiniPay listing.
+ * Privacy Policy, support channel, and studio info.
+ * Required for MiniPay listing (§7 Legal Links, §6 Dedicated Support).
  */
 const AppFooter: React.FC = () => {
   return (
@@ -40,6 +42,16 @@ const AppFooter: React.FC = () => {
           style={{ color: 'var(--ink-soft)' }}
         >
           PRIVACY
+        </a>
+
+        <a
+          href={ABOUT_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="font-display text-[9px] tracking-[0.12em] underline-offset-2 hover:underline"
+          style={{ color: 'var(--ink-soft)' }}
+        >
+          ABOUT
         </a>
 
         <a
