@@ -25,7 +25,8 @@ export default defineConfig({
   server: {
     allowedHosts: [
       'aptly-letter-rocklike.ngrok-free.dev',
-      'all'
+      'd6c4-102-91-103-49.ngrok-free.app',
+      'all',
     ],
   },
   // @ts-ignore - vitest types

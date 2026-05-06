@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useMemo, useState, useEffect, useRef } from 'react'
 import { BrutalIcon } from './BrutalIcon'
 import { useAccount } from 'wagmi'
 import { useReadContracts } from 'wagmi'
@@ -10,23 +10,148 @@ import contractInfo from '../contract.json'
 
 const TOURNAMENT_ADDRESS = contractInfo.tournament as `0x${string}`
 
+// ─── Count-up hook ──────────────────────────────────────────────────────────
+function useCountUp(target: number, duration = 900, delay = 0): number {
+  const [value, setValue] = useState(0)
+  useEffect(() => {
+    if (!target) { setValue(0); return }
+    const t = setTimeout(() => {
+      const start = Date.now()
+      const tick = () => {
+        const p = Math.min((Date.now() - start) / duration, 1)
+        const eased = 1 - Math.pow(1 - p, 3)
+        setValue(Math.round(target * eased))
+        if (p < 1) requestAnimationFrame(tick)
+      }
+      requestAnimationFrame(tick)
+    }, delay)
+    return () => clearTimeout(t)
+  }, [target, duration, delay])
+  return value
+}
+
+// ─── Animated entrance wrapper ───────────────────────────────────────────────
+const FadeUp: React.FC<{ delay?: number; children: React.ReactNode; className?: string }> = ({
+  delay = 0,
+  children,
+  className = '',
+}) => {
+  const [visible, setVisible] = useState(false)
+  useEffect(() => { const t = setTimeout(() => setVisible(true), delay); return () => clearTimeout(t) }, [delay])
+  return (
+    <div
+      className={className}
+      style={{
+        opacity: visible ? 1 : 0,
+        transform: visible ? 'translateY(0)' : 'translateY(14px)',
+        transition: `opacity 320ms ease, transform 320ms cubic-bezier(0.22,1,0.36,1)`,
+      }}
+    >
+      {children}
+    </div>
+  )
+}
+
+// ─── Marquee ticker ──────────────────────────────────────────────────────────
+const TICKER_ITEMS = [
+  '⬛ STACK',
+  '▶ SMASH',
+  '◆ STAKE',
+  '⬛ PLAY ON-CHAIN',
+  '◆ WIN USDC',
+  '▶ FREE TO PLAY',
+]
+
+const Ticker: React.FC = () => {
+  const items = [...TICKER_ITEMS, ...TICKER_ITEMS] // double for seamless loop
+  return (
+    <div
+      className="overflow-hidden border-y-[3px] border-ink"
+      style={{ background: 'var(--ink-fixed)', height: 32 }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          height: '100%',
+          width: 'max-content',
+          animation: 'lobbyTicker 18s linear infinite',
+          willChange: 'transform',
+        }}
+      >
+        {items.map((item, i) => (
+          <span
+            key={i}
+            style={{
+              fontFamily: "'Archivo Black', sans-serif",
+              fontSize: 9,
+              letterSpacing: '0.22em',
+              textTransform: 'uppercase',
+              color: i % 3 === 0 ? '#FFE600' : 'rgba(255,255,255,0.65)',
+              paddingLeft: 28,
+              paddingRight: 4,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {item}
+          </span>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ─── Floating Tetris Blocks ──────────────────────────────────────────────────
+const TetrisBlocks: React.FC = () => (
+  <div style={{ animation: 'lobbyFloat 3.4s ease-in-out infinite' }}>
+    <svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="0" y="18" width="9" height="9" fill="var(--piece-red)" stroke="var(--ink)" strokeWidth="1.5"/>
+      <rect x="9" y="18" width="9" height="9" fill="var(--piece-red)" stroke="var(--ink)" strokeWidth="1.5"/>
+      <rect x="9" y="9" width="9" height="9" fill="var(--piece-red)" stroke="var(--ink)" strokeWidth="1.5"/>
+      <rect x="18" y="9" width="9" height="9" fill="var(--piece-purple)" stroke="var(--ink)" strokeWidth="1.5"/>
+      <rect x="18" y="18" width="9" height="9" fill="var(--piece-blue)" stroke="var(--ink)" strokeWidth="1.5"/>
+      <rect x="27" y="18" width="9" height="9" fill="var(--piece-blue)" stroke="var(--ink)" strokeWidth="1.5"/>
+      <rect x="18" y="27" width="9" height="9" fill="var(--piece-yellow)" stroke="var(--ink)" strokeWidth="1.5"/>
+      <rect x="27" y="27" width="9" height="9" fill="var(--piece-lime)" stroke="var(--ink)" strokeWidth="1.5"/>
+    </svg>
+  </div>
+)
+
+// ─── Animated streak bars ────────────────────────────────────────────────────
+const StreakBars: React.FC<{ streak: number; count?: number; accent?: string }> = ({
+  streak,
+  count = 7,
+  accent,
+}) => {
+  const [filled, setFilled] = useState(0)
+  useEffect(() => {
+    let i = 0
+    const fill = () => {
+      if (i <= streak) { setFilled(i); i++; setTimeout(fill, 80) }
+    }
+    const t = setTimeout(fill, 400)
+    return () => clearTimeout(t)
+  }, [streak])
+  return (
+    <div className="flex items-center gap-[4px]">
+      {Array.from({ length: count }).map((_, i) => (
+        <div
+          key={i}
+          className="h-[14px] flex-1 border-[2px] border-ink"
+          style={{
+            background: i < filled ? (accent ?? 'var(--accent)') : 'var(--rule)',
+            transition: 'background 120ms ease',
+          }}
+        />
+      ))}
+    </div>
+  )
+}
+
 interface LobbyScreenProps {
   onPlayClassic: () => void
   onPlayTournaments: () => void
 }
-
-const TetrisBlocks: React.FC = () => (
-  <svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <rect x="0" y="18" width="9" height="9" fill="var(--piece-red)" stroke="var(--ink)" strokeWidth="1.5"/>
-    <rect x="9" y="18" width="9" height="9" fill="var(--piece-red)" stroke="var(--ink)" strokeWidth="1.5"/>
-    <rect x="9" y="9" width="9" height="9" fill="var(--piece-red)" stroke="var(--ink)" strokeWidth="1.5"/>
-    <rect x="18" y="9" width="9" height="9" fill="var(--piece-purple)" stroke="var(--ink)" strokeWidth="1.5"/>
-    <rect x="18" y="18" width="9" height="9" fill="var(--piece-blue)" stroke="var(--ink)" strokeWidth="1.5"/>
-    <rect x="27" y="18" width="9" height="9" fill="var(--piece-blue)" stroke="var(--ink)" strokeWidth="1.5"/>
-    <rect x="18" y="27" width="9" height="9" fill="var(--piece-yellow)" stroke="var(--ink)" strokeWidth="1.5"/>
-    <rect x="27" y="27" width="9" height="9" fill="var(--piece-lime)" stroke="var(--ink)" strokeWidth="1.5"/>
-  </svg>
-)
 
 const RailShell: React.FC<{ title: string; children: React.ReactNode; accent?: boolean }> = ({
   title,
@@ -159,11 +284,17 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({ onPlayClassic, onPlayTourname
     } catch { return 0 }
   })
 
+  // Count-up animated stats
+  const animatedScore = useCountUp(playerStats?.bestScore ?? 0, 900, 300)
+  const animatedRank  = useCountUp(playerStats?.rank ?? 0, 700, 420)
+  const animatedLive  = useCountUp(activeTournaments, 600, 500)
+  const liveScore = playerStats?.bestScore ?? sortedLeaderboard[0]?.score ?? 0
+  const animatedLiveScore = useCountUp(liveScore, 1000, 200)
+
   const heroBackground = isDarkTheme ? 'var(--hero)' : 'var(--accent-yellow)'
   const heroCaptionColor = isDarkTheme ? 'var(--label)' : 'var(--ink-fixed)'
   const heroTextColor = isDarkTheme ? '#FFFFFF' : 'var(--ink-fixed)'
   const streakLabelColor = isDarkTheme ? 'var(--label)' : 'var(--ink-fixed)'
-  const liveScore = playerStats?.bestScore ?? sortedLeaderboard[0]?.score ?? 0
   const nextChainWidth = `${Math.min(100, 28 + streak * 10)}%`
   const topThree = sortedLeaderboard.slice(0, 3)
   const currentRank = playerStats?.rank
@@ -172,386 +303,436 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({ onPlayClassic, onPlayTourname
   const handleShareBestScore = () => {
     const message = `BLOKAZ best: ${shareScore.toLocaleString()}`
     if (navigator.share) {
-      void navigator.share({
-        title: 'BLOKAZ',
-        text: message,
-        url: window.location.href,
-      })
+      void navigator.share({ title: 'BLOKAZ', text: message, url: window.location.href })
       return
     }
-
     window.open(
       `https://twitter.com/intent/tweet?text=${encodeURIComponent(`${message} on BLOKAZ`)}`,
-      '_blank',
-      'noopener,noreferrer'
+      '_blank', 'noopener,noreferrer'
     )
   }
 
   const heroStack = (
     <>
-      <div
-        className="mt-1 border-[3px] border-ink p-4 lg:mt-0 lg:p-6"
-        style={{ background: heroBackground, boxShadow: '5px 5px 0 var(--shadow)' }}
-      >
-        <div className="mb-3 flex items-center justify-between">
-          <span
-            className="font-display text-[10px] tracking-[0.18em]"
-            style={{ color: heroCaptionColor }}
-          >
-            {season !== null && week !== null
-              ? `SEASON ${String(season).padStart(2, '0')} · WEEK ${String(week).padStart(2, '0')}`
-              : 'WEEKLY SEASON'}
-          </span>
-          <div className="flex items-center gap-2">
-            <div
-              className="border-[2px] border-ink px-2 py-[3px] font-display text-[10px] tracking-widest"
-              style={{ background: 'var(--ink)', color: 'var(--label)' }}
-            >
-              WEEKLY
-            </div>
+      {/* Hero headline */}
+      <FadeUp delay={60}>
+        <div
+          className="mt-1 border-[3px] border-ink p-4 lg:mt-0 lg:p-6"
+          style={{ background: heroBackground, boxShadow: '5px 5px 0 var(--shadow)' }}
+        >
+          <div className="mb-3 flex items-center justify-end">
             <TetrisBlocks />
           </div>
-        </div>
 
-        <div
-          className="font-display leading-[0.92]"
-          style={{ fontSize: 'clamp(44px, 7vw, 72px)', letterSpacing: '-0.025em' }}
-        >
-          <div style={{ color: heroTextColor }}>STACK.</div>
-          <div style={{ color: heroTextColor }}>SMASH.</div>
           <div
-            style={{
-              color: 'var(--danger)',
-              WebkitTextStroke: '1px var(--ink)',
-              paintOrder: 'stroke fill',
-            }}
+            className="font-display leading-[0.92]"
+            style={{ fontSize: 'clamp(44px, 7vw, 72px)', letterSpacing: '-0.025em' }}
           >
-            STAKE.
+            {(['STACK.', 'SMASH.'] as const).map((word, wi) => (
+              <div
+                key={word}
+                style={{
+                  color: heroTextColor,
+                  animation: `lobbySlideWord 400ms cubic-bezier(0.22,1,0.36,1) both`,
+                  animationDelay: `${120 + wi * 90}ms`,
+                }}
+              >
+                {word}
+              </div>
+            ))}
+            <div
+              style={{
+                color: 'var(--danger)',
+                WebkitTextStroke: '1px var(--ink)',
+                paintOrder: 'stroke fill',
+                animation: 'lobbySlideWord 400ms cubic-bezier(0.22,1,0.36,1) both',
+                animationDelay: '300ms',
+              }}
+            >
+              STAKE.
+            </div>
           </div>
         </div>
-      </div>
+      </FadeUp>
 
-      <div
-        className="grid grid-cols-3 border-[3px] border-ink"
-        style={{ boxShadow: '5px 5px 0 var(--shadow)' }}
-      >
-        <div
-          className="flex flex-col items-center justify-center border-r-[3px] border-ink py-4"
-          style={{ background: 'var(--paper)' }}
-        >
-          <span
-            className="mb-1 font-display text-[9px] tracking-[0.16em]"
-            style={{ color: 'var(--ink-fixed)', opacity: 0.7 }}
-          >
-            BEST
-          </span>
-          <span
-            className="font-display"
-            style={{ letterSpacing: '-0.03em', fontSize: 28, color: 'var(--ink-fixed)' }}
-          >
-            {playerStats ? playerStats.bestScore.toLocaleString() : '—'}
-          </span>
-        </div>
-        <div
-          className="flex flex-col items-center justify-center border-r-[3px] border-ink py-4"
-          style={{ background: 'var(--accent-pink)' }}
-        >
-          <span
-            className="mb-1 font-display text-[9px] tracking-[0.16em]"
-            style={{ color: 'var(--ink-fixed)', opacity: 0.7 }}
-          >
-            RANK
-          </span>
-          <span
-            className="font-display"
-            style={{ letterSpacing: '-0.03em', fontSize: 28, color: 'var(--ink-fixed)' }}
-          >
-            {playerStats ? `#${playerStats.rank}` : '—'}
-          </span>
-        </div>
-        <div
-          className="flex flex-col items-center justify-center py-4"
-          style={{ background: 'var(--accent-lime)' }}
-        >
-          <span
-            className="mb-1 font-display text-[9px] tracking-[0.16em]"
-            style={{ color: 'var(--ink-fixed)', opacity: 0.7 }}
-          >
-            WON
-          </span>
-          <span
-            className="font-display"
-            style={{ letterSpacing: '-0.03em', fontSize: 28, color: 'var(--ink-fixed)' }}
-          >
-            —
-          </span>
-        </div>
-      </div>
+      {/* Ticker strip */}
+      <FadeUp delay={180}>
+        <Ticker />
+      </FadeUp>
 
-      <button
-        onClick={onPlayClassic}
-        className="brutal-btn flex items-stretch overflow-hidden border-[3px] border-ink text-left"
-        style={{ background: 'var(--danger)', boxShadow: '5px 5px 0 var(--shadow)' }}
-      >
+      {/* Stats row */}
+      <FadeUp delay={260}>
         <div
-          className="flex w-16 flex-shrink-0 items-center justify-center border-r-[3px] border-ink"
-          style={{ background: 'var(--ink)' }}
+          className="grid grid-cols-3 border-[3px] border-ink"
+          style={{ boxShadow: '5px 5px 0 var(--shadow)' }}
         >
-          <span className="font-display text-2xl" style={{ color: 'var(--accent-yellow)' }}>
-            ▶
-          </span>
-        </div>
-        <div className="flex-1 px-4 py-4">
-          <div className="flex items-center justify-between font-display text-xl tracking-[0.04em] text-white">
-            PLAY CLASSIC <span className="text-2xl leading-none opacity-70">→</span>
+          <div
+            className="flex flex-col items-center justify-center border-r-[3px] border-ink py-4"
+            style={{ background: 'var(--paper)' }}
+          >
+            <span className="mb-1 font-display text-[9px] tracking-[0.16em]" style={{ color: 'var(--ink-fixed)', opacity: 0.7 }}>BEST</span>
+            <span
+              className="font-display"
+              style={{ letterSpacing: '-0.03em', fontSize: 'clamp(16px,5.5vw,28px)', color: 'var(--ink-fixed)' }}
+            >
+              {playerStats ? animatedScore.toLocaleString() : '—'}
+            </span>
           </div>
           <div
-            className="mt-1 font-display text-[10px] tracking-[0.1em]"
-            style={{ color: '#FFFFFF', opacity: 0.9 }}
+            className="flex flex-col items-center justify-center border-r-[3px] border-ink py-4"
+            style={{ background: 'var(--accent-pink)' }}
           >
-            Weekly leaderboard · Free
+            <span className="mb-1 font-display text-[9px] tracking-[0.16em]" style={{ color: 'var(--ink-fixed)', opacity: 0.7 }}>RANK</span>
+            <span
+              className="font-display"
+              style={{ letterSpacing: '-0.03em', fontSize: 'clamp(16px,5.5vw,28px)', color: 'var(--ink-fixed)' }}
+            >
+              {playerStats ? `#${animatedRank}` : '—'}
+            </span>
+          </div>
+          <div
+            className="flex flex-col items-center justify-center py-4"
+            style={{ background: 'var(--accent-lime)' }}
+          >
+            <span className="mb-1 font-display text-[9px] tracking-[0.16em]" style={{ color: 'var(--ink-fixed)', opacity: 0.7 }}>WON</span>
+            <span
+              className="font-display"
+              style={{ letterSpacing: '-0.03em', fontSize: 'clamp(16px,5.5vw,28px)', color: 'var(--ink-fixed)' }}
+            >
+              —
+            </span>
           </div>
         </div>
-      </button>
+      </FadeUp>
 
-      <div className="relative">
-        {totalPool > 0n && (
-          <div
-            className="absolute right-3 top-[-10px] z-10 border-[2px] border-ink px-2 py-[2px] font-display text-[9px] tracking-[0.12em]"
-            style={{ background: 'var(--accent-lime)', color: 'var(--ink-fixed)' }}
-          >
-            +${formattedPool} POOL
-          </div>
-        )}
+      {/* Play Classic */}
+      <FadeUp delay={340}>
         <button
-          onClick={onPlayTournaments}
+          onClick={onPlayClassic}
           className="brutal-btn flex w-full items-stretch overflow-hidden border-[3px] border-ink text-left"
-          style={{ background: 'var(--piece-blue)', boxShadow: '5px 5px 0 var(--shadow)' }}
+          style={{ background: 'var(--danger)', boxShadow: '5px 5px 0 var(--shadow)' }}
         >
           <div
             className="flex w-16 flex-shrink-0 items-center justify-center border-r-[3px] border-ink"
-            style={{ background: 'var(--ink)' }}
+            style={{ background: 'var(--ink-fixed)' }}
           >
-            <BrutalIcon name="trophy" size={22} strokeWidth={2.5} />
+            <span
+              className="font-display text-2xl"
+              style={{ color: 'var(--accent-yellow)', animation: 'lobbyPulsePlay 2.4s ease-in-out infinite' }}
+            >
+              ▶
+            </span>
           </div>
           <div className="flex-1 px-4 py-4">
             <div className="flex items-center justify-between font-display text-xl tracking-[0.04em] text-white">
-              TOURNAMENTS <span className="text-2xl leading-none opacity-70">→</span>
+              PLAY CLASSIC <span className="text-2xl leading-none opacity-70">→</span>
             </div>
-            <div
-              className="mt-1 font-display text-[10px] tracking-[0.1em]"
-              style={{ color: '#FFFFFF', opacity: 0.9 }}
-            >
-              {activeTournaments > 0 ? `${activeTournaments} open · $1–$10 entry` : 'View all brackets'}
+            <div className="mt-1 font-display text-[10px] tracking-[0.1em]" style={{ color: '#FFFFFF', opacity: 0.9 }}>
+              Weekly leaderboard · Free
             </div>
           </div>
         </button>
-      </div>
+      </FadeUp>
 
-      <div
-        className="flex items-center justify-between border-[3px] border-ink px-4 py-3"
-        style={{ background: 'var(--paper-2)', boxShadow: '5px 5px 0 var(--shadow)' }}
-      >
-        <div className="flex items-center gap-3">
-          <BrutalIcon name="flame" size={20} strokeWidth={2.5} className="text-ink" />
-          <div>
+      {/* Tournaments */}
+      <FadeUp delay={420}>
+        <div className="relative">
+          {totalPool > 0n && (
             <div
-              className="mb-0.5 font-display text-[9px] tracking-[0.16em]"
-              style={{ color: streakLabelColor }}
+              className="absolute right-3 top-[-10px] z-10 border-[2px] border-ink px-2 py-[2px] font-display text-[9px] tracking-[0.12em]"
+              style={{
+                background: 'var(--accent-lime)',
+                color: 'var(--ink-fixed)',
+                animation: 'lobbyBadgePop 0.6s cubic-bezier(0.34,1.56,0.64,1) both',
+                animationDelay: '600ms',
+              }}
             >
-              DAILY STREAK
+              +${formattedPool} POOL
             </div>
-            <div className="font-display text-[13px] tracking-[0.06em]" style={{ color: 'var(--ink)' }}>
-              {streak > 0 ? `DAY ${streak} · ${streak >= 7 ? '2X' : `${streak}X`} BONUS` : 'START YOUR STREAK'}
+          )}
+          <button
+            onClick={onPlayTournaments}
+            className="brutal-btn flex w-full items-stretch overflow-hidden border-[3px] border-ink text-left"
+            style={{ background: 'var(--piece-blue)', boxShadow: '5px 5px 0 var(--shadow)' }}
+          >
+            <div
+              className="flex w-16 flex-shrink-0 items-center justify-center border-r-[3px] border-ink"
+              style={{ background: 'var(--ink-fixed)' }}
+            >
+              <BrutalIcon name="trophy" size={22} strokeWidth={2.5} className="text-white" />
+            </div>
+            <div className="flex-1 px-4 py-4">
+              <div className="flex items-center justify-between font-display text-xl tracking-[0.04em] text-white">
+                TOURNAMENTS <span className="text-2xl leading-none opacity-70">→</span>
+              </div>
+              <div className="mt-1 font-display text-[10px] tracking-[0.1em]" style={{ color: '#FFFFFF', opacity: 0.9 }}>
+                {activeTournaments > 0
+                  ? <><span style={{ animation: 'loaderPulse 1.4s ease-in-out infinite' }}>●</span> {animatedLive} open · $1–$10 entry</>
+                  : 'View all brackets'}
+              </div>
+            </div>
+          </button>
+        </div>
+      </FadeUp>
+
+      {/* Daily streak */}
+      <FadeUp delay={500}>
+        <div
+          className="flex flex-col gap-2 border-[3px] border-ink px-4 py-3"
+          style={{ background: 'var(--paper-2)', boxShadow: '5px 5px 0 var(--shadow)' }}
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <BrutalIcon
+                name="flame"
+                size={16}
+                strokeWidth={2.5}
+                className="text-ink"
+                style={{ animation: streak > 0 ? 'lobbyFlame 1.8s ease-in-out infinite' : undefined } as any}
+              />
+              <div>
+                <div className="font-display text-[9px] tracking-[0.16em]" style={{ color: streakLabelColor }}>
+                  DAILY STREAK
+                </div>
+                <div className="font-display text-[11px] tracking-[0.04em]" style={{ color: 'var(--ink)' }}>
+                  {streak > 0 ? `DAY ${streak} · ${streak >= 7 ? '2X' : `${streak}X`} BONUS` : 'START YOUR STREAK'}
+                </div>
+              </div>
             </div>
           </div>
+          <StreakBars streak={streak} />
         </div>
-        <div className="flex items-center gap-[5px]">
-          {Array.from({ length: 7 }).map((_, i) => (
-            <div
-              key={i}
-              className="h-[18px] w-[18px] border-[2px] border-ink"
-              style={{ background: i < streak ? 'var(--accent)' : 'var(--rule)' }}
-            />
-          ))}
-        </div>
-      </div>
+      </FadeUp>
     </>
   )
 
   return (
-    <div className="w-full px-4 pb-6 lg:px-6">
-      <div
-        className="mx-auto hidden max-w-[1440px] items-start gap-8 lg:grid"
-        style={{
-          gridTemplateColumns: 'minmax(250px, 280px) minmax(0, 1fr) minmax(250px, 280px)',
-        }}
-      >
-        <div className="flex min-w-0 flex-col gap-5">
-          <RailShell title="LIVE SCORE" accent>
-            <div
-              className="font-display"
-              style={{
-                color: 'var(--ink)',
-                fontSize: 58,
-                letterSpacing: '-0.04em',
-                lineHeight: 0.94,
-              }}
-            >
-              {liveScore.toLocaleString()}
-            </div>
-            <div className="mt-4 flex flex-wrap gap-2">
-              <div
-                className="border-[2px] border-ink px-2 py-1 font-display text-[10px] tracking-[0.12em]"
-                style={{ background: 'var(--accent-yellow)', color: 'var(--ink-fixed)' }}
-              >
-                {currentRank ? `RANK #${currentRank}` : 'JOIN THE LADDER'}
-              </div>
-              <div
-                className="border-[2px] border-ink px-2 py-1 font-display text-[10px] tracking-[0.12em]"
-                style={{ background: 'var(--paper-2)', color: 'var(--ink)' }}
-              >
-                {activeTournaments} LIVE
-              </div>
-            </div>
-          </RailShell>
+    <>
+      {/* Keyframes injected once */}
+      <style>{`
+        @keyframes lobbyTicker {
+          from { transform: translateX(0); }
+          to   { transform: translateX(-50%); }
+        }
+        @keyframes lobbyFloat {
+          0%, 100% { transform: translateY(0px); }
+          50%       { transform: translateY(-5px); }
+        }
+        @keyframes lobbySlideWord {
+          from { opacity: 0; transform: translateX(-12px); }
+          to   { opacity: 1; transform: translateX(0); }
+        }
+        @keyframes lobbyPulsePlay {
+          0%, 100% { transform: scale(1); }
+          50%       { transform: scale(1.15); }
+        }
+        @keyframes lobbyFlame {
+          0%, 100% { transform: scale(1) rotate(0deg); }
+          35%       { transform: scale(1.18) rotate(-8deg); }
+          65%       { transform: scale(1.1) rotate(6deg); }
+        }
+        @keyframes lobbyBadgePop {
+          from { opacity: 0; transform: scale(0.7) translateY(4px); }
+          to   { opacity: 1; transform: scale(1) translateY(0); }
+        }
+        @keyframes loaderPulse {
+          0%, 100% { opacity: 1; }
+          50%       { opacity: 0.3; }
+        }
+        @keyframes lobbyCountPop {
+          0%   { transform: scale(1); }
+          40%  { transform: scale(1.08); }
+          100% { transform: scale(1); }
+        }
+      `}</style>
 
-          <RailShell title="NEXT CLEAR CHAIN">
-            <div className="relative overflow-hidden border-[3px] border-ink" style={{ height: 24 }}>
-              <div
-                className="absolute inset-y-0 left-0"
-                style={{
-                  width: nextChainWidth,
-                  background:
-                    'repeating-linear-gradient(135deg, var(--accent) 0 18px, var(--accent-2) 18px 36px)',
-                  transition: 'width 160ms ease',
-                }}
-              />
-            </div>
-            <div
-              className="mt-3 flex items-center justify-between font-display text-[10px] tracking-[0.14em]"
-              style={{ color: 'var(--ink-soft)' }}
-            >
-              <span>{streak > 0 ? `DAY ${streak} READY` : 'OPENING LINE'}</span>
-              <span>+{Math.max(80, streak * 40)} BONUS</span>
-            </div>
-          </RailShell>
+      <div className="w-full px-3 pb-6 sm:px-4 lg:px-6">
+        {/* ── Desktop three-column layout ── */}
+        <div
+          className="mx-auto hidden max-w-[1440px] items-start gap-8 lg:grid"
+          style={{ gridTemplateColumns: 'minmax(250px, 280px) minmax(0, 1fr) minmax(250px, 280px)' }}
+        >
+          {/* Left rail */}
+          <div className="flex min-w-0 flex-col gap-5">
+            <FadeUp delay={80}>
+              <RailShell title="LIVE SCORE" accent>
+                <div
+                  className="font-display"
+                  style={{ color: 'var(--ink)', fontSize: 58, letterSpacing: '-0.04em', lineHeight: 0.94 }}
+                >
+                  {animatedLiveScore.toLocaleString()}
+                </div>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <div
+                    className="border-[2px] border-ink px-2 py-1 font-display text-[10px] tracking-[0.12em]"
+                    style={{ background: 'var(--accent-yellow)', color: 'var(--ink-fixed)' }}
+                  >
+                    {currentRank ? `RANK #${currentRank}` : 'JOIN THE LADDER'}
+                  </div>
+                  <div
+                    className="flex items-center gap-1 border-[2px] border-ink px-2 py-1 font-display text-[10px] tracking-[0.12em]"
+                    style={{ background: 'var(--paper-2)', color: 'var(--ink)' }}
+                  >
+                    <span style={{ animation: 'loaderPulse 1.4s ease-in-out infinite', color: 'var(--accent-lime)' }}>●</span>
+                    {animatedLive} LIVE
+                  </div>
+                </div>
+              </RailShell>
+            </FadeUp>
 
-          <div className="grid grid-cols-2 gap-3">
-            <MiniMetric label="SEASON" value={season !== null ? String(season).padStart(2, '0') : '—'} background="var(--paper-2)" />
-            <MiniMetric label="WEEK" value={week !== null ? String(week).padStart(2, '0') : '—'} background="var(--accent-pink)" />
-            <MiniMetric label="POOL" value={`$${formattedPool}`} background="var(--accent-lime)" />
-            <MiniMetric label="OPEN" value={String(activeTournaments)} background="var(--accent-cyan)" />
+            <FadeUp delay={160}>
+              <RailShell title="NEXT CLEAR CHAIN">
+                <div className="relative overflow-hidden border-[3px] border-ink" style={{ height: 24 }}>
+                  <div
+                    className="absolute inset-y-0 left-0"
+                    style={{
+                      width: nextChainWidth,
+                      background: 'repeating-linear-gradient(135deg, var(--accent) 0 18px, var(--accent-2) 18px 36px)',
+                      transition: 'width 800ms cubic-bezier(0.22,1,0.36,1)',
+                    }}
+                  />
+                </div>
+                <div
+                  className="mt-3 flex items-center justify-between font-display text-[10px] tracking-[0.14em]"
+                  style={{ color: 'var(--ink-soft)' }}
+                >
+                  <span>{streak > 0 ? `DAY ${streak} READY` : 'OPENING LINE'}</span>
+                  <span>+{Math.max(80, streak * 40)} BONUS</span>
+                </div>
+              </RailShell>
+            </FadeUp>
+
+            <FadeUp delay={240}>
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <MiniMetric label="POOL" value={`$${formattedPool}`}      background="var(--accent-lime)" />
+                </div>
+                <div className="flex-1">
+                  <MiniMetric label="OPEN" value={String(activeTournaments)} background="var(--accent-cyan)" />
+                </div>
+              </div>
+            </FadeUp>
+
+            <FadeUp delay={320}>
+              <RailShell title="DAILY STREAK">
+                <div className="flex items-center gap-3">
+                  <BrutalIcon name="flame" size={18} strokeWidth={2.5} className="text-ink" />
+                  <div>
+                    <div className="font-display text-[11px] tracking-[0.12em]" style={{ color: streakLabelColor }}>
+                      {streak > 0 ? `DAY ${streak} · ${streak >= 7 ? '2X BONUS' : `${streak}X BONUS`}` : 'START YOUR STREAK'}
+                    </div>
+                    <div className="mt-1 font-display text-[10px] tracking-[0.1em]" style={{ color: 'var(--ink-soft)' }}>
+                      Fill the week bar to lock your multiplier.
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-4">
+                  <StreakBars streak={streak} count={7} />
+                </div>
+              </RailShell>
+            </FadeUp>
           </div>
 
-          <RailShell title="DAILY STREAK">
-            <div className="flex items-center gap-3">
-              <BrutalIcon name="flame" size={18} strokeWidth={2.5} className="text-ink" />
-              <div>
-                <div className="font-display text-[11px] tracking-[0.12em]" style={{ color: streakLabelColor }}>
-                  {streak > 0 ? `DAY ${streak} · ${streak >= 7 ? '2X BONUS' : `${streak}X BONUS`}` : 'START YOUR STREAK'}
-                </div>
-                <div className="mt-1 font-display text-[10px] tracking-[0.1em]" style={{ color: 'var(--ink-soft)' }}>
-                  Fill the week bar to lock your multiplier.
-                </div>
-              </div>
-            </div>
-            <div className="mt-4 grid grid-cols-7 gap-1.5">
-              {Array.from({ length: 7 }).map((_, i) => (
-                <div
-                  key={i}
-                  className="h-[18px] border-[2px] border-ink"
-                  style={{ background: i < streak ? 'var(--accent)' : 'var(--rule)' }}
-                />
-              ))}
-            </div>
-          </RailShell>
-        </div>
+          {/* Center hero */}
+          <div className="flex min-w-0 flex-col gap-4">{heroStack}</div>
 
-        <div className="flex min-w-0 flex-col gap-4">{heroStack}</div>
-
-        <div className="flex min-w-0 flex-col gap-5">
-          <RailShell title="WEEKLY LADDER" accent>
-            <div className="space-y-2">
-              {topThree.length > 0 ? (
-                topThree.map((entry, index) => {
-                  const isCurrentUser = address?.toLowerCase() === entry.player.toLowerCase()
-                  return (
+          {/* Right rail */}
+          <div className="flex min-w-0 flex-col gap-5">
+            <FadeUp delay={100}>
+              <RailShell title="WEEKLY LADDER" accent>
+                <div className="space-y-2">
+                  {topThree.length > 0 ? (
+                    topThree.map((entry, index) => {
+                      const isCurrentUser = address?.toLowerCase() === entry.player.toLowerCase()
+                      return (
+                        <div
+                          key={entry.player}
+                          className="flex items-center gap-3 border-[3px] border-ink px-3 py-3"
+                          style={{
+                            background: index === 0 ? 'var(--accent-yellow)' : isCurrentUser ? 'var(--accent-cyan)' : 'var(--paper-2)',
+                            color: index === 0 || isCurrentUser ? 'var(--ink-fixed)' : 'var(--ink)',
+                            animation: `lobbySlideWord 300ms cubic-bezier(0.22,1,0.36,1) both`,
+                            animationDelay: `${200 + index * 80}ms`,
+                          }}
+                        >
+                          <span className="w-6 font-display text-[16px]">#{index + 1}</span>
+                          <span className="min-w-0 flex-1 truncate font-display text-[11px] tracking-[0.08em]">
+                            {entry.player.slice(0, 6)}…{entry.player.slice(-4)}
+                          </span>
+                          <span className="font-display text-[12px]" style={{ letterSpacing: '-0.02em' }}>
+                            {entry.score.toLocaleString()}
+                          </span>
+                        </div>
+                      )
+                    })
+                  ) : (
                     <div
-                      key={entry.player}
-                      className="flex items-center gap-3 border-[3px] border-ink px-3 py-3"
+                      className="border-[3px] border-ink px-3 py-4 font-display text-[10px] tracking-[0.12em]"
+                      style={{ background: 'var(--paper-2)', color: 'var(--ink-soft)' }}
+                    >
+                      Ladder is warming up.
+                    </div>
+                  )}
+                </div>
+              </RailShell>
+            </FadeUp>
+
+            <FadeUp delay={200}>
+              <RailShell title="DANGER WATCH">
+                <div className="space-y-2">
+                  {[
+                    { label: '3×3 SQUARE', state: 'HIGH', bg: 'var(--piece-red)' },
+                    { label: '5-LONG LINE', state: 'MED',  bg: 'var(--piece-orange)' },
+                    { label: 'Z-ZIGZAG',   state: 'LOW',  bg: 'var(--piece-lime)' },
+                  ].map((item, i) => (
+                    <div
+                      key={item.label}
+                      className="flex items-center justify-between border-[3px] border-ink px-3 py-3"
                       style={{
-                        background: index === 0 ? 'var(--accent-yellow)' : isCurrentUser ? 'var(--accent-cyan)' : 'var(--paper-2)',
-                        color: index === 0 || isCurrentUser ? 'var(--ink-fixed)' : 'var(--ink)',
+                        background: 'var(--paper-2)',
+                        animation: 'lobbySlideWord 280ms ease both',
+                        animationDelay: `${300 + i * 70}ms`,
                       }}
                     >
-                      <span className="w-6 font-display text-[16px]">#{index + 1}</span>
-                      <span className="min-w-0 flex-1 truncate font-display text-[11px] tracking-[0.08em]">
-                        {entry.player.slice(0, 6)}…{entry.player.slice(-4)}
+                      <span className="font-display text-[11px] tracking-[0.08em]" style={{ color: 'var(--ink)' }}>
+                        {item.label}
                       </span>
-                      <span className="font-display text-[12px]" style={{ letterSpacing: '-0.02em' }}>
-                        {entry.score.toLocaleString()}
+                      <span
+                        className="border-[2px] border-ink px-2 py-0.5 font-display text-[9px] tracking-[0.1em]"
+                        style={{ background: item.bg, color: 'var(--ink-fixed)' }}
+                      >
+                        {item.state}
                       </span>
                     </div>
-                  )
-                })
-              ) : (
-                <div
-                  className="border-[3px] border-ink px-3 py-4 font-display text-[10px] tracking-[0.12em]"
-                  style={{ background: 'var(--paper-2)', color: 'var(--ink-soft)' }}
-                >
-                  Ladder is warming up.
+                  ))}
                 </div>
-              )}
-            </div>
-          </RailShell>
+              </RailShell>
+            </FadeUp>
 
-          <RailShell title="DANGER WATCH">
-            <div className="space-y-2">
-              {[
-                { label: '3×3 SQUARE', state: 'HIGH', bg: 'var(--piece-red)' },
-                { label: '5-LONG LINE', state: 'MED', bg: 'var(--piece-orange)' },
-                { label: 'Z-ZIGZAG', state: 'LOW', bg: 'var(--piece-lime)' },
-              ].map((item) => (
-                <div
-                  key={item.label}
-                  className="flex items-center justify-between border-[3px] border-ink px-3 py-3"
-                  style={{ background: 'var(--paper-2)' }}
-                >
-                  <span className="font-display text-[11px] tracking-[0.08em]" style={{ color: 'var(--ink)' }}>
-                    {item.label}
-                  </span>
-                  <span
-                    className="border-[2px] border-ink px-2 py-0.5 font-display text-[9px] tracking-[0.1em]"
-                    style={{ background: item.bg, color: 'var(--ink-fixed)' }}
-                  >
-                    {item.state}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </RailShell>
-
-          <button
-            onClick={handleShareBestScore}
-            className="brutal-btn flex items-center justify-between border-[3px] border-ink px-5 py-5 font-display text-[11px] tracking-[0.18em]"
-            style={{
-              background: 'var(--accent-lime)',
-              color: 'var(--ink-fixed)',
-              boxShadow: '5px 5px 0 var(--shadow)',
-            }}
-          >
-            <span className="flex items-center">
-              <BrutalIcon name="rocket" size={16} className="mr-2" />
-              SHARE BEST SCORE
-            </span>
-            <span className="text-xl leading-none">→</span>
-          </button>
+            <FadeUp delay={300}>
+              <button
+                onClick={handleShareBestScore}
+                className="brutal-btn flex w-full items-center justify-between border-[3px] border-ink px-5 py-5 font-display text-[11px] tracking-[0.18em]"
+                style={{
+                  background: 'var(--accent-lime)',
+                  color: 'var(--ink-fixed)',
+                  boxShadow: '5px 5px 0 var(--shadow)',
+                }}
+              >
+                <span className="flex items-center">
+                  <BrutalIcon name="rocket" size={16} className="mr-2" />
+                  SHARE BEST SCORE
+                </span>
+                <span className="text-xl leading-none">→</span>
+              </button>
+            </FadeUp>
+          </div>
         </div>
-      </div>
 
-      <div className="mx-auto flex max-w-lg flex-col gap-3 pb-4 lg:hidden">{heroStack}</div>
-    </div>
+        {/* ── Mobile stack ── */}
+        <div className="mx-auto flex max-w-lg flex-col gap-3 pb-4 lg:hidden">{heroStack}</div>
+      </div>
+    </>
   )
 }
 

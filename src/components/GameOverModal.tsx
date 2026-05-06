@@ -366,543 +366,296 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
     (e) => e.player.toLowerCase() === (address?.toLowerCase() ?? '')
   )
 
+  // Tokens to show — MiniPay only supports USDC
+  const visibleTokens = (Object.keys(STABLECOIN_TOKENS) as StablecoinSymbol[]).filter(
+    (sym) => !isMiniPay || sym === 'USDC'
+  )
+
   return (
-    <div className="fixed inset-0 z-50 overflow-hidden">
+    <div className="fixed inset-0 z-50 overflow-y-auto">
+      {/* Backdrop */}
       <div
-        className="absolute inset-0"
-        style={{
-          background: 'var(--overlay)',
-          backdropFilter: 'blur(8px)',
-        }}
+        className="fixed inset-0"
+        style={{ background: 'var(--overlay)', backdropFilter: 'blur(8px)' }}
       />
       <div
-        className="absolute inset-0 opacity-[0.14]"
+        className="fixed inset-0 opacity-[0.10] pointer-events-none"
         style={{
           backgroundImage:
             'linear-gradient(135deg, transparent 0%, transparent 42%, var(--ink) 42%, var(--ink) 45%, transparent 45%, transparent 100%)',
           backgroundSize: '28px 28px',
         }}
       />
-      <div className="relative flex h-full items-center justify-center p-2 sm:p-4">
-        <div
-          className="relative flex w-full max-w-sm flex-col gap-3 text-ink"
-          style={{ maxHeight: 'calc(100dvh - 1rem)' }}
-        >
-          <button
-            onClick={handleAbandon}
-            className="brutal-btn absolute right-2 top-2 z-50 flex h-11 w-11 items-center justify-center border-4 border-ink bg-paper-2 p-2 text-ink sm:h-12 sm:w-12"
-            style={{ boxShadow: '4px 4px 0 var(--shadow)' }}
-          >
-            <BrutalIcon name="back" size={20} strokeWidth={4} />
-          </button>
 
-          <div className="flex shrink-0 justify-center px-14 pt-2">
-            <div
-              className="brutal-sticker text-center"
-              style={{
-                background: 'var(--danger)',
-                padding: '10px 22px',
-                fontSize: 'clamp(2.25rem, 10vw, 3rem)',
-                letterSpacing: '-0.03em',
-                lineHeight: 0.9,
-                transform: 'rotate(-4deg) scale(1.02)',
-                boxShadow: `8px 8px 0 var(--game-over-shadow)`,
-                zIndex: 30,
-              }}
+      {/* Scroll container — centres on tall screens, top-aligns on short ones */}
+      <div className="relative flex min-h-full items-center justify-center px-3 py-6">
+        <div className="w-full max-w-sm">
+          {/* ── GAME OVER banner ── */}
+          <div
+            className="mb-[-4px] flex items-center justify-between border-4 border-b-0 border-ink px-4 py-2"
+            style={{
+              background: 'var(--danger)',
+              boxShadow: `6px 0 0 var(--game-over-shadow), -6px 0 0 var(--game-over-shadow), 6px -6px 0 var(--game-over-shadow)`,
+            }}
+          >
+            <span
+              className="font-display text-[1.6rem] leading-none tracking-[-0.03em] text-white"
+              style={{ textShadow: '2px 2px 0 rgba(0,0,0,0.3)' }}
             >
-              <div className="border-t-4 border-white pt-1">
-                GAME
-                <br />
-                OVER
-              </div>
-            </div>
+              GAME OVER
+            </span>
+            <button
+              onClick={handleAbandon}
+              className="brutal-btn flex h-9 w-9 items-center justify-center border-[3px] border-white text-white"
+              style={{ background: 'rgba(0,0,0,0.25)', boxShadow: '3px 3px 0 rgba(0,0,0,0.3)' }}
+            >
+              <BrutalIcon name="back" size={16} strokeWidth={3} />
+            </button>
           </div>
 
-          <div className="min-h-0 space-y-3 overflow-y-auto pr-1">
-            <div
-              className="border-4 border-ink p-4 sm:p-6"
-              style={{
-                background: 'var(--paper)',
-                boxShadow: `10px 10px 0 ${shadowColor}`,
-              }}
-            >
-              <div className="mb-1 font-display text-[11px] tracking-[0.18em] text-ink opacity-80">
+        {/* ── Main card ── */}
+        <div
+          className="border-4 border-ink"
+          style={{
+            background: 'var(--paper)',
+            boxShadow: `8px 8px 0 ${shadowColor}`,
+          }}
+        >
+          {/* Score + chips row */}
+          <div className="flex items-center justify-between border-b-4 border-ink px-4 py-3">
+            <div>
+              <div className="font-display text-[9px] uppercase tracking-[0.18em] opacity-60">
                 FINAL SCORE
               </div>
               <div
-                className="mb-4 font-display tabular-nums"
-                style={{
-                  fontSize: 'clamp(3.25rem, 13vw, 4.5rem)',
-                  letterSpacing: '-0.04em',
-                  lineHeight: 0.9,
-                }}
+                className="font-display tabular-nums leading-none"
+                style={{ fontSize: 'clamp(2.5rem, 11vw, 3.5rem)', letterSpacing: '-0.04em' }}
               >
                 {score.toLocaleString()}
               </div>
-
-              <div className="mb-5 flex flex-wrap gap-2">
-                <div
-                  className="border-4 border-ink bg-accent-lime px-3 py-1 font-display text-[10px] uppercase tracking-widest shadow-[3px_3px_0_var(--shadow)]"
-                  style={{ color: accentTextColor }}
-                >
-                  NEW HIGH SCORE
-                </div>
-                <div
-                  className="border-4 border-ink bg-accent-pink px-3 py-1 font-display text-[10px] uppercase tracking-widest shadow-[3px_3px_0_var(--shadow)]"
-                  style={{ color: accentTextColor }}
-                >
-                  {achievementChips[1]}
-                </div>
+            </div>
+            <div className="flex flex-col items-end gap-1.5">
+              <div
+                className="border-[3px] border-ink px-2.5 py-0.5 font-display text-[9px] uppercase tracking-widest shadow-[2px_2px_0_var(--shadow)]"
+                style={{ background: 'var(--accent-lime)', color: accentTextColor }}
+              >
+                NEW HIGH
               </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                {[
-                  {
-                    label: 'BIGGEST COMBO',
-                    value: `×${stats.bestCombo}`,
-                    bg: 'var(--paper-2)',
-                    icon: 'zap' as const,
-                  },
-                  {
-                    label: 'LINES CLEARED',
-                    value: stats.linesCleared,
-                    bg: 'var(--paper-2)',
-                    icon: 'star' as const,
-                  },
-                  {
-                    label: 'PIECES PLACED',
-                    value: stats.piecesPlaced,
-                    bg: 'var(--paper-2)',
-                    icon: 'history' as const,
-                  },
-                  {
-                    label: 'TIME',
-                    value: stats.time,
-                    bg: 'var(--paper-2)',
-                    icon: 'timer' as const,
-                  },
-                ].map((stat) => (
-                  <div
-                    key={stat.label}
-                    className="relative border-[3px] border-ink p-2.5"
-                    style={{ background: stat.bg }}
-                  >
-                    <div className="mb-0.5 flex items-center gap-1 font-display text-[8px] uppercase tracking-[0.15em] opacity-80">
-                      <BrutalIcon name={stat.icon} size={10} strokeWidth={2} />
-                      {stat.label}
-                    </div>
-                    <div
-                      className="font-display text-xl leading-none"
-                      style={{ letterSpacing: '-0.02em' }}
-                    >
-                      {stat.value}
-                    </div>
-                  </div>
-                ))}
+              <div
+                className="border-[3px] border-ink px-2.5 py-0.5 font-display text-[9px] uppercase tracking-widest shadow-[2px_2px_0_var(--shadow)]"
+                style={{ background: 'var(--accent-pink)', color: accentTextColor }}
+              >
+                {achievementChips[1]}
               </div>
             </div>
-
-            <div
-              className="border-4 border-ink bg-accent-yellow p-4"
-              style={{
-                boxShadow: '6px 6px 0 var(--shadow)',
-                color: accentTextColor,
-              }}
-            >
-              <div className="mb-2 flex items-center justify-between font-display text-[10px] uppercase tracking-widest">
-                <span style={{ color: 'var(--label)' }}>WEEKLY LADDER</span>
-                <span>#{rankData.currentRank} NEXT</span>
-              </div>
-              <div className="relative h-4 border-4 border-ink bg-paper-2">
-                <div
-                  className="absolute inset-y-0 left-0 bg-danger"
-                  style={{ width: `${rankData.progress}%` }}
-                />
-                <div
-                  className="absolute -top-1 h-6 w-1 bg-ink"
-                  style={{ left: `calc(${rankData.progress}% - 2px)` }}
-                />
-              </div>
-              <div className="mt-2 flex items-center justify-between font-display text-[9px] tracking-widest opacity-90">
-                <span>#{userIdx + 2 || '143'}</span>
-                <span>#{rankData.currentRank - 1 || '89'} NEXT</span>
-              </div>
-            </div>
-
-            {hasError && (
-              <div className="border-4 border-danger bg-paper-2 p-3 text-center">
-                <p className="font-display text-[10px] uppercase text-danger">
-                  Submission Failed
-                </p>
-              </div>
-            )}
           </div>
 
-          <div
-            className="shrink-0 border-4 border-ink bg-paper p-3"
-            style={{ boxShadow: '8px 8px 0 var(--shadow)' }}
-          >
-            <div className="flex flex-col gap-3">
-              <button
-                onClick={handleSubmit}
-                disabled={!canSubmit}
-                className="brutal-btn flex w-full items-center justify-center gap-3 border-4 border-ink bg-accent-lime py-4 font-display text-sm uppercase tracking-[0.15em] disabled:opacity-50 sm:py-5 sm:text-base"
-                style={{
-                  boxShadow: '6px 6px 0 var(--shadow)',
-                  color: accentTextColor,
-                }}
+          {/* Stats — 4 in a single row */}
+          <div className="grid grid-cols-4 border-b-4 border-ink">
+            {[
+              { label: 'COMBO', value: `×${stats.bestCombo}`, icon: 'zap' as const },
+              { label: 'LINES', value: stats.linesCleared, icon: 'star' as const },
+              { label: 'PIECES', value: stats.piecesPlaced, icon: 'history' as const },
+              { label: 'TIME', value: stats.time, icon: 'timer' as const },
+            ].map((stat, i) => (
+              <div
+                key={stat.label}
+                className={`p-2 text-center${i < 3 ? ' border-r-4 border-ink' : ''}`}
+                style={{ background: 'var(--paper-2)' }}
               >
-                {isRegistering ? (
-                  <div className="brutal-loader" />
-                ) : (
-                  <BrutalIcon name="play" size={20} strokeWidth={2.5} />
-                )}
-                {isAllSuccess ? 'REPLAYING...' : 'SUBMIT + PLAY AGAIN'}
-              </button>
+                <div className="mb-0.5 flex items-center justify-center gap-0.5 font-display text-[7px] uppercase tracking-[0.1em] opacity-60">
+                  <BrutalIcon name={stat.icon} size={8} strokeWidth={2} />
+                  {stat.label}
+                </div>
+                <div className="font-display text-base leading-none" style={{ letterSpacing: '-0.02em' }}>
+                  {stat.value}
+                </div>
+              </div>
+            ))}
+          </div>
 
-              {/* GoodDollar Retry Option */}
-              {gModeEnabled && mode === 'classic' && (
-                <div
-                  className="border-4 border-ink"
-                  style={{
-                    background: 'var(--paper-2)',
-                    boxShadow: '6px 6px 0 var(--shadow)',
-                  }}
-                >
-                  <div
-                    className="flex items-center justify-between border-b-4 border-ink px-4 py-2.5"
-                    style={{ background: 'var(--paper)' }}
-                  >
-                    <div className="flex items-center gap-2 font-display text-[10px] uppercase tracking-[0.18em]">
-                      <div
-                        className="flex h-5 w-5 items-center justify-center border-2 border-ink font-display text-[8px] font-bold"
-                        style={{
-                          background: 'var(--accent-lime)',
-                          color: 'var(--ink-fixed)',
-                        }}
-                      >
-                        G$
-                      </div>
-                      GOODDOLLAR REVIVAL
-                    </div>
-                    <div
-                      className="border-2 border-ink px-2 py-0.5 font-display text-[8px] uppercase tracking-[0.15em]"
-                      style={{
-                        background: 'var(--accent-yellow)',
-                        color: 'var(--ink-fixed)',
-                      }}
-                    >
-                      LIVE
-                    </div>
+          {/* ── Actions ── */}
+          <div className="flex flex-col gap-2.5 p-3">
+            {/* Primary CTA */}
+            <button
+              onClick={handleSubmit}
+              disabled={!canSubmit}
+              className="brutal-btn flex w-full items-center justify-center gap-2 border-4 border-ink bg-accent-lime py-3.5 font-display text-sm uppercase tracking-[0.15em] disabled:opacity-50"
+              style={{ boxShadow: '5px 5px 0 var(--shadow)', color: accentTextColor }}
+            >
+              {isRegistering ? <div className="brutal-loader" /> : <BrutalIcon name="play" size={18} strokeWidth={2.5} />}
+              {isAllSuccess ? 'REPLAYING...' : 'SUBMIT + PLAY AGAIN'}
+            </button>
+
+            {hasError && (
+              <div className="border-[3px] border-danger bg-paper-2 px-3 py-1.5 text-center font-display text-[9px] uppercase text-danger">
+                Submission failed — try again
+              </div>
+            )}
+
+            {/* GoodDollar revival — compact */}
+            {gModeEnabled && mode === 'classic' && (
+              <div className="border-[3px] border-ink" style={{ background: 'var(--paper-2)' }}>
+                <div className="flex items-center justify-between border-b-[3px] border-ink px-3 py-1.5" style={{ background: 'var(--paper)' }}>
+                  <div className="flex items-center gap-1.5 font-display text-[9px] uppercase tracking-[0.15em]">
+                    <div className="flex h-4 w-4 items-center justify-center border-[2px] border-ink font-display text-[7px] font-bold" style={{ background: 'var(--accent-lime)', color: 'var(--ink-fixed)' }}>G$</div>
+                    G$ REVIVAL
                   </div>
+                  <span className="font-display text-[8px] uppercase tracking-widest opacity-60">10 G$</span>
+                </div>
+                <div className="p-2.5">
+                  {!isWhitelisted ? (
+                    <a href={verificationUrl} target="_blank" rel="noopener noreferrer"
+                      className="brutal-btn flex w-full items-center justify-center gap-1.5 border-[3px] border-ink bg-accent-pink py-2.5 font-display text-[10px] uppercase tracking-wider shadow-[3px_3px_0_var(--shadow)]"
+                      style={{ color: 'var(--ink-fixed)' }}>
+                      <BrutalIcon name="alert" size={11} /> VERIFY TO REVIVE
+                    </a>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <span className="font-display text-[10px] opacity-70">
+                        {gBalance ? (Number(gBalance.value) / 1e18).toFixed(1) : '0'} G$
+                      </span>
+                      <button
+                        onClick={handleGRetry}
+                        disabled={isPayingRetry || (gBalance?.value || 0n) < 10n * 10n ** 18n}
+                        className="brutal-btn ml-auto flex items-center gap-1.5 border-[3px] border-ink bg-accent-lime px-3 py-2 font-display text-[10px] uppercase tracking-wider shadow-[3px_3px_0_var(--shadow)] disabled:opacity-50"
+                        style={{ color: 'var(--ink-fixed)' }}>
+                        {isPayingRetry ? <div className="brutal-loader" /> : <><BrutalIcon name="zap" size={11} strokeWidth={2.5} /> REVIVE</>}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
-                  <div className="p-3">
-                    {!isWhitelisted ? (
-                      <>
-                        <div className="mb-3 font-body text-[10px] leading-relaxed text-ink/60">
-                          Verify your identity once to unlock G$ revival power.
-                        </div>
-                        <a
-                          href={verificationUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="brutal-btn flex w-full items-center justify-center gap-2 border-4 border-ink bg-accent-pink py-3 font-display text-[11px] uppercase tracking-wider shadow-[4px_4px_0_var(--shadow)]"
-                          style={{ color: 'var(--ink-fixed)' }}
-                        >
-                          <BrutalIcon name="alert" size={13} />
-                          VERIFY TO REVIVE
-                        </a>
-                      </>
-                    ) : (
-                      <>
-                        <div className="mb-3 grid grid-cols-2 gap-2">
-                          <div
-                            className="border-[3px] border-ink p-2"
-                            style={{ background: 'var(--paper)' }}
-                          >
-                            <div className="mb-0.5 font-display text-[7px] uppercase tracking-[0.15em] opacity-60">
-                              BALANCE
-                            </div>
-                            <div
-                              className="font-display text-sm"
-                              style={{ letterSpacing: '-0.02em' }}
-                            >
-                              {gBalance
-                                ? (Number(gBalance.value) / 1e18).toFixed(1)
-                                : '0'}{' '}
-                              G$
-                            </div>
-                          </div>
-                          <div
-                            className="border-[3px] border-ink p-2"
-                            style={{
-                              background: 'var(--accent-lime)',
-                              color: 'var(--ink-fixed)',
-                            }}
-                          >
-                            <div className="mb-0.5 font-display text-[7px] uppercase tracking-[0.15em] opacity-70">
-                              COST
-                            </div>
-                            <div
-                              className="font-display text-sm"
-                              style={{ letterSpacing: '-0.02em' }}
-                            >
-                              10 G$
-                            </div>
-                          </div>
-                        </div>
-                        <button
-                          onClick={handleGRetry}
-                          disabled={
-                            isPayingRetry ||
-                            (gBalance?.value || 0n) < 10n * 10n ** 18n
-                          }
-                          className="brutal-btn flex w-full items-center justify-center gap-2 border-4 border-ink bg-accent-lime py-3.5 font-display text-[11px] uppercase tracking-wider shadow-[4px_4px_0_var(--shadow)] disabled:opacity-50"
-                          style={{ color: 'var(--ink-fixed)' }}
-                        >
-                          {isPayingRetry ? (
-                            <div className="brutal-loader" />
-                          ) : (
-                            <>
-                              <BrutalIcon
-                                name="zap"
-                                size={14}
-                                strokeWidth={2.5}
-                              />
-                              REVIVE — CONTINUE RUN
-                            </>
-                          )}
-                        </button>
-                        <div className="mt-2 text-center font-display text-[8px] uppercase tracking-[0.18em] text-ink/50">
-                          RESTORES 3 CLEARANCE SHAPES
-                        </div>
-                      </>
-                    )}
+            {/* Revival — copy adapts for MiniPay (no crypto jargon) */}
+            {mode === 'classic' && (
+              <div className="border-[3px] border-ink" style={{ background: 'var(--paper-2)' }}>
+                {/* Header */}
+                <div className="flex items-center justify-between border-b-[3px] border-ink px-3 py-2" style={{ background: 'var(--paper)' }}>
+                  <div className="flex items-center gap-2 font-display text-[10px] uppercase tracking-[0.15em]">
+                    <div className="flex h-5 w-5 items-center justify-center border-[2px] border-ink text-[10px]" style={{ background: 'var(--accent-cyan)', color: 'var(--ink-fixed)' }}>⚡</div>
+                    {isMiniPay ? 'CONTINUE YOUR RUN' : 'REVIVAL'}
+                  </div>
+                  <div className="border-[2px] border-ink px-2 py-0.5 font-display text-[8px] uppercase tracking-wider" style={{ background: 'var(--accent-cyan)', color: 'var(--ink-fixed)' }}>
+                    $0.001
                   </div>
                 </div>
-              )}
 
-              {/* Stablecoin Revival — visible for all classic players */}
-              {mode === 'classic' && (
-                <div
-                  className="border-4 border-ink"
-                  style={{
-                    background: 'var(--paper-2)',
-                    boxShadow: '6px 6px 0 var(--shadow)',
-                  }}
-                >
-                  {/* Header */}
-                  <div
-                    className="flex items-center justify-between border-b-4 border-ink px-4 py-2.5"
-                    style={{ background: 'var(--paper)' }}
-                  >
-                    <div className="flex items-center gap-2 font-display text-[10px] uppercase tracking-[0.18em]">
-                      <div
-                        className="flex h-5 w-5 items-center justify-center border-2 border-ink font-display text-[7px] font-bold"
-                        style={{ background: 'var(--accent-cyan)', color: 'var(--ink-fixed)' }}
-                      >
-                        $
-                      </div>
-                      STABLECOIN REVIVAL
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      {isMiniPay && (
-                        <div
-                          className="border-2 border-ink px-2 py-0.5 font-display text-[7px] uppercase tracking-[0.12em]"
-                          style={{ background: 'var(--paper-2)', color: 'var(--label)' }}
-                        >
-                          MINIPAY
-                        </div>
-                      )}
-                      <div
-                        className="border-2 border-ink px-2 py-0.5 font-display text-[8px] uppercase tracking-[0.15em]"
-                        style={{ background: 'var(--accent-cyan)', color: 'var(--ink-fixed)' }}
-                      >
-                        $0.001
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="p-3 space-y-2.5">
-                    {/* Token selector */}
-                    <div className="flex gap-2">
-                      {(Object.keys(STABLECOIN_TOKENS) as StablecoinSymbol[]).map((sym) => {
-                        const affordable = canAfford(sym)
+                <div className="p-3 space-y-2.5">
+                  {/* Token cards — each shows name + balance. Hidden on MiniPay (USDC only). */}
+                  {!isMiniPay && (
+                    <div className="grid grid-cols-3 gap-2">
+                      {visibleTokens.map((sym) => {
                         const isSelected = selectedToken === sym
+                        const decimals = STABLECOIN_TOKENS[sym].decimals
+                        const raw = stableBalances[sym]
+                        const balance = (Number(raw) / 10 ** decimals).toFixed(2)
+                        const affordable = canAfford(sym)
                         return (
                           <button
                             key={sym}
                             onClick={() => setSelectedToken(sym)}
-                            className="flex-1 border-[3px] border-ink py-1.5 font-display text-[10px] uppercase tracking-wider transition-colors"
+                            className="flex flex-col items-center gap-1 border-[3px] border-ink py-2.5 px-1 font-display"
                             style={{
-                              background: isSelected
-                                ? 'var(--accent-cyan)'
-                                : affordable
-                                ? 'var(--paper)'
-                                : 'var(--paper-2)',
+                              background: isSelected ? 'var(--accent-cyan)' : 'var(--paper)',
                               color: isSelected ? 'var(--ink-fixed)' : 'var(--ink)',
-                              opacity: affordable ? 1 : 0.45,
-                              boxShadow: isSelected ? '3px 3px 0 var(--shadow)' : 'none',
+                              boxShadow: isSelected ? '3px 3px 0 var(--shadow)' : '2px 2px 0 var(--shadow)',
                             }}
                           >
-                            {sym}
+                            <span className="text-[11px] uppercase tracking-wider font-bold">{sym}</span>
+                            <span
+                              className="text-[9px] tabular-nums"
+                              style={{ color: isSelected ? 'var(--ink-fixed)' : affordable ? 'var(--ink)' : 'var(--ink-soft)', opacity: isSelected ? 0.75 : 1 }}
+                            >
+                              {balance}
+                            </span>
                           </button>
                         )
                       })}
                     </div>
+                  )}
 
-                    {/* Balance row */}
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="border-[3px] border-ink p-2" style={{ background: 'var(--paper)' }}>
-                        <div className="mb-0.5 font-display text-[7px] uppercase tracking-[0.15em] opacity-60">BALANCE</div>
-                        <div className="font-display text-sm" style={{ letterSpacing: '-0.02em' }}>
-                          {(() => {
-                            const decimals = STABLECOIN_TOKENS[selectedToken].decimals
-                            const raw = stableBalances[selectedToken]
-                            return (Number(raw) / 10 ** decimals).toFixed(2)
-                          })()}{' '}
-                          {selectedToken}
-                        </div>
-                      </div>
-                      <div
-                        className="border-[3px] border-ink p-2"
-                        style={{ background: 'var(--accent-cyan)', color: 'var(--ink-fixed)' }}
-                      >
-                        <div className="mb-0.5 font-display text-[7px] uppercase tracking-[0.15em] opacity-70">COST</div>
-                        <div className="font-display text-sm" style={{ letterSpacing: '-0.02em' }}>
-                          0.001 {selectedToken}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Revive button */}
-                    <button
-                      onClick={handleStableRevive}
-                      disabled={isStablePaying || !canAfford(selectedToken)}
-                      className="brutal-btn flex w-full items-center justify-center gap-2 border-4 border-ink bg-accent-cyan py-3.5 font-display text-[11px] uppercase tracking-wider shadow-[4px_4px_0_var(--shadow)] disabled:opacity-50"
-                      style={{ color: 'var(--ink-fixed)' }}
-                    >
-                      {isStablePaying ? (
-                        <div className="brutal-loader" />
-                      ) : (
-                        <>
-                          <BrutalIcon name="zap" size={14} strokeWidth={2.5} />
-                          {canAfford(selectedToken) ? 'REVIVE — CONTINUE RUN' : 'INSUFFICIENT BALANCE'}
-                        </>
-                      )}
-                    </button>
-
-                    {stableError && (
-                      <div className="text-center font-display text-[8px] uppercase tracking-[0.15em] text-danger">
-                        {stableError}
-                      </div>
-                    )}
-
-                    <div className="text-center font-display text-[8px] uppercase tracking-[0.18em] text-ink/50">
-                      RESTORES {3} CLEARANCE SHAPES · NO VERIFICATION NEEDED
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {showShareSheet ? (
-                <div
-                  className="border-4 border-ink"
-                  style={{
-                    background: 'var(--paper-2)',
-                    boxShadow: '6px 6px 0 var(--shadow)',
-                  }}
-                >
-                  <div
-                    className="flex items-center justify-between border-b-4 border-ink px-3 py-2"
-                    style={{ background: 'var(--paper)' }}
-                  >
-                    <span className="font-display text-[10px] uppercase tracking-[0.18em]">
-                      SHARE YOUR RUN
-                    </span>
-                    <button
-                      onClick={() => setShowShareSheet(false)}
-                      className="brutal-btn flex h-7 w-7 items-center justify-center border-2 border-ink"
-                      style={{
-                        background: 'var(--paper-2)',
-                        boxShadow: '2px 2px 0 var(--shadow)',
-                      }}
-                    >
-                      <BrutalIcon name="back" size={12} strokeWidth={3} />
-                    </button>
-                  </div>
-                  <div className="flex flex-col gap-2 p-3">
-                    <button
-                      onClick={handleShareWarpcast}
-                      className="brutal-btn flex w-full items-center justify-between border-4 border-ink px-4 py-3 font-display text-[11px] uppercase tracking-wider shadow-[4px_4px_0_var(--shadow)]"
-                      style={{
-                        background: 'var(--accent-pink)',
-                        color: 'var(--ink-fixed)',
-                      }}
-                    >
-                      <span className="flex items-center gap-2">
-                        <span
-                          className="flex h-5 w-5 items-center justify-center border-2 border-ink text-[9px] font-bold"
-                          style={{
-                            background: 'var(--ink-fixed)',
-                            color: 'var(--accent-pink)',
-                          }}
-                        >
-                          W
+                  {/* MiniPay: show balance inline */}
+                  {isMiniPay && (
+                    <div className="flex items-center justify-between px-1">
+                      <span className="font-display text-[10px]" style={{ color: 'var(--ink-soft)' }}>
+                        CREDIT&nbsp;
+                        <span style={{ color: 'var(--ink)' }}>
+                          ${(Number(stableBalances[selectedToken]) / 10 ** STABLECOIN_TOKENS[selectedToken].decimals).toFixed(2)}
                         </span>
-                        CAST ON WARPCAST
                       </span>
-                      <span className="text-base">→</span>
-                    </button>
-                    <button
-                      onClick={handleShareTwitter}
-                      className="brutal-btn flex w-full items-center justify-between border-4 border-ink px-4 py-3 font-display text-[11px] uppercase tracking-wider shadow-[4px_4px_0_var(--shadow)]"
-                      style={{
-                        background: 'var(--ink)',
-                        color: 'var(--paper)',
-                      }}
-                    >
-                      <span className="flex items-center gap-2">
-                        <span
-                          className="flex h-5 w-5 items-center justify-center border-2 border-paper text-[9px] font-bold"
-                          style={{
-                            background: 'var(--paper)',
-                            color: 'var(--ink)',
-                          }}
-                        >
-                          X
-                        </span>
-                        POST ON X / TWITTER
-                      </span>
-                      <span className="text-base">→</span>
-                    </button>
-                    <div className="text-center font-display text-[8px] uppercase tracking-[0.18em] text-ink/40">
-                      blokaz.xyz · @playblokaz
+                      <span className="font-display text-[9px]" style={{ color: 'var(--ink-soft)' }}>COST $0.001</span>
                     </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 gap-3">
+                  )}
+
+                  {/* Revive button */}
                   <button
-                    onClick={() => setShowShareSheet(true)}
-                    className="brutal-btn flex items-center justify-center gap-1.5 border-4 border-ink bg-paper-2 py-3.5 font-display text-[11px] uppercase tracking-wider text-ink shadow-[4px_4px_0_var(--shadow)] sm:py-4 sm:text-xs"
+                    onClick={handleStableRevive}
+                    disabled={isStablePaying || !canAfford(selectedToken)}
+                    className="brutal-btn flex w-full items-center justify-center gap-2 border-[3px] border-ink py-3 font-display text-[11px] uppercase tracking-wider shadow-[3px_3px_0_var(--shadow)] disabled:opacity-50"
+                    style={{ background: 'var(--accent-cyan)', color: 'var(--ink-fixed)' }}
                   >
-                    <BrutalIcon name="rocket" size={13} strokeWidth={2} />
-                    SHARE RUN
+                    {isStablePaying
+                      ? <div className="brutal-loader" />
+                      : canAfford(selectedToken)
+                        ? <><BrutalIcon name="zap" size={13} strokeWidth={2.5} />{isMiniPay ? 'CONTINUE' : `REVIVE WITH ${selectedToken}`}</>
+                        : <span>{isMiniPay ? 'ADD FUNDS' : `NOT ENOUGH ${selectedToken}`}</span>
+                    }
                   </button>
-                  <button
-                    onClick={onOpenLeaderboard}
-                    className="brutal-btn border-4 border-ink bg-accent-cyan py-3.5 font-display text-[11px] uppercase tracking-wider shadow-[4px_4px_0_var(--shadow)] sm:py-4 sm:text-xs"
-                    style={{ color: accentTextColor }}
-                  >
-                    LEADERBOARD
+
+                  {stableError && (
+                    <div className="text-center font-display text-[8px] uppercase tracking-[0.12em] text-danger">
+                      {isMiniPay ? 'Something went wrong — try again' : stableError}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Share / Leaderboard */}
+            {showShareSheet ? (
+              <div className="border-[3px] border-ink" style={{ background: 'var(--paper-2)' }}>
+                <div className="flex items-center justify-between border-b-[3px] border-ink px-3 py-2" style={{ background: 'var(--paper)' }}>
+                  <span className="font-display text-[9px] uppercase tracking-[0.18em]">SHARE YOUR RUN</span>
+                  <button onClick={() => setShowShareSheet(false)}
+                    className="brutal-btn flex h-7 w-7 items-center justify-center border-2 border-ink text-ink"
+                    style={{ background: 'var(--paper-2)', boxShadow: '2px 2px 0 var(--shadow)' }}>
+                    <BrutalIcon name="back" size={12} strokeWidth={3} />
                   </button>
                 </div>
-              )}
-            </div>
+                <div className="flex gap-2 p-2.5">
+                  <button onClick={handleShareWarpcast}
+                    className="brutal-btn flex flex-1 items-center justify-center gap-1.5 border-[3px] border-ink py-2.5 font-display text-[10px] uppercase tracking-wider shadow-[3px_3px_0_var(--shadow)]"
+                    style={{ background: 'var(--accent-pink)', color: 'var(--ink-fixed)' }}>
+                    <span className="flex h-4 w-4 items-center justify-center border-[2px] border-ink text-[8px] font-bold" style={{ background: 'var(--ink-fixed)', color: 'var(--accent-pink)' }}>W</span>
+                    WARPCAST
+                  </button>
+                  <button onClick={handleShareTwitter}
+                    className="brutal-btn flex flex-1 items-center justify-center gap-1.5 border-[3px] border-ink py-2.5 font-display text-[10px] uppercase tracking-wider shadow-[3px_3px_0_var(--shadow)]"
+                    style={{ background: 'var(--ink)', color: 'var(--paper)' }}>
+                    <span className="flex h-4 w-4 items-center justify-center border-[2px] border-paper text-[8px] font-bold" style={{ background: 'var(--paper)', color: 'var(--ink)' }}>X</span>
+                    TWITTER
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-2">
+                <button onClick={() => setShowShareSheet(true)}
+                  className="brutal-btn flex items-center justify-center gap-1.5 border-[3px] border-ink bg-paper-2 py-3 font-display text-[10px] uppercase tracking-wider text-ink shadow-[3px_3px_0_var(--shadow)]">
+                  <BrutalIcon name="rocket" size={12} strokeWidth={2} /> SHARE
+                </button>
+                <button onClick={onOpenLeaderboard}
+                  className="brutal-btn border-[3px] border-ink bg-accent-cyan py-3 font-display text-[10px] uppercase tracking-wider shadow-[3px_3px_0_var(--shadow)]"
+                  style={{ color: accentTextColor }}>
+                  LEADERBOARD
+                </button>
+              </div>
+            )}
           </div>
         </div>
-      </div>
+        </div>{/* /w-full max-w-sm */}
+      </div>{/* /scroll container */}
     </div>
   )
 }

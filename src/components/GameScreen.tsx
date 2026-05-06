@@ -1046,8 +1046,8 @@ const ClassicStartCard: React.FC<{
 
   return (
   <div
-    className="relative z-10 flex w-full flex-col gap-5 rounded-[6px] border-4 border-ink bg-paper px-7 py-8"
-    style={{ boxShadow: '10px 10px 0 var(--accent-yellow)' }}
+    className="relative z-10 flex w-full flex-col gap-4 rounded-[6px] border-4 border-ink bg-paper px-4 py-5 sm:gap-5 sm:px-7 sm:py-8"
+    style={{ boxShadow: '6px 6px 0 var(--accent-yellow)' }}
   >
     <div
       className="w-fit border-4 border-ink bg-accent-yellow px-6 py-2 font-display text-sm tracking-[0.15em]"
@@ -1059,7 +1059,7 @@ const ClassicStartCard: React.FC<{
     {/* Hero Image */}
     <div className="relative overflow-hidden border-4 border-ink bg-paper-2 shadow-[6px_6px_0_var(--shadow)]">
       <img
-        src="/hero.png"
+        src="/hero.webp"
         alt="Blokaz Game Preview"
         className="block h-auto w-full"
       />
@@ -1069,7 +1069,7 @@ const ClassicStartCard: React.FC<{
     <div
       className="text-center font-display uppercase"
       style={{
-        fontSize: 32,
+        fontSize: 'clamp(1.4rem, 7.5vw, 2rem)',
         letterSpacing: '-0.03em',
         lineHeight: 1.1,
       }}
@@ -1432,7 +1432,7 @@ const CanvasArea: React.FC<CanvasAreaProps> = ({
               }}
             />
             <div
-              className="pointer-events-none absolute left-0 z-[1] grid grid-cols-3 border-[3px] border-ink p-5"
+              className="pointer-events-none absolute left-0 z-[1] grid grid-cols-3 border-[3px] border-ink p-3 sm:p-5"
               style={{
                 background: 'var(--piece-tray-bg)',
                 top: canvasDims.trayY,
@@ -1542,7 +1542,7 @@ const LeftRail: React.FC<{
   <div className="flex w-full flex-col gap-5">
     <div
       className="border-4 border-ink p-5"
-      style={{ background: 'var(--ink)', boxShadow: '6px 6px 0 var(--shadow)' }}
+      style={{ background: 'var(--ink-fixed)', boxShadow: '6px 6px 0 var(--shadow)' }}
     >
       <div
         className="brutal-label mb-2 opacity-100"
@@ -1550,8 +1550,8 @@ const LeftRail: React.FC<{
         LIVE SCORE
       </div>
       <div
-        className="font-display tabular-nums text-paper"
-        style={{ fontSize: 64, letterSpacing: '-0.04em', lineHeight: 0.95 }}
+        className="font-display tabular-nums"
+        style={{ fontSize: 64, letterSpacing: '-0.04em', lineHeight: 0.95, color: '#ffffff' }}
       >
         {score.toLocaleString()}
       </div>
@@ -1687,7 +1687,7 @@ const RightRail: React.FC<{
             </span>
             <button
               onClick={() => setShowShare(false)}
-              className="brutal-btn flex h-7 w-7 items-center justify-center border-2 border-ink"
+              className="brutal-btn flex h-7 w-7 items-center justify-center border-2 border-ink text-ink"
               style={{
                 background: 'var(--paper-2)',
                 boxShadow: '2px 2px 0 var(--shadow)',
@@ -1775,30 +1775,18 @@ const MobileLayout: React.FC<MobileLayoutProps> = ({
         {/* ── Game chrome: back / status / pause ──────────────────── */}
         <div className="flex shrink-0 items-center justify-between border-b-4 border-ink bg-paper px-3 py-1.5">
           <button
-            className="brutal-btn border-[3px] border-ink bg-paper p-1.5"
+            className="brutal-btn border-[3px] border-ink bg-paper p-1.5 text-ink"
             style={{ boxShadow: '2px 2px 0 var(--shadow)' }}
             onClick={onBack ?? (() => window.history.back())}
           >
             <BrutalIcon name="back" size={16} strokeWidth={3} />
           </button>
 
-          <div
-            className="flex items-center gap-2 border-[3px] border-ink px-3 py-1 font-display text-[10px] uppercase tracking-[0.18em]"
-            style={{
-              background: 'var(--accent-lime)',
-              boxShadow: '2px 2px 0 var(--shadow)',
-              color: 'var(--ink-fixed)',
-            }}
-          >
-            <div
-              className="h-2 w-2 animate-pulse"
-              style={{ background: 'var(--ink-fixed)', borderRadius: '50%' }}
-            />
-            ON-CHAIN
-          </div>
+          {/* centre — intentionally empty; sync state shows via canvas overlay */}
+          <div />
 
           <button
-            className="brutal-btn border-[3px] border-ink bg-paper p-1.5"
+            className="brutal-btn border-[3px] border-ink bg-paper p-1.5 text-ink"
             style={{ boxShadow: '2px 2px 0 var(--shadow)' }}
           >
             <BrutalIcon name="pause" size={16} strokeWidth={3} />

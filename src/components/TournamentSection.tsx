@@ -5,6 +5,7 @@ import {
   useTournament,
   useInTournament,
   useUSDCAllowance,
+  useUSDCBalance,
   useApproveUSDC,
   useJoinTournament,
   useFinalizeTournament,
@@ -13,6 +14,9 @@ import {
 import { useAccount } from 'wagmi'
 import { formatUnits } from 'viem'
 import { useGameStore } from '../stores/gameStore'
+import { IS_MINIPAY } from '../utils/miniPay'
+
+const MINIPAY_DEPOSIT_URL = 'https://minipay.opera.com/add_cash'
 
 const ROW_COLORS = [
   'var(--piece-red)',
@@ -52,6 +56,7 @@ const TournamentCard: React.FC<TournamentCardProps> = ({
     refetch: refetchIn,
   } = useInTournament(id, address)
   const { allowance, refetch: refetchAllowance } = useUSDCAllowance(address)
+  const { balance: usdcBalance } = useUSDCBalance(IS_MINIPAY ? address : undefined)
   const {
     approve,
     isPending: isApproving,
@@ -143,6 +148,8 @@ const TournamentCard: React.FC<TournamentCardProps> = ({
   // justApproved overrides: once the approve tx confirms, show JOIN immediately
   // without waiting for the allowance refetch to settle.
   const needsApproval = !justApproved && (allowance === undefined || allowance < entryFee)
+  // In MiniPay, check if user has enough USDC to cover the entry fee
+  const hasInsufficientUSDC = IS_MINIPAY && usdcBalance !== undefined && usdcBalance < entryFee
   const formatTime = (ts: bigint) =>
     new Date(Number(ts) * 1000).toLocaleDateString()
   const formatDateTime = (ts: bigint) =>
@@ -156,6 +163,11 @@ const TournamentCard: React.FC<TournamentCardProps> = ({
   const tagStyle = TAG_STYLES[index % 4]
 
   const handleJoin = () => {
+    // MiniPay: redirect to Deposit screen if USDC balance is too low
+    if (IS_MINIPAY && hasInsufficientUSDC) {
+      window.open(MINIPAY_DEPOSIT_URL, '_blank')
+      return
+    }
     if (needsApproval) {
       approve(entryFee)
     } else {
@@ -423,17 +435,20 @@ const TournamentCard: React.FC<TournamentCardProps> = ({
             style={{
               ...insetFullWidthCtaStyle,
               opacity: isEnded || isFull ? 0.5 : 1,
+              background: hasInsufficientUSDC ? 'var(--accent-yellow)' : insetFullWidthCtaStyle.background,
             }}
           >
             {isApproving || isConfirmingApprove
-              ? 'APPROVING USDC...'
+              ? 'APPROVING...'
               : isJoining || isConfirmingJoin
                 ? 'JOINING...'
                 : isFull
                   ? 'TOURNAMENT FULL'
-                  : needsApproval
-                    ? 'APPROVE USDC'
-                    : 'JOIN TOURNAMENT'}
+                  : hasInsufficientUSDC
+                    ? '+ DEPOSIT TO JOIN'
+                    : needsApproval
+                      ? 'APPROVE & JOIN'
+                      : 'JOIN TOURNAMENT'}
           </button>
           {(approveError || joinError) && (
             <div

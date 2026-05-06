@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import GameScreen from './components/GameScreen'
 import TournamentGameScreen from './components/TournamentGameScreen'
 import Header from './components/Header'
@@ -6,8 +6,11 @@ import Leaderboard from './components/Leaderboard'
 import TournamentHall from './components/TournamentHall'
 import AdminDashboard from './components/AdminDashboard'
 import LobbyScreen from './components/LobbyScreen'
+import AppFooter from './components/AppFooter'
+import SplashScreen from './components/SplashScreen'
 import { useGameStore } from './stores/gameStore'
 import { useThemeStore, type ThemeMode } from './stores/themeStore'
+import { IS_MINIPAY } from './utils/miniPay'
 
 type AppView = 'lobby' | 'classic' | 'tournaments' | 'tournament-play' | 'admin'
 
@@ -21,10 +24,16 @@ const getViewFromHash = (hash: string): AppView | null => {
 }
 
 const App: React.FC = () => {
+  // Show splash on every fresh page load. App only mounts once per load,
+  // so navigating between views never re-triggers it.
+  const [showSplash, setShowSplash] = useState(true)
   const [showLeaderboard, setShowLeaderboard] = useState(false)
-  const { setTournamentId, forceReset } = useGameStore()
+  const { setTournamentId, forceReset, gameSession } = useGameStore()
   const [activeView, setActiveView] = useState<AppView>('lobby')
+  // Hide the header bar while actively playing — the game chrome has its own back/pause
+  const isPlayingGame = !!gameSession && (activeView === 'classic' || activeView === 'tournament-play')
   const setThemeMode = useThemeStore((state) => state.setMode)
+  const handleSplashDone = useCallback(() => setShowSplash(false), [])
 
   useEffect(() => {
     const handleHashChange = () => {
@@ -81,17 +90,25 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-paper text-ink">
-      <Header
-        onShowLeaderboard={() => setShowLeaderboard(true)}
-        showLeaderboardAction={true}
-        isLeaderboardOpen={showLeaderboard}
-        activeView={activeView}
-        onViewChange={handleNavigate}
-      />
+      {showSplash && <SplashScreen onDone={handleSplashDone} />}
+
+      {/* Header: hidden during active gameplay — game chrome has its own back/pause */}
+      {!isPlayingGame && (
+        <Header
+          onShowLeaderboard={() => setShowLeaderboard(true)}
+          showLeaderboardAction={true}
+          isLeaderboardOpen={showLeaderboard}
+          activeView={activeView}
+          onViewChange={handleNavigate}
+        />
+      )}
 
       <main className={`flex flex-col ${
         activeView === 'lobby' ? 'min-h-screen pt-[64px] pb-20'
-        : activeView === 'classic' ? 'h-dvh overflow-hidden pt-16 pb-16 lg:min-h-screen lg:h-auto lg:overflow-visible lg:pt-[64px] lg:pb-20 lg:items-center'
+        : activeView === 'classic'
+          ? isPlayingGame
+            ? 'h-dvh overflow-hidden pt-0 pb-16 lg:min-h-screen lg:h-auto lg:overflow-visible lg:pt-0 lg:pb-20 lg:items-center'
+            : 'h-dvh overflow-hidden pt-16 pb-16 lg:min-h-screen lg:h-auto lg:overflow-visible lg:pt-[64px] lg:pb-20 lg:items-center'
         : activeView === 'tournament-play' ? 'pt-0 min-h-screen'
         : 'min-h-screen pt-[64px] pb-20 lg:items-center lg:pb-12'
       }`}>
@@ -123,6 +140,11 @@ const App: React.FC = () => {
         isOpen={showLeaderboard}
         onClose={() => setShowLeaderboard(false)}
       />
+
+      {/* Footer — always visible; provides ToS, Privacy, Support links (MiniPay requirement) */}
+      {activeView !== 'classic' && activeView !== 'tournament-play' && (
+        <AppFooter />
+      )}
     </div>
   )
 }

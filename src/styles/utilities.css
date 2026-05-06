@@ -9,6 +9,30 @@
     box-shadow 80ms ease-out;
 }
 
+/*
+ * ── Contrast rules ──────────────────────────────────────────────────────
+ * Rule A: paper-surface buttons — background is light in light-mode,
+ *   dark in dark-mode, so color must follow --ink (flips with the theme).
+ * Rule B: light accent buttons — lime / yellow / cyan are always bright,
+ *   so they always need the fixed dark ink regardless of theme.
+ * Both rules use !important to reliably override the base `color: #fff`.
+ * ────────────────────────────────────────────────────────────────────────
+ */
+
+/* A — paper surfaces */
+.brutal-btn.bg-paper,
+.brutal-btn.bg-paper-2,
+.brutal-btn[class*="bg-paper"] {
+  color: var(--ink) !important;
+}
+
+/* B — always-bright accent backgrounds */
+.brutal-btn.bg-accent-lime,
+.brutal-btn.bg-accent-yellow,
+.brutal-btn.bg-accent-cyan {
+  color: var(--ink-fixed) !important;
+}
+
 .brutal-btn:hover {
   transform: translate(2px, 2px);
   box-shadow: 2px 2px 0 var(--shadow) !important;
