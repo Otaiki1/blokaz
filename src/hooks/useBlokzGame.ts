@@ -11,9 +11,9 @@ import { BLOKZ_GAME_ABI, BLOKZ_TOURNAMENT_ABI } from '../constants/abi'
 import contractInfo from '../contract.json'
 import { isMiniPay } from '../utils/miniPay'
 
-// MiniPay only supports legacy (type 0) transactions — EIP-1559 is not supported.
-// Wagmi tx overrides. For MiniPay users, we MUST force type: 'legacy' (0x0).
-// Modern wallets default to EIP-1559 (0x2), which MiniPay explicitly rejects.
+// MiniPay only supports legacy (type 0) transactions — EIP-1559 (type 2) is not supported.
+// MiniPay handles gas fee abstraction natively; dApps must NOT set feeCurrency here.
+// feeCurrency requires CIP-64 (type 0x7b) which is incompatible with type: 'legacy'.
 const getTxOverrides = () =>
   isMiniPay()
     ? { type: 'legacy' as const }

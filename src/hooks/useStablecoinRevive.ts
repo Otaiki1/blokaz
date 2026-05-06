@@ -83,7 +83,9 @@ export function useStablecoinRevive() {
       setError(null)
       try {
         const token = STABLECOIN_TOKENS[sym]
-        const txOverrides = isMiniPay() ? { type: 'legacy' as const } : {}
+        const txOverrides = isMiniPay()
+          ? { type: 'legacy' as const }
+          : {}
         await writeRef.current({
           address: token.address,
           abi: ERC20_TRANSFER_ABI,
