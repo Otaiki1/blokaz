@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react'
 import { useGameStore } from '../stores/gameStore'
 import { useGoodDollar } from '../hooks/useGoodDollar'
-import { useStablecoinRevive, isMiniPayBrowser } from '../hooks/useStablecoinRevive'
+import { useStablecoinRevive } from '../hooks/useStablecoinRevive'
 import { STABLECOIN_TOKENS, type StablecoinSymbol } from '../constants/contracts'
 import { packMoves } from '../engine/replay'
 import {
@@ -83,7 +83,6 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
   } = useStablecoinRevive()
 
   const [selectedToken, setSelectedToken] = React.useState<StablecoinSymbol>(defaultToken)
-  const isMiniPay = isMiniPayBrowser()
 
   const handleStableRevive = async () => {
     await payForRevive(selectedToken)
@@ -183,9 +182,8 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
   }
 
   const handleSubmit = async () => {
-    if (!gameSession || !recoveredSeed || !effectiveGameId || !isSeedMatch)
-      return
-    if (isPending || isConfirming || isSuccess) return
+    if (!gameSession || !recoveredSeed || !effectiveGameId) return
+    if (isRegistering || isAllSuccess) return
     const packed = packMoves(gameSession.moveHistory)
     if (isTournamentMode) {
       try {
@@ -223,19 +221,15 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
   const isSyncing = onChainStatus === 'pending' || onChainStatus === 'syncing'
   const isAllSuccess = isSuccess || isToursSuccess
   const hasError = error || toursError
-  const isRegisteredOrRecovered =
-    onChainStatus === 'registered' ||
-    onChainStatus === 'syncing' ||
-    (!!effectiveGameId && onChainStatus === 'none' && !isLoading)
-  const isPotentialConflict =
-    effectiveGameId && !isSeedMatch && !isLoading && gameData
+  // Button is enabled as soon as we have a game ID — seed verification is
+  // enforced by the contract. On MiniPay wagmi's isSuccess may never fire,
+  // so we don't gate on isSeedMatch or onChainStatus here.
   const canSubmit =
     !isRegistering &&
     !isAllSuccess &&
-    isSeedMatch &&
-    !!effectiveGameId &&
-    isRegisteredOrRecovered &&
-    !isPotentialConflict
+    !!gameSession &&
+    !!recoveredSeed &&
+    !!effectiveGameId
 
   React.useEffect(() => {
     if (isAllSuccess) {
@@ -366,10 +360,7 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
     (e) => e.player.toLowerCase() === (address?.toLowerCase() ?? '')
   )
 
-  // Tokens to show — MiniPay only supports USDC
-  const visibleTokens = (Object.keys(STABLECOIN_TOKENS) as StablecoinSymbol[]).filter(
-    (sym) => !isMiniPay || sym === 'USDC'
-  )
+  const visibleTokens = Object.keys(STABLECOIN_TOKENS) as StablecoinSymbol[]
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto">
@@ -476,20 +467,72 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
 
           {/* ── Actions ── */}
           <div className="flex flex-col gap-2.5 p-3">
-            {/* Primary CTA */}
-            <button
-              onClick={handleSubmit}
-              disabled={!canSubmit}
-              className="brutal-btn flex w-full items-center justify-center gap-2 border-4 border-ink bg-accent-lime py-3.5 font-display text-sm uppercase tracking-[0.15em] disabled:opacity-50"
-              style={{ boxShadow: '5px 5px 0 var(--shadow)', color: accentTextColor }}
-            >
-              {isRegistering ? <div className="brutal-loader" /> : <BrutalIcon name="play" size={18} strokeWidth={2.5} />}
-              {isAllSuccess ? 'REPLAYING...' : 'SUBMIT + PLAY AGAIN'}
-            </button>
+            {/* Stablecoin revival — shown first so player sees it without scrolling */}
+            {mode === 'classic' && (
+              <div className="border-[3px] border-ink" style={{ background: 'var(--paper-2)' }}>
+                <div className="flex items-center justify-between border-b-[3px] border-ink px-3 py-2" style={{ background: 'var(--paper)' }}>
+                  <div className="flex items-center gap-2 font-display text-[10px] uppercase tracking-[0.15em]">
+                    <div className="flex h-5 w-5 items-center justify-center border-[2px] border-ink text-[10px]" style={{ background: 'var(--accent-cyan)', color: 'var(--ink-fixed)' }}>⚡</div>
+                    CONTINUE YOUR RUN
+                  </div>
+                  <div className="border-[2px] border-ink px-2 py-0.5 font-display text-[8px] uppercase tracking-wider" style={{ background: 'var(--accent-cyan)', color: 'var(--ink-fixed)' }}>
+                    $0.001
+                  </div>
+                </div>
 
-            {hasError && (
-              <div className="border-[3px] border-danger bg-paper-2 px-3 py-1.5 text-center font-display text-[9px] uppercase text-danger">
-                Submission failed — try again
+                <div className="p-3 space-y-2.5">
+                  {/* Token cards — always show all 3 so player can pick their balance */}
+                  <div className="grid grid-cols-3 gap-2">
+                    {visibleTokens.map((sym) => {
+                      const isSelected = selectedToken === sym
+                      const decimals = STABLECOIN_TOKENS[sym].decimals
+                      const raw = stableBalances[sym]
+                      const balance = (Number(raw) / 10 ** decimals).toFixed(2)
+                      const affordable = canAfford(sym)
+                      return (
+                        <button
+                          key={sym}
+                          onClick={() => setSelectedToken(sym)}
+                          className="flex flex-col items-center gap-1 border-[3px] border-ink py-2.5 px-1 font-display"
+                          style={{
+                            background: isSelected ? 'var(--accent-cyan)' : 'var(--paper)',
+                            color: isSelected ? 'var(--ink-fixed)' : 'var(--ink)',
+                            boxShadow: isSelected ? '3px 3px 0 var(--shadow)' : '2px 2px 0 var(--shadow)',
+                          }}
+                        >
+                          <span className="text-[11px] uppercase tracking-wider font-bold">{sym}</span>
+                          <span
+                            className="text-[9px] tabular-nums"
+                            style={{ color: isSelected ? 'var(--ink-fixed)' : affordable ? 'var(--ink)' : 'var(--ink-soft)', opacity: isSelected ? 0.75 : 1 }}
+                          >
+                            {balance}
+                          </span>
+                        </button>
+                      )
+                    })}
+                  </div>
+
+                  {/* Revive button */}
+                  <button
+                    onClick={handleStableRevive}
+                    disabled={isStablePaying || !canAfford(selectedToken)}
+                    className="brutal-btn flex w-full items-center justify-center gap-2 border-[3px] border-ink py-3 font-display text-[11px] uppercase tracking-wider shadow-[3px_3px_0_var(--shadow)] disabled:opacity-50"
+                    style={{ background: 'var(--accent-cyan)', color: 'var(--ink-fixed)' }}
+                  >
+                    {isStablePaying
+                      ? <div className="brutal-loader" />
+                      : canAfford(selectedToken)
+                        ? <><BrutalIcon name="zap" size={13} strokeWidth={2.5} />REVIVE WITH {selectedToken}</>
+                        : <span>NOT ENOUGH {selectedToken} — TOP UP</span>
+                    }
+                  </button>
+
+                  {stableError && (
+                    <div className="text-center font-display text-[8px] uppercase tracking-[0.12em] text-danger">
+                      {stableError}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 
@@ -528,88 +571,20 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
               </div>
             )}
 
-            {/* Revival — copy adapts for MiniPay (no crypto jargon) */}
-            {mode === 'classic' && (
-              <div className="border-[3px] border-ink" style={{ background: 'var(--paper-2)' }}>
-                {/* Header */}
-                <div className="flex items-center justify-between border-b-[3px] border-ink px-3 py-2" style={{ background: 'var(--paper)' }}>
-                  <div className="flex items-center gap-2 font-display text-[10px] uppercase tracking-[0.15em]">
-                    <div className="flex h-5 w-5 items-center justify-center border-[2px] border-ink text-[10px]" style={{ background: 'var(--accent-cyan)', color: 'var(--ink-fixed)' }}>⚡</div>
-                    {isMiniPay ? 'CONTINUE YOUR RUN' : 'REVIVAL'}
-                  </div>
-                  <div className="border-[2px] border-ink px-2 py-0.5 font-display text-[8px] uppercase tracking-wider" style={{ background: 'var(--accent-cyan)', color: 'var(--ink-fixed)' }}>
-                    $0.001
-                  </div>
-                </div>
+            {/* Submit score CTA */}
+            <button
+              onClick={handleSubmit}
+              disabled={!canSubmit}
+              className="brutal-btn flex w-full items-center justify-center gap-2 border-4 border-ink bg-accent-lime py-3.5 font-display text-sm uppercase tracking-[0.15em] disabled:opacity-50"
+              style={{ boxShadow: '5px 5px 0 var(--shadow)', color: accentTextColor }}
+            >
+              {isRegistering ? <div className="brutal-loader" /> : <BrutalIcon name="play" size={18} strokeWidth={2.5} />}
+              {isAllSuccess ? 'REPLAYING...' : 'SUBMIT + PLAY AGAIN'}
+            </button>
 
-                <div className="p-3 space-y-2.5">
-                  {/* Token cards — each shows name + balance. Hidden on MiniPay (USDC only). */}
-                  {!isMiniPay && (
-                    <div className="grid grid-cols-3 gap-2">
-                      {visibleTokens.map((sym) => {
-                        const isSelected = selectedToken === sym
-                        const decimals = STABLECOIN_TOKENS[sym].decimals
-                        const raw = stableBalances[sym]
-                        const balance = (Number(raw) / 10 ** decimals).toFixed(2)
-                        const affordable = canAfford(sym)
-                        return (
-                          <button
-                            key={sym}
-                            onClick={() => setSelectedToken(sym)}
-                            className="flex flex-col items-center gap-1 border-[3px] border-ink py-2.5 px-1 font-display"
-                            style={{
-                              background: isSelected ? 'var(--accent-cyan)' : 'var(--paper)',
-                              color: isSelected ? 'var(--ink-fixed)' : 'var(--ink)',
-                              boxShadow: isSelected ? '3px 3px 0 var(--shadow)' : '2px 2px 0 var(--shadow)',
-                            }}
-                          >
-                            <span className="text-[11px] uppercase tracking-wider font-bold">{sym}</span>
-                            <span
-                              className="text-[9px] tabular-nums"
-                              style={{ color: isSelected ? 'var(--ink-fixed)' : affordable ? 'var(--ink)' : 'var(--ink-soft)', opacity: isSelected ? 0.75 : 1 }}
-                            >
-                              {balance}
-                            </span>
-                          </button>
-                        )
-                      })}
-                    </div>
-                  )}
-
-                  {/* MiniPay: show balance inline */}
-                  {isMiniPay && (
-                    <div className="flex items-center justify-between px-1">
-                      <span className="font-display text-[10px]" style={{ color: 'var(--ink-soft)' }}>
-                        CREDIT&nbsp;
-                        <span style={{ color: 'var(--ink)' }}>
-                          ${(Number(stableBalances[selectedToken]) / 10 ** STABLECOIN_TOKENS[selectedToken].decimals).toFixed(2)}
-                        </span>
-                      </span>
-                      <span className="font-display text-[9px]" style={{ color: 'var(--ink-soft)' }}>COST $0.001</span>
-                    </div>
-                  )}
-
-                  {/* Revive button */}
-                  <button
-                    onClick={handleStableRevive}
-                    disabled={isStablePaying || !canAfford(selectedToken)}
-                    className="brutal-btn flex w-full items-center justify-center gap-2 border-[3px] border-ink py-3 font-display text-[11px] uppercase tracking-wider shadow-[3px_3px_0_var(--shadow)] disabled:opacity-50"
-                    style={{ background: 'var(--accent-cyan)', color: 'var(--ink-fixed)' }}
-                  >
-                    {isStablePaying
-                      ? <div className="brutal-loader" />
-                      : canAfford(selectedToken)
-                        ? <><BrutalIcon name="zap" size={13} strokeWidth={2.5} />{isMiniPay ? 'CONTINUE' : `REVIVE WITH ${selectedToken}`}</>
-                        : <span>{isMiniPay ? 'ADD FUNDS' : `NOT ENOUGH ${selectedToken}`}</span>
-                    }
-                  </button>
-
-                  {stableError && (
-                    <div className="text-center font-display text-[8px] uppercase tracking-[0.12em] text-danger">
-                      {isMiniPay ? 'Something went wrong — try again' : stableError}
-                    </div>
-                  )}
-                </div>
+            {hasError && (
+              <div className="border-[3px] border-danger bg-paper-2 px-3 py-1.5 text-center font-display text-[9px] uppercase text-danger">
+                Submission failed — try again
               </div>
             )}
 

@@ -7,6 +7,7 @@ import {
   type StablecoinSymbol,
 } from '../constants/contracts'
 import { useGameStore } from '../stores/gameStore'
+import { isMiniPay } from '../utils/miniPay'
 
 const ERC20_TRANSFER_ABI = [
   {
@@ -82,11 +83,13 @@ export function useStablecoinRevive() {
       setError(null)
       try {
         const token = STABLECOIN_TOKENS[sym]
+        const txOverrides = isMiniPay() ? { type: 'legacy' as const } : {}
         await writeRef.current({
           address: token.address,
           abi: ERC20_TRANSFER_ABI,
           functionName: 'transfer',
           args: [GOODDOLLAR_ADDRESSES.TREASURY, token.reviveCost],
+          ...txOverrides,
         })
         setClearanceTurns(G_GAME_ECONOMICS.CLEARANCE_MODE_TURNS)
         reviveGame()
