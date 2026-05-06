@@ -364,10 +364,10 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
           backgroundSize: '28px 28px',
         }}
       />
-      <div className="relative flex h-full items-center justify-center p-2 sm:p-4">
+      <div className="relative flex h-full items-center justify-center p-1.5 sm:p-4">
         <div
-          className="relative flex w-full max-w-sm flex-col gap-3 text-ink"
-          style={{ maxHeight: 'calc(100dvh - 1rem)' }}
+          className="relative flex w-full max-w-sm flex-col gap-2 text-ink sm:gap-3"
+          style={{ maxHeight: 'calc(100dvh - 0.75rem)' }}
         >
           <button
             onClick={handleAbandon}
@@ -377,7 +377,7 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
             <BrutalIcon name="back" size={20} strokeWidth={4} />
           </button>
 
-          <div className="flex shrink-0 justify-center px-14 pt-2">
+          <div className="flex shrink-0 justify-center px-4 pt-2">
             <div
               className="brutal-sticker text-center"
               style={{

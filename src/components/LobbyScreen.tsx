@@ -247,7 +247,7 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({ onPlayClassic, onPlayTourname
           </span>
           <span
             className="font-display"
-            style={{ letterSpacing: '-0.03em', fontSize: 28, color: 'var(--ink-fixed)' }}
+            style={{ letterSpacing: '-0.03em', fontSize: 'clamp(16px,5.5vw,28px)', color: 'var(--ink-fixed)' }}
           >
             {playerStats ? playerStats.bestScore.toLocaleString() : '—'}
           </span>
@@ -264,7 +264,7 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({ onPlayClassic, onPlayTourname
           </span>
           <span
             className="font-display"
-            style={{ letterSpacing: '-0.03em', fontSize: 28, color: 'var(--ink-fixed)' }}
+            style={{ letterSpacing: '-0.03em', fontSize: 'clamp(16px,5.5vw,28px)', color: 'var(--ink-fixed)' }}
           >
             {playerStats ? `#${playerStats.rank}` : '—'}
           </span>
@@ -281,7 +281,7 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({ onPlayClassic, onPlayTourname
           </span>
           <span
             className="font-display"
-            style={{ letterSpacing: '-0.03em', fontSize: 28, color: 'var(--ink-fixed)' }}
+            style={{ letterSpacing: '-0.03em', fontSize: 'clamp(16px,5.5vw,28px)', color: 'var(--ink-fixed)' }}
           >
             —
           </span>
@@ -349,28 +349,30 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({ onPlayClassic, onPlayTourname
       </div>
 
       <div
-        className="flex items-center justify-between border-[3px] border-ink px-4 py-3"
+        className="flex flex-col gap-2 border-[3px] border-ink px-4 py-3"
         style={{ background: 'var(--paper-2)', boxShadow: '5px 5px 0 var(--shadow)' }}
       >
-        <div className="flex items-center gap-3">
-          <BrutalIcon name="flame" size={20} strokeWidth={2.5} className="text-ink" />
-          <div>
-            <div
-              className="mb-0.5 font-display text-[9px] tracking-[0.16em]"
-              style={{ color: streakLabelColor }}
-            >
-              DAILY STREAK
-            </div>
-            <div className="font-display text-[13px] tracking-[0.06em]" style={{ color: 'var(--ink)' }}>
-              {streak > 0 ? `DAY ${streak} · ${streak >= 7 ? '2X' : `${streak}X`} BONUS` : 'START YOUR STREAK'}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <BrutalIcon name="flame" size={16} strokeWidth={2.5} className="text-ink" />
+            <div>
+              <div
+                className="font-display text-[9px] tracking-[0.16em]"
+                style={{ color: streakLabelColor }}
+              >
+                DAILY STREAK
+              </div>
+              <div className="font-display text-[11px] tracking-[0.04em]" style={{ color: 'var(--ink)' }}>
+                {streak > 0 ? `DAY ${streak} · ${streak >= 7 ? '2X' : `${streak}X`} BONUS` : 'START YOUR STREAK'}
+              </div>
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-[5px]">
+        <div className="flex items-center gap-[4px]">
           {Array.from({ length: 7 }).map((_, i) => (
             <div
               key={i}
-              className="h-[18px] w-[18px] border-[2px] border-ink"
+              className="h-[14px] flex-1 border-[2px] border-ink"
               style={{ background: i < streak ? 'var(--accent)' : 'var(--rule)' }}
             />
           ))}
@@ -380,7 +382,7 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({ onPlayClassic, onPlayTourname
   )
 
   return (
-    <div className="w-full px-4 pb-6 lg:px-6">
+    <div className="w-full px-3 pb-6 sm:px-4 lg:px-6">
       <div
         className="mx-auto hidden max-w-[1440px] items-start gap-8 lg:grid"
         style={{

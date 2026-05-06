@@ -296,13 +296,13 @@ export const Header: React.FC<HeaderProps> = ({
         className="fixed left-0 right-0 top-0 z-50 border-b-4 border-ink bg-paper px-4 py-3 lg:px-6 lg:py-4"
         style={{ borderBottomColor: 'var(--ink)' }}
       >
-        <div className="mx-auto flex w-full max-w-[1440px] items-center justify-between gap-6">
+        <div className="mx-auto flex w-full max-w-[1440px] items-center justify-between gap-3 lg:gap-6">
           <div
-            className="group flex min-w-[210px] cursor-pointer items-center gap-[14px] lg:basis-[320px]"
+            className="group flex min-w-0 cursor-pointer items-center gap-2.5 lg:min-w-[210px] lg:basis-[320px] lg:gap-[14px]"
             onClick={() => safeNavigate('lobby')}
           >
             <div
-              className="flex h-[46px] w-[46px] items-center justify-center border-[3px] border-ink font-display text-[22px] transition-transform group-hover:-rotate-3"
+              className="flex h-10 w-10 shrink-0 items-center justify-center border-[3px] border-ink font-display text-[18px] transition-transform group-hover:-rotate-3 lg:h-[46px] lg:w-[46px] lg:text-[22px]"
               style={{
                 background: 'var(--accent-yellow)',
                 boxShadow: '3px 3px 0 var(--shadow)',
@@ -311,7 +311,7 @@ export const Header: React.FC<HeaderProps> = ({
             >
               B
             </div>
-            <span className="font-display text-[24px] leading-none tracking-tight text-ink">
+            <span className="font-display text-[18px] leading-none tracking-tight text-ink lg:text-[24px]">
               BLOKAZ
             </span>
           </div>
@@ -417,9 +417,10 @@ export const Header: React.FC<HeaderProps> = ({
                             </>
                           )}
 
+                          {/* Address chip: hidden on mobile to save width */}
                           <button
                             onClick={handleClick}
-                            className="min-w-[104px] border-[3px] border-ink px-4 py-[10px] font-display text-[12px] tracking-[0.08em] uppercase"
+                            className="hidden border-[3px] border-ink px-4 py-[10px] font-display text-[12px] tracking-[0.08em] uppercase lg:block"
                             style={{
                               background: connectedChipBg,
                               color: connectedChipColor,
@@ -430,11 +431,13 @@ export const Header: React.FC<HeaderProps> = ({
                               ? 'NETWORK ⚠'
                               : truncateAddress(account.address)}
                           </button>
+                          {/* Avatar icon: always visible */}
                           <button
                             onClick={handleClick}
-                            className="flex h-10 w-10 items-center justify-center border-[3px] border-ink bg-paper font-display text-[11px] uppercase"
+                            className="flex h-10 w-10 items-center justify-center border-[3px] border-ink font-display text-[11px] uppercase"
                             style={{
-                              color: 'var(--ink)',
+                              background: connectedChipBg,
+                              color: connectedChipColor,
                               boxShadow: '3px 3px 0 var(--shadow)',
                             }}
                             aria-label="Open account"

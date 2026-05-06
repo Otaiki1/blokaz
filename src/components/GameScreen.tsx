@@ -1046,8 +1046,8 @@ const ClassicStartCard: React.FC<{
 
   return (
   <div
-    className="relative z-10 flex w-full flex-col gap-5 rounded-[6px] border-4 border-ink bg-paper px-7 py-8"
-    style={{ boxShadow: '10px 10px 0 var(--accent-yellow)' }}
+    className="relative z-10 flex w-full flex-col gap-4 rounded-[6px] border-4 border-ink bg-paper px-4 py-5 sm:gap-5 sm:px-7 sm:py-8"
+    style={{ boxShadow: '6px 6px 0 var(--accent-yellow)' }}
   >
     <div
       className="w-fit border-4 border-ink bg-accent-yellow px-6 py-2 font-display text-sm tracking-[0.15em]"
@@ -1069,7 +1069,7 @@ const ClassicStartCard: React.FC<{
     <div
       className="text-center font-display uppercase"
       style={{
-        fontSize: 32,
+        fontSize: 'clamp(1.4rem, 7.5vw, 2rem)',
         letterSpacing: '-0.03em',
         lineHeight: 1.1,
       }}
@@ -1432,7 +1432,7 @@ const CanvasArea: React.FC<CanvasAreaProps> = ({
               }}
             />
             <div
-              className="pointer-events-none absolute left-0 z-[1] grid grid-cols-3 border-[3px] border-ink p-5"
+              className="pointer-events-none absolute left-0 z-[1] grid grid-cols-3 border-[3px] border-ink p-3 sm:p-5"
               style={{
                 background: 'var(--piece-tray-bg)',
                 top: canvasDims.trayY,
@@ -1783,7 +1783,7 @@ const MobileLayout: React.FC<MobileLayoutProps> = ({
           </button>
 
           <div
-            className="flex items-center gap-2 border-[3px] border-ink px-3 py-1 font-display text-[10px] uppercase tracking-[0.18em]"
+            className="flex items-center gap-1.5 border-[3px] border-ink px-2 py-1 font-display text-[9px] uppercase tracking-[0.1em]"
             style={{
               background: 'var(--accent-lime)',
               boxShadow: '2px 2px 0 var(--shadow)',
@@ -1791,7 +1791,7 @@ const MobileLayout: React.FC<MobileLayoutProps> = ({
             }}
           >
             <div
-              className="h-2 w-2 animate-pulse"
+              className="h-1.5 w-1.5 animate-pulse"
               style={{ background: 'var(--ink-fixed)', borderRadius: '50%' }}
             />
             ON-CHAIN
