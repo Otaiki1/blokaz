@@ -298,7 +298,11 @@ export const Header: React.FC<HeaderProps> = ({
       >
         <div className="mx-auto flex w-full max-w-[1440px] items-center justify-between gap-6">
           <div
-            className="group flex min-w-[210px] cursor-pointer items-center gap-[14px] lg:basis-[320px]"
+            className={`group cursor-pointer items-center gap-[14px] lg:flex lg:basis-[320px] lg:min-w-[210px] ${
+              activeView === 'classic' || activeView === 'tournament-play'
+                ? 'hidden'
+                : 'flex min-w-[160px]'
+            }`}
             onClick={() => safeNavigate('lobby')}
           >
             <div
@@ -344,14 +348,10 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
 
           <div className="flex min-w-0 items-center justify-end gap-2 lg:basis-[320px] lg:gap-3">
-            <ThemeToggle />
+            <div className="hidden lg:block"><ThemeToggle /></div>
             <HeaderDivider />
 
-            {IS_MINIPAY ? (
-              <>
-                <MiniPayWalletBadge />
-              </>
-            ) : (
+            {IS_MINIPAY ? null : (
               <ConnectButton.Custom>
                 {({
                   account,
@@ -432,7 +432,7 @@ export const Header: React.FC<HeaderProps> = ({
                           </button>
                           <button
                             onClick={handleClick}
-                            className="flex h-10 w-10 items-center justify-center border-[3px] border-ink bg-paper font-display text-[11px] uppercase"
+                            className="hidden lg:flex h-10 w-10 items-center justify-center border-[3px] border-ink bg-paper font-display text-[11px] uppercase"
                             style={{
                               color: 'var(--ink)',
                               boxShadow: '3px 3px 0 var(--shadow)',
