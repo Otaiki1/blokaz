@@ -39,8 +39,9 @@
     <meta name="talentapp:project_verification" content="90311590842b835040b6ea565b383a5eff96a4c7c26ceaddababe71e0a74d4eed6bc70f989070703284e868f4936a2bf4ee8aef92d07c358ea9df10032d3ab6f" />
     <title>BLOKAZ — Stack. Smash. Stake.</title>
     <meta name="description" content="Blokaz is a block-stacking puzzle game on Celo. Play free, climb the weekly leaderboard, and stake with GoodDollar. Available on MiniPay." />
-    <!-- Preload LCP image — browser fetches before JS executes -->
-    <link rel="preload" as="image" href="/Blokaz_logo.webp" type="image/webp" fetchpriority="high" />
+    <!-- Preload both splash images so browser fetches them before JS executes -->
+    <link rel="preload" as="image" href="/crackedstudioslogo.webp" type="image/webp" fetchpriority="high" />
+    <link rel="preload" as="image" href="/Blokaz_logo.webp" type="image/webp" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="preconnect" href="https://api.web3auth.io" />
@@ -111,7 +112,7 @@
         </div>
         <div class="inner">
           <div class="logo-wrap">
-            <img src="/crackedstudioslogo.webp" alt="Cracked Studios" width="480" height="146" />
+            <img src="/crackedstudioslogo.webp" alt="Cracked Studios" width="349" height="106" fetchpriority="high" />
           </div>
           <div class="divider">
             <div class="divider-line"></div>
@@ -124,7 +125,7 @@
         </div>
       </div>
     </div>
-    <div id="root"></div>
+    <div id="root" role="main"></div>
     <script>
       // Remove static splash once React mounts content into #root.
       // #root is defined above this script so getElementById works.

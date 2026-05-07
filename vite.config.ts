@@ -3,6 +3,23 @@ import react from '@vitejs/plugin-react'
 import path from 'path'
 import { nodePolyfills } from 'vite-plugin-node-polyfills'
 
+// Vite plugin: make the generated CSS bundle non-blocking.
+// Safe here because the inline static splash covers all app content until
+// React mounts, so deferring the Tailwind bundle causes zero FOUC.
+const deferCssPlugin = {
+  name: 'defer-css',
+  transformIndexHtml(html: string) {
+    // Replace blocking <link rel="stylesheet" … href="/assets/…css">
+    // with a preload + onload swap (standard non-blocking CSS pattern).
+    return html.replace(
+      /<link rel="stylesheet" crossorigin href="(\/assets\/[^"]+\.css)">/g,
+      (_: string, href: string) =>
+        `<link rel="preload" as="style" onload="this.onload=null;this.rel='stylesheet'" href="${href}" crossorigin>` +
+        `<noscript><link rel="stylesheet" href="${href}" crossorigin></noscript>`,
+    )
+  },
+}
+
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [
@@ -16,6 +33,7 @@ export default defineConfig({
       globals: { Buffer: true, global: true, process: true },
       protocolImports: false,
     }),
+    deferCssPlugin,
   ],
   resolve: {
     alias: {

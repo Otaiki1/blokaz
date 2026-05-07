@@ -108,7 +108,7 @@ const App: React.FC = () => {
         />
       )}
 
-      <main className={`flex flex-col ${
+      <div className={`flex flex-col ${
         activeView === 'lobby' ? 'min-h-screen pt-[64px] pb-20'
         : activeView === 'classic'
           ? isPlayingGame
@@ -141,7 +141,7 @@ const App: React.FC = () => {
             <AdminDashboard />
           )}
         </Suspense>
-      </main>
+      </div>
 
       <Suspense fallback={null}>
         <Leaderboard
