@@ -17,7 +17,7 @@ const TensionBar: React.FC<{
   const tensionActive = comboStreak >= 4
 
   return (
-    <div className="flex items-center gap-2 px-4 pb-4">
+    <div className="flex items-center gap-2 px-3 pb-2">
       <div
         className="flex items-center gap-1 font-display text-[9px] tracking-[0.14em]"
         style={{ color: 'var(--paper)', whiteSpace: 'nowrap' }}
@@ -68,8 +68,8 @@ const ScoreBar: React.FC<ScoreBarProps> = ({
   const accentColor = isTournament ? 'var(--accent-cyan)' : 'var(--accent-purple)'
   const textColor = 'var(--paper)'
   const barBg = 'var(--ink)'
-  const vPad = compact ? 'py-3' : 'py-6'
-  const hPad = compact ? 'px-4' : 'px-6'
+  const vPad = compact ? 'py-2' : 'py-6'
+  const hPad = compact ? 'px-3' : 'px-6'
 
   return (
     <div className="border-b-4 border-ink" style={{ background: barBg }}>

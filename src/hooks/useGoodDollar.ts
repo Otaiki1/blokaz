@@ -3,6 +3,11 @@ import { useAccount, useReadContract, useWriteContract, useBalance, usePublicCli
 import { GOODDOLLAR_ADDRESSES, G_GAME_ECONOMICS, G_IDENTITY_ABI, CFA_FORWARDER_ABI } from '../constants/contracts'
 import { useGameStore } from '../stores/gameStore'
 import { IdentitySDK, ClaimSDK } from '@goodsdks/citizen-sdk'
+import { isMiniPay } from '../utils/miniPay'
+
+// MiniPay requires legacy (type 0) transactions; feeCurrency is handled natively by MiniPay.
+// Do NOT set feeCurrency here — it requires CIP-64 (type 0x7b), incompatible with legacy.
+const getMiniPayOverrides = () => isMiniPay() ? { type: 'legacy' as const } : {}
 
 export const useGoodDollar = () => {
   const { address, isConnected } = useAccount()
@@ -144,6 +149,7 @@ export const useGoodDollar = () => {
         abi: CFA_FORWARDER_ABI,
         functionName: 'createFlow',
         args: [GOODDOLLAR_ADDRESSES.G_TOKEN, address, GOODDOLLAR_ADDRESSES.TREASURY, G_GAME_ECONOMICS.STREAM_RATE_PER_SECOND as any, '0x'],
+        ...getMiniPayOverrides(),
       })
       setIsStreaming(true)
     } catch (error) {
@@ -160,6 +166,7 @@ export const useGoodDollar = () => {
         abi: CFA_FORWARDER_ABI,
         functionName: 'deleteFlow',
         args: [GOODDOLLAR_ADDRESSES.G_TOKEN, address, GOODDOLLAR_ADDRESSES.TREASURY, '0x'],
+        ...getMiniPayOverrides(),
       })
       setIsStreaming(false)
     } catch (error) {
@@ -187,8 +194,9 @@ export const useGoodDollar = () => {
         outputs: [{ type: 'bool' }],
       }] as const
 
-      await transferGRef.current({ address: GOODDOLLAR_ADDRESSES.G_TOKEN, abi, functionName: 'transfer', args: [GOODDOLLAR_ADDRESSES.TREASURY, halfAmount] })
-      await transferGRef.current({ address: GOODDOLLAR_ADDRESSES.G_TOKEN, abi, functionName: 'transfer', args: [GOODDOLLAR_ADDRESSES.UBI_POOL, halfAmount] })
+      const miniPayOverrides = getMiniPayOverrides()
+      await transferGRef.current({ address: GOODDOLLAR_ADDRESSES.G_TOKEN, abi, functionName: 'transfer', args: [GOODDOLLAR_ADDRESSES.TREASURY, halfAmount], ...miniPayOverrides })
+      await transferGRef.current({ address: GOODDOLLAR_ADDRESSES.G_TOKEN, abi, functionName: 'transfer', args: [GOODDOLLAR_ADDRESSES.UBI_POOL, halfAmount], ...miniPayOverrides })
 
       setClearanceTurns(G_GAME_ECONOMICS.CLEARANCE_MODE_TURNS)
       return true

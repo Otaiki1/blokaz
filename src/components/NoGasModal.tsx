@@ -70,7 +70,7 @@ const NoGasModal: React.FC<NoGasModalProps> = ({ address, onDismiss }) => {
           </div>
           <button
             onClick={onDismiss}
-            className="brutal-btn border-[2px] border-ink bg-paper p-1"
+            className="brutal-btn border-[2px] border-ink bg-paper p-1 text-ink"
             style={{ boxShadow: '2px 2px 0 var(--shadow)' }}
             aria-label="Dismiss"
           >

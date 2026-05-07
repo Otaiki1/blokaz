@@ -28,15 +28,26 @@ import {
 import { useAccount, useBalance } from 'wagmi'
 import { keccak256, encodePacked } from 'viem'
 import contractInfo from '../contract.json'
+import { GameSession } from '../engine/game'
+import type { MoveRecord } from '../engine/game'
 import {
   CLASSIC_SESSION_STORAGE_KEY,
   readStoredGameSession,
   writeStoredGameSession,
+  clearStoredGameSession,
 } from '../utils/gameSessionStorage'
 import { IS_MINIPAY } from '../utils/miniPay'
 
 const GAME_ADDRESS = contractInfo.game as `0x${string}`
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
+
+function replayMoveHistory(seed: bigint, history: MoveRecord[]): GameSession {
+  const session = new GameSession(seed)
+  for (const move of history) {
+    session.placePiece(move.pieceIndex, move.row, move.col)
+  }
+  return session
+}
 
 interface GameScreenProps {
   onOpenLeaderboard?: () => void
@@ -580,7 +591,20 @@ const GameScreen: React.FC<GameScreenProps> = ({
           encodePacked(['bytes32', 'address'], [latestSeed, address])
         ).slice(0, 18)
       )
-      startGame(localSeed, true)
+      const stored = readStoredGameSession(CLASSIC_SESSION_STORAGE_KEY, address, GAME_ADDRESS)
+      if (stored?.snapshot?.moveHistory?.length) {
+        const restoredSession = replayMoveHistory(localSeed, stored.snapshot.moveHistory)
+        ;(window as any).currentPieces = restoredSession.currentPieces
+        useGameStore.setState({
+          gameSession: restoredSession,
+          score: restoredSession.score,
+          comboStreak: restoredSession.comboStreak,
+          currentPieces: [...restoredSession.currentPieces],
+          isGameOver: restoredSession.isGameOver,
+        })
+      } else {
+        startGame(localSeed, true)
+      }
       return
     }
     const dummyAddr = address || ZERO_ADDRESS
@@ -744,6 +768,18 @@ const GameScreen: React.FC<GameScreenProps> = ({
             score: result.scoreEvent.totalPoints,
           })
         }
+        // Persist move history so browser refresh can replay and restore progress
+        const updatedSession = useGameStore.getState().gameSession
+        if (updatedSession) {
+          const raw = localStorage.getItem(CLASSIC_SESSION_STORAGE_KEY)
+          if (raw) {
+            try {
+              const entry = JSON.parse(raw)
+              entry.snapshot = { moveHistory: updatedSession.moveHistory }
+              localStorage.setItem(CLASSIC_SESSION_STORAGE_KEY, JSON.stringify(entry))
+            } catch {}
+          }
+        }
       },
       (shape: ShapeDefinition, row: number, col: number) => {
         if (!shape) return false
@@ -832,6 +868,33 @@ const GameScreen: React.FC<GameScreenProps> = ({
 
   const handlePlayAgain = () => handleStartGame()
 
+  // Detect a saved game the user can resume (snapshot in localStorage)
+  const hasStoredGame = !gameSession && !!address && !!(
+    readStoredGameSession(CLASSIC_SESSION_STORAGE_KEY, address, GAME_ADDRESS)?.snapshot?.moveHistory?.length
+  )
+
+  const continueGame = () => {
+    if (!address) return
+    const stored = readStoredGameSession(CLASSIC_SESSION_STORAGE_KEY, address, GAME_ADDRESS)
+    if (!stored?.snapshot?.moveHistory?.length || !stored.hash) return
+    const localSeed = BigInt(stored.hash.slice(0, 18))
+    const restoredSession = replayMoveHistory(localSeed, stored.snapshot.moveHistory)
+    ;(window as any).currentPieces = restoredSession.currentPieces
+    useGameStore.setState({
+      gameSession: restoredSession,
+      score: restoredSession.score,
+      comboStreak: restoredSession.comboStreak,
+      currentPieces: [...restoredSession.currentPieces],
+      isGameOver: restoredSession.isGameOver,
+    })
+  }
+
+  const startNewGame = () => {
+    clearStoredGameSession(CLASSIC_SESSION_STORAGE_KEY)
+    forceReset()
+    handleStartGame()
+  }
+
   const isMiniPayConnecting = IS_MINIPAY && !isConnected
 
   const commonCanvasProps = {
@@ -856,6 +919,9 @@ const GameScreen: React.FC<GameScreenProps> = ({
     setSessionConflict,
     onOpenLeaderboard,
     startGameError,
+    hasStoredGame,
+    continueGame,
+    startNewGame,
   }
 
   const canvasArea = (
@@ -989,6 +1055,9 @@ interface CanvasAreaProps {
   setSessionConflict: (v: boolean) => void
   onOpenLeaderboard?: () => void
   startGameError?: Error | null
+  hasStoredGame: boolean
+  continueGame: () => void
+  startNewGame: () => void
 
   // GoodDollar Props
   gModeEnabled: boolean
@@ -1011,6 +1080,9 @@ const ClassicStartCard: React.FC<{
   forceReset: () => void
   setSessionConflict: (v: boolean) => void
   startGameError?: Error | null
+  hasStoredGame: boolean
+  continueGame: () => void
+  startNewGame: () => void
 
   // GoodDollar Props
   gModeEnabled: boolean
@@ -1031,6 +1103,9 @@ const ClassicStartCard: React.FC<{
   forceReset,
   setSessionConflict,
   startGameError,
+  hasStoredGame,
+  continueGame,
+  startNewGame,
   gModeEnabled,
   setGModeEnabled,
   isWhitelisted,
@@ -1046,8 +1121,8 @@ const ClassicStartCard: React.FC<{
 
   return (
   <div
-    className="relative z-10 flex w-full flex-col gap-5 rounded-[6px] border-4 border-ink bg-paper px-7 py-8"
-    style={{ boxShadow: '10px 10px 0 var(--accent-yellow)' }}
+    className="relative z-10 flex w-full flex-col gap-4 rounded-[6px] border-4 border-ink bg-paper px-4 py-5 sm:gap-5 sm:px-7 sm:py-8"
+    style={{ boxShadow: '6px 6px 0 var(--accent-yellow)' }}
   >
     <div
       className="w-fit border-4 border-ink bg-accent-yellow px-6 py-2 font-display text-sm tracking-[0.15em]"
@@ -1059,7 +1134,7 @@ const ClassicStartCard: React.FC<{
     {/* Hero Image */}
     <div className="relative overflow-hidden border-4 border-ink bg-paper-2 shadow-[6px_6px_0_var(--shadow)]">
       <img
-        src="/hero.png"
+        src="/hero.webp"
         alt="Blokaz Game Preview"
         className="block h-auto w-full"
       />
@@ -1069,7 +1144,7 @@ const ClassicStartCard: React.FC<{
     <div
       className="text-center font-display uppercase"
       style={{
-        fontSize: 32,
+        fontSize: 'clamp(1.4rem, 7.5vw, 2rem)',
         letterSpacing: '-0.03em',
         lineHeight: 1.1,
       }}
@@ -1088,8 +1163,20 @@ const ClassicStartCard: React.FC<{
       </span>{' '}
       RUN?
     </div>
+    {/* CONTINUE GAME — shown when a saved snapshot exists */}
+    {hasStoredGame && (
+      <button
+        onClick={continueGame}
+        disabled={isPending || isConfirming || isSyncingContract || isMiniPayConnecting}
+        className="brutal-btn flex w-full items-center justify-center gap-3 border-4 border-ink bg-accent-lime py-5 font-display text-sm uppercase tracking-[0.15em] shadow-[6px_6px_0_var(--shadow)] disabled:opacity-70"
+        style={{ color: 'var(--ink-fixed)' }}
+      >
+        ▶ CONTINUE GAME
+      </button>
+    )}
+
     <button
-      onClick={handleStartGame}
+      onClick={hasStoredGame ? startNewGame : handleStartGame}
       disabled={
         isPending ||
         isConfirming ||
@@ -1097,7 +1184,9 @@ const ClassicStartCard: React.FC<{
         isMiniPayConnecting ||
         sessionConflict
       }
-      className="brutal-btn flex w-full items-center justify-center gap-3 border-4 border-ink bg-accent-lime py-5 font-display text-sm uppercase tracking-[0.15em] shadow-[6px_6px_0_var(--shadow)] disabled:opacity-70"
+      className={`brutal-btn flex w-full items-center justify-center gap-3 border-4 border-ink py-5 font-display text-sm uppercase tracking-[0.15em] shadow-[6px_6px_0_var(--shadow)] disabled:opacity-70 ${
+        hasStoredGame ? 'bg-paper-2' : 'bg-accent-lime'
+      }`}
       style={{ color: 'var(--ink-fixed)' }}
     >
       {isMiniPayConnecting ? (
@@ -1112,6 +1201,8 @@ const ClassicStartCard: React.FC<{
         </>
       ) : sessionConflict ? (
         'SESSION CONFLICT'
+      ) : hasStoredGame ? (
+        'START NEW GAME'
       ) : (
         'START CLASSIC GAME'
       )}
@@ -1384,6 +1475,9 @@ const CanvasArea: React.FC<CanvasAreaProps> = ({
   setSessionConflict,
   onOpenLeaderboard,
   startGameError,
+  hasStoredGame,
+  continueGame,
+  startNewGame,
   gModeEnabled,
   setGModeEnabled,
   isWhitelisted,
@@ -1404,6 +1498,9 @@ const CanvasArea: React.FC<CanvasAreaProps> = ({
         forceReset={forceReset}
         setSessionConflict={setSessionConflict}
         startGameError={startGameError}
+        hasStoredGame={hasStoredGame}
+        continueGame={continueGame}
+        startNewGame={startNewGame}
         gModeEnabled={gModeEnabled}
         setGModeEnabled={setGModeEnabled}
         isWhitelisted={isWhitelisted}
@@ -1432,7 +1529,7 @@ const CanvasArea: React.FC<CanvasAreaProps> = ({
               }}
             />
             <div
-              className="pointer-events-none absolute left-0 z-[1] grid grid-cols-3 border-[3px] border-ink p-5"
+              className="pointer-events-none absolute left-0 z-[1] grid grid-cols-3 border-[3px] border-ink p-3 sm:p-5"
               style={{
                 background: 'var(--piece-tray-bg)',
                 top: canvasDims.trayY,
@@ -1542,7 +1639,7 @@ const LeftRail: React.FC<{
   <div className="flex w-full flex-col gap-5">
     <div
       className="border-4 border-ink p-5"
-      style={{ background: 'var(--ink)', boxShadow: '6px 6px 0 var(--shadow)' }}
+      style={{ background: 'var(--ink-fixed)', boxShadow: '6px 6px 0 var(--shadow)' }}
     >
       <div
         className="brutal-label mb-2 opacity-100"
@@ -1550,8 +1647,8 @@ const LeftRail: React.FC<{
         LIVE SCORE
       </div>
       <div
-        className="font-display tabular-nums text-paper"
-        style={{ fontSize: 64, letterSpacing: '-0.04em', lineHeight: 0.95 }}
+        className="font-display tabular-nums"
+        style={{ fontSize: 64, letterSpacing: '-0.04em', lineHeight: 0.95, color: '#ffffff' }}
       >
         {score.toLocaleString()}
       </div>
@@ -1687,7 +1784,7 @@ const RightRail: React.FC<{
             </span>
             <button
               onClick={() => setShowShare(false)}
-              className="brutal-btn flex h-7 w-7 items-center justify-center border-2 border-ink"
+              className="brutal-btn flex h-7 w-7 items-center justify-center border-2 border-ink text-ink"
               style={{
                 background: 'var(--paper-2)',
                 boxShadow: '2px 2px 0 var(--shadow)',
@@ -1775,7 +1872,7 @@ const MobileLayout: React.FC<MobileLayoutProps> = ({
         {/* ── Game chrome: back / status / pause ──────────────────── */}
         <div className="flex shrink-0 items-center justify-between border-b-4 border-ink bg-paper px-3 py-1.5">
           <button
-            className="brutal-btn border-[3px] border-ink bg-paper p-1.5"
+            className="brutal-btn border-[3px] border-ink bg-paper p-1.5 text-ink"
             style={{ boxShadow: '2px 2px 0 var(--shadow)' }}
             onClick={onBack ?? (() => window.history.back())}
           >
@@ -1786,7 +1883,7 @@ const MobileLayout: React.FC<MobileLayoutProps> = ({
           <div />
 
           <button
-            className="brutal-btn border-[3px] border-ink bg-paper p-1.5"
+            className="brutal-btn border-[3px] border-ink bg-paper p-1.5 text-ink"
             style={{ boxShadow: '2px 2px 0 var(--shadow)' }}
           >
             <BrutalIcon name="pause" size={16} strokeWidth={3} />

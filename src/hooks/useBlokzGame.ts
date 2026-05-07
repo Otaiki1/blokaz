@@ -11,9 +11,9 @@ import { BLOKZ_GAME_ABI, BLOKZ_TOURNAMENT_ABI } from '../constants/abi'
 import contractInfo from '../contract.json'
 import { isMiniPay } from '../utils/miniPay'
 
-// MiniPay only supports legacy (type 0) transactions — EIP-1559 is not supported.
-// Wagmi tx overrides. For MiniPay users, we MUST force type: 'legacy' (0x0).
-// Modern wallets default to EIP-1559 (0x2), which MiniPay explicitly rejects.
+// MiniPay only supports legacy (type 0) transactions — EIP-1559 (type 2) is not supported.
+// MiniPay handles gas fee abstraction natively; dApps must NOT set feeCurrency here.
+// feeCurrency requires CIP-64 (type 0x7b) which is incompatible with type: 'legacy'.
 const getTxOverrides = () =>
   isMiniPay()
     ? { type: 'legacy' as const }
@@ -76,6 +76,13 @@ const ERC20_ABI = [
     ],
     outputs: [{ name: '', type: 'bool' }],
     stateMutability: 'nonpayable'
+  },
+  {
+    type: 'function',
+    name: 'balanceOf',
+    inputs: [{ name: 'account', type: 'address' }],
+    outputs: [{ name: '', type: 'uint256' }],
+    stateMutability: 'view'
   }
 ] as const
 
@@ -235,6 +242,20 @@ export function useUSDCAllowance(ownerAddress?: `0x${string}`) {
   return { allowance: allowance as bigint | undefined, isLoading, refetch }
 }
 
+/**
+ * Hook to check the user's USDC balance on Celo mainnet.
+ */
+export function useUSDCBalance(ownerAddress?: `0x${string}`) {
+  const { data: balance, isLoading, refetch } = useReadContract({
+    address: USDC_ADDRESS,
+    abi: ERC20_ABI,
+    functionName: 'balanceOf',
+    args: ownerAddress ? [ownerAddress] : undefined,
+    query: { enabled: !!ownerAddress, refetchInterval: 15_000 }
+  })
+
+  return { balance: balance as bigint | undefined, isLoading, refetch }
+}
 
 /**
  * Hook to get a player's registered username.

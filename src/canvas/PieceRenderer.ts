@@ -27,10 +27,13 @@ export class PieceRenderer {
     const palette = isTournament ? TOURNAMENT_PALETTE : COLOR_PALETTE
 
     pieces.forEach((shape, index) => {
-      // Draw slot divider (except before the first slot)
+      // Draw slot divider (except before the first slot).
+      // Use a dark semi-transparent line so it stays subtle on both the
+      // yellow light-theme tray and the coloured dark-theme tray (where
+      // --ink is light and would appear as a harsh white stripe).
       if (index > 0) {
-        this.ctx.strokeStyle = getThemeColor('--ink')
-        this.ctx.lineWidth = 4
+        this.ctx.strokeStyle = 'rgba(0,0,0,0.28)'
+        this.ctx.lineWidth = 3
         this.ctx.beginPath()
         this.ctx.moveTo(index * slotWidth, this.trayY)
         this.ctx.lineTo(index * slotWidth, this.trayY + slotWidth)
@@ -92,18 +95,19 @@ export class PieceRenderer {
       this.ctx.fillStyle = color
       this.ctx.fillRect(cx, cy, size, size)
 
-      // Top highlight
-      this.ctx.fillStyle = 'rgba(255,255,255,0.4)'
-      this.ctx.fillRect(cx, cy, size, Math.floor(size * 0.28))
+      // Top highlight — subtle shimmer, not a glaring white band
+      this.ctx.fillStyle = 'rgba(255,255,255,0.18)'
+      this.ctx.fillRect(cx, cy, size, Math.floor(size * 0.26))
 
       // Bottom shadow
-      const sh = Math.floor(size * 0.28)
-      this.ctx.fillStyle = 'rgba(0,0,0,0.12)'
+      const sh = Math.floor(size * 0.26)
+      this.ctx.fillStyle = 'rgba(0,0,0,0.14)'
       this.ctx.fillRect(cx, cy + size - sh, size, sh)
 
-      // Ink border
-      this.ctx.strokeStyle = getThemeColor('--ink')
-      this.ctx.lineWidth = 2.5
+      // Border: always dark semi-transparent so it contrasts with the piece
+      // colour in every theme (--ink is light in dark themes = white outlines)
+      this.ctx.strokeStyle = 'rgba(0,0,0,0.4)'
+      this.ctx.lineWidth = 2
       this.ctx.strokeRect(cx, cy, size, size)
     }
   }
