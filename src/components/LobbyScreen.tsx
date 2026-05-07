@@ -197,7 +197,7 @@ const MiniMetric: React.FC<{ label: string; value: string; background: string }>
     >
       <div
         className="font-display text-[8px] tracking-[0.14em]"
-        style={{ color: labelColor, opacity: isColoredSurface ? 0.7 : 1 }}
+        style={{ color: labelColor }}
       >
         {label}
       </div>
@@ -343,7 +343,7 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({ onPlayClassic, onPlayTourname
             <div
               style={{
                 color: 'var(--danger)',
-                WebkitTextStroke: '1px var(--ink)',
+                WebkitTextStroke: '2px var(--ink)',
                 paintOrder: 'stroke fill',
                 animation: 'lobbySlideWord 400ms cubic-bezier(0.22,1,0.36,1) both',
                 animationDelay: '300ms',
@@ -370,7 +370,7 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({ onPlayClassic, onPlayTourname
             className="flex flex-col items-center justify-center border-r-[3px] border-ink py-4"
             style={{ background: 'var(--paper)' }}
           >
-            <span className="mb-1 font-display text-[9px] tracking-[0.16em]" style={{ color: 'var(--ink-fixed)', opacity: 0.7 }}>BEST</span>
+            <span className="mb-1 font-display text-[9px] tracking-[0.16em]" style={{ color: 'var(--ink-fixed)' }}>BEST</span>
             <span
               className="font-display"
               style={{ letterSpacing: '-0.03em', fontSize: 'clamp(16px,5.5vw,28px)', color: 'var(--ink-fixed)' }}
@@ -382,7 +382,7 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({ onPlayClassic, onPlayTourname
             className="flex flex-col items-center justify-center border-r-[3px] border-ink py-4"
             style={{ background: 'var(--accent-pink)' }}
           >
-            <span className="mb-1 font-display text-[9px] tracking-[0.16em]" style={{ color: 'var(--ink-fixed)', opacity: 0.7 }}>RANK</span>
+            <span className="mb-1 font-display text-[9px] tracking-[0.16em]" style={{ color: 'var(--ink-fixed)' }}>RANK</span>
             <span
               className="font-display"
               style={{ letterSpacing: '-0.03em', fontSize: 'clamp(16px,5.5vw,28px)', color: 'var(--ink-fixed)' }}
@@ -394,7 +394,7 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({ onPlayClassic, onPlayTourname
             className="flex flex-col items-center justify-center py-4"
             style={{ background: 'var(--accent-lime)' }}
           >
-            <span className="mb-1 font-display text-[9px] tracking-[0.16em]" style={{ color: 'var(--ink-fixed)', opacity: 0.7 }}>WON</span>
+            <span className="mb-1 font-display text-[9px] tracking-[0.16em]" style={{ color: 'var(--ink-fixed)' }}>WON</span>
             <span
               className="font-display"
               style={{ letterSpacing: '-0.03em', fontSize: 'clamp(16px,5.5vw,28px)', color: 'var(--ink-fixed)' }}
@@ -425,9 +425,9 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({ onPlayClassic, onPlayTourname
           </div>
           <div className="flex-1 px-4 py-4">
             <div className="flex items-center justify-between font-display text-xl tracking-[0.04em] text-white">
-              PLAY CLASSIC <span className="text-2xl leading-none opacity-70">→</span>
+              PLAY CLASSIC <span className="text-2xl leading-none">→</span>
             </div>
-            <div className="mt-1 font-display text-[10px] tracking-[0.1em]" style={{ color: '#FFFFFF', opacity: 0.9 }}>
+            <div className="mt-1 font-display text-[10px] tracking-[0.1em]" style={{ color: '#FFFFFF' }}>
               Weekly leaderboard · Free
             </div>
           </div>
@@ -463,9 +463,9 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({ onPlayClassic, onPlayTourname
             </div>
             <div className="flex-1 px-4 py-4">
               <div className="flex items-center justify-between font-display text-xl tracking-[0.04em] text-white">
-                TOURNAMENTS <span className="text-2xl leading-none opacity-70">→</span>
+                TOURNAMENTS <span className="text-2xl leading-none">→</span>
               </div>
-              <div className="mt-1 font-display text-[10px] tracking-[0.1em]" style={{ color: '#FFFFFF', opacity: 0.9 }}>
+              <div className="mt-1 font-display text-[10px] tracking-[0.1em]" style={{ color: '#FFFFFF' }}>
                 {activeTournaments > 0
                   ? <><span style={{ animation: 'loaderPulse 1.4s ease-in-out infinite' }}>●</span> {animatedLive} open · $1–$10 entry</>
                   : 'View all brackets'}
