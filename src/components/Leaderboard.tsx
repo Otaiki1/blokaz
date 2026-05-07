@@ -104,7 +104,19 @@ const RANK_ACCENT: Record<number, string> = {
 
 const Leaderboard: React.FC<LeaderboardProps> = ({ isOpen, onClose }) => {
   const { address } = useAccount()
-  const { leaderboard, isLoading, currentEpoch } = useLeaderboard()
+  const { currentEpoch } = useLeaderboard()
+  const [viewEpoch, setViewEpoch] = useState<bigint | undefined>(undefined)
+
+  // When the panel opens or currentEpoch loads, reset to current epoch
+  useEffect(() => {
+    if (isOpen && currentEpoch !== undefined) setViewEpoch(currentEpoch)
+  }, [isOpen, currentEpoch])
+
+  const { leaderboard, isLoading } = useLeaderboard(viewEpoch)
+
+  const isCurrentEpoch = viewEpoch === undefined || viewEpoch === currentEpoch
+  const canGoBack = viewEpoch !== undefined && viewEpoch > 0n
+  const canGoForward = !isCurrentEpoch
 
   return (
     <>
@@ -138,10 +150,30 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ isOpen, onClose }) => {
             >
               CLASSIC RANKINGS
             </div>
-            <div className="mt-3 inline-flex items-center border-2 border-paper bg-accent-yellow px-3 py-1 font-display text-[11px] tracking-[0.16em] text-ink">
-              {currentEpoch !== undefined
-                ? `EPOCH #${currentEpoch.toString()}`
-                : 'LOADING...'}
+            {/* Epoch navigation */}
+            <div className="mt-3 flex items-center gap-2">
+              <button
+                onClick={() => setViewEpoch(e => e !== undefined && e > 0n ? e - 1n : e)}
+                disabled={!canGoBack}
+                className="flex h-7 w-7 items-center justify-center border-2 border-paper font-display text-paper disabled:opacity-30"
+                style={{ background: 'transparent' }}
+              >
+                ‹
+              </button>
+              <div className="inline-flex items-center gap-2 border-2 border-paper bg-accent-yellow px-3 py-1 font-display text-[11px] tracking-[0.16em] text-ink">
+                {viewEpoch !== undefined ? `WEEK #${viewEpoch.toString()}` : 'LOADING...'}
+                {!isCurrentEpoch && (
+                  <span className="border border-ink bg-ink px-1 text-[9px] text-paper">PAST</span>
+                )}
+              </div>
+              <button
+                onClick={() => setViewEpoch(e => e !== undefined ? e + 1n : e)}
+                disabled={!canGoForward}
+                className="flex h-7 w-7 items-center justify-center border-2 border-paper font-display text-paper disabled:opacity-30"
+                style={{ background: 'transparent' }}
+              >
+                ›
+              </button>
             </div>
           </div>
           <button
@@ -255,9 +287,11 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ isOpen, onClose }) => {
                 className="border-4 border-ink p-8 text-center"
                 style={{ background: 'var(--paper-2)' }}
               >
-                <div className="mb-2 font-display text-xl">NO SCORES YET</div>
+                <div className="mb-2 font-display text-xl">
+                  {isCurrentEpoch ? 'NO SCORES YET' : 'NO SCORES THIS WEEK'}
+                </div>
                 <div className="font-body text-sm italic opacity-80">
-                  Be the first to claim the throne
+                  {isCurrentEpoch ? 'Be the first to claim the throne' : 'Nobody played this week'}
                 </div>
               </div>
             )}
