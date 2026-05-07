@@ -121,12 +121,13 @@ const SplashScreen: React.FC<SplashScreenProps> = ({ onDone }) => {
             <div style={{ flex: 1, height: 2, background: `${YELLOW}40` }} />
           </div>
 
-          {/* ── Blokaz game logo ── */}
+          {/* ── Blokaz game logo — LCP element, load with high priority ── */}
           <picture style={{ width: '80%', maxWidth: 280 }}>
             <source srcSet="/Blokaz_logo.webp" type="image/webp" />
             <img
               src="/Blokaz_logo.png"
               alt="Blokaz"
+              fetchPriority="high"
               style={{ width: '100%', height: 'auto', display: 'block' }}
             />
           </picture>

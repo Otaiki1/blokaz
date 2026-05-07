@@ -16,9 +16,9 @@ const AppFooter: React.FC = () => {
       className="w-full border-t-[2px] border-ink"
       style={{ background: 'var(--paper)', paddingTop: 10, paddingBottom: 10 }}
     >
-      <div className="mx-auto flex max-w-[1440px] flex-wrap items-center justify-center gap-x-5 gap-y-1 px-4">
+      <div className="mx-auto flex max-w-[1440px] flex-wrap items-center justify-center gap-x-1 gap-y-0 px-4">
         <span
-          className="font-display text-[9px] tracking-[0.12em]"
+          className="px-2 py-3 font-display text-[9px] tracking-[0.12em]"
           style={{ color: 'var(--ink-soft)', opacity: 0.6 }}
         >
           © {new Date().getFullYear()} BLOKAZ
@@ -28,7 +28,7 @@ const AppFooter: React.FC = () => {
           href={TOS_URL}
           target="_blank"
           rel="noopener noreferrer"
-          className="font-display text-[9px] tracking-[0.12em] underline-offset-2 hover:underline"
+          className="px-2 py-3 font-display text-[9px] tracking-[0.12em] underline-offset-2 hover:underline"
           style={{ color: 'var(--ink-soft)' }}
         >
           TERMS
@@ -38,7 +38,7 @@ const AppFooter: React.FC = () => {
           href={PRIVACY_URL}
           target="_blank"
           rel="noopener noreferrer"
-          className="font-display text-[9px] tracking-[0.12em] underline-offset-2 hover:underline"
+          className="px-2 py-3 font-display text-[9px] tracking-[0.12em] underline-offset-2 hover:underline"
           style={{ color: 'var(--ink-soft)' }}
         >
           PRIVACY
@@ -48,7 +48,7 @@ const AppFooter: React.FC = () => {
           href={ABOUT_URL}
           target="_blank"
           rel="noopener noreferrer"
-          className="font-display text-[9px] tracking-[0.12em] underline-offset-2 hover:underline"
+          className="px-2 py-3 font-display text-[9px] tracking-[0.12em] underline-offset-2 hover:underline"
           style={{ color: 'var(--ink-soft)' }}
         >
           ABOUT
@@ -58,10 +58,9 @@ const AppFooter: React.FC = () => {
           href={TELEGRAM_SUPPORT}
           target="_blank"
           rel="noopener noreferrer"
-          className="flex items-center gap-1 font-display text-[9px] tracking-[0.12em] underline-offset-2 hover:underline"
+          className="flex items-center gap-1 px-2 py-3 font-display text-[9px] tracking-[0.12em] underline-offset-2 hover:underline"
           style={{ color: 'var(--ink-soft)' }}
         >
-          {/* Telegram send icon */}
           <svg
             width="11"
             height="11"
