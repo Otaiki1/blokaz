@@ -318,12 +318,6 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
     return parts.join('\n')
   }
 
-  const handleShareWarpcast = () => {
-    const text = buildShareText(true)
-    const url = `https://warpcast.com/~/compose?text=${encodeURIComponent(text)}&embeds[]=${encodeURIComponent('https://blokaz.xyz')}`
-    window.open(url, '_blank', 'noopener,noreferrer')
-  }
-
   const handleShareTwitter = () => {
     // No &url= param — emoji board + hashtags fill ~270 chars, adding a URL would exceed 280
     const text = buildShareText(false)
@@ -547,17 +541,11 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
                   </button>
                 </div>
                 <div className="flex gap-2 p-2.5">
-                  <button onClick={handleShareWarpcast}
-                    className="brutal-btn flex flex-1 items-center justify-center gap-1.5 border-[3px] border-ink py-2.5 font-display text-[10px] uppercase tracking-wider shadow-[3px_3px_0_var(--shadow)]"
-                    style={{ background: 'var(--accent-pink)', color: 'var(--ink-fixed)' }}>
-                    <span className="flex h-4 w-4 items-center justify-center border-[2px] border-ink text-[8px] font-bold" style={{ background: 'var(--ink-fixed)', color: 'var(--accent-pink)' }}>W</span>
-                    WARPCAST
-                  </button>
                   <button onClick={handleShareTwitter}
-                    className="brutal-btn flex flex-1 items-center justify-center gap-1.5 border-[3px] border-ink py-2.5 font-display text-[10px] uppercase tracking-wider shadow-[3px_3px_0_var(--shadow)]"
+                    className="brutal-btn flex w-full items-center justify-center gap-1.5 border-[3px] border-ink py-2.5 font-display text-[10px] uppercase tracking-wider shadow-[3px_3px_0_var(--shadow)]"
                     style={{ background: 'var(--ink)', color: 'var(--paper)' }}>
                     <span className="flex h-4 w-4 items-center justify-center border-[2px] border-paper text-[8px] font-bold" style={{ background: 'var(--paper)', color: 'var(--ink)' }}>X</span>
-                    TWITTER
+                    SHARE ON X
                   </button>
                 </div>
               </div>
