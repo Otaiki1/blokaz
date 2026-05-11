@@ -449,7 +449,7 @@ const AboutBody: React.FC<{ onClose: () => void }> = ({ onClose }) => (
   <div className="flex flex-col items-center gap-6 px-6 py-8">
     <div
       className="w-full max-w-[280px] border-4 border-ink p-4"
-      style={{ background: 'var(--ink)', boxShadow: '6px 6px 0 var(--shadow)' }}
+      style={{ background: 'var(--ink-fixed)', boxShadow: '6px 6px 0 var(--shadow)' }}
     >
       <img
         src="/crackedstudioslogo.webp"

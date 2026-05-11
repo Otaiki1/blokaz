@@ -38,7 +38,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="talentapp:project_verification" content="90311590842b835040b6ea565b383a5eff96a4c7c26ceaddababe71e0a74d4eed6bc70f989070703284e868f4936a2bf4ee8aef92d07c358ea9df10032d3ab6f" />
     <title>BLOKAZ — Stack. Smash. Stake.</title>
-    <meta name="description" content="Blokaz is a block-stacking puzzle game on Celo. Play free, climb the weekly leaderboard, and stake with GoodDollar. Available on MiniPay." />
+    <meta name="description" content="Blokaz is a block-stacking puzzle game on Celo. Play free, climb the weekly leaderboard, and stake with stablecoins. Available on MiniPay." />
     <!-- Preload both splash images so browser fetches them before JS executes -->
     <link rel="preload" as="image" href="/crackedstudioslogo.webp" type="image/webp" fetchpriority="high" />
     <link rel="preload" as="image" href="/Blokaz_logo.webp" type="image/webp" />
@@ -50,6 +50,10 @@
     <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Space+Grotesk:wght@400;500;700&display=swap" />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Space+Grotesk:wght@400;500;700&display=swap" media="print" onload="this.media='all'" />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Space+Grotesk:wght@400;500;700&display=swap" /></noscript>
+    <!-- Preload Inter early — web3auth injects this at runtime, preloading avoids the late critical-path fetch -->
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" media="print" onload="this.media='all'" crossorigin />
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" /></noscript>
     <!-- Static splash shell — mirrors SplashScreen.tsx, shown before React boots -->
     <style>
       *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
