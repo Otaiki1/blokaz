@@ -65,6 +65,11 @@ export default defineConfig({
           ) {
             return 'vendor-wagmi'
           }
+          // TanStack Query: data-fetching runtime; was bundled into vendor-wagmi,
+          // splitting it out lets wagmi and tanstack load simultaneously.
+          if (id.includes('node_modules/@tanstack')) {
+            return 'vendor-tanstack'
+          }
         },
       },
     },
