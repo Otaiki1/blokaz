@@ -35,63 +35,108 @@ const UsernameRegistration: React.FC = () => {
   const { username, refetch } = useUsername(address)
   const { setUsername, isPending, isConfirming, isSuccess } = useSetUsername()
   const [newName, setNewName] = useState('')
+  const [justSaved, setJustSaved] = useState(false)
 
   useEffect(() => {
     if (isSuccess) {
       refetch()
       setNewName('')
+      setJustSaved(true)
+      const t = setTimeout(() => setJustSaved(false), 2500)
+      return () => clearTimeout(t)
     }
   }, [isSuccess, refetch])
 
   if (!address) return null
 
+  const isBusy = isPending || isConfirming
+  const isValid = newName.length >= 3
+  const tooShort = newName.length > 0 && newName.length < 3
+
   return (
     <div
-      className="relative z-20 mx-4 mb-4 border-4 border-ink p-4"
+      className="relative z-20 mx-4 mb-4 border-4 border-ink"
       style={{ background: 'var(--paper-2)', boxShadow: '4px 4px 0 var(--shadow)' }}
     >
-      <div className="mb-3 flex items-center justify-between">
-        <div className="font-display text-[10px] tracking-[0.14em]">
+      {/* Header bar */}
+      <div
+        className="flex items-center justify-between border-b-4 border-ink px-4 py-3"
+        style={{ background: 'var(--paper)' }}
+      >
+        <div className="font-display text-[10px] uppercase tracking-[0.16em]">
           {username ? 'UPDATE IDENTITY' : 'SET YOUR IDENTITY'}
         </div>
         {username && (
-          <span className="font-body text-xs opacity-60">
-            Current: <span className="font-bold">{username}</span>
+          <span
+            className="rounded-none border-[2px] border-ink px-2 py-0.5 font-display text-[9px] uppercase tracking-wider"
+            style={{ background: 'var(--accent-yellow)', color: 'var(--ink-fixed)' }}
+          >
+            {username}
           </span>
         )}
       </div>
-      <div className="flex gap-2">
-        <input
-          type="text"
-          value={newName}
-          onChange={(e) => setNewName(e.target.value)}
-          placeholder="3–16 characters"
-          maxLength={16}
-          disabled={isPending || isConfirming}
-          className="brutal-input flex-1 disabled:opacity-50"
-        />
+
+      {/* Input + button stacked */}
+      <div className="flex flex-col gap-3 p-4">
+        <div className="relative">
+          <input
+            type="text"
+            value={newName}
+            onChange={(e) => setNewName(e.target.value.replace(/[^a-zA-Z0-9_]/g, ''))}
+            placeholder="Choose a display name…"
+            maxLength={16}
+            disabled={isBusy}
+            className="brutal-input w-full pr-12 disabled:opacity-50"
+            style={{
+              borderColor: tooShort ? 'var(--danger, #e53e3e)' : 'var(--ink)',
+              transition: 'border-color 120ms',
+            }}
+          />
+          {/* Character counter */}
+          {newName.length > 0 && (
+            <span
+              className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 font-display text-[10px] tabular-nums"
+              style={{ color: tooShort ? 'var(--danger, #e53e3e)' : 'var(--ink-soft)', opacity: 0.7 }}
+            >
+              {newName.length}/16
+            </span>
+          )}
+        </div>
+
+        {/* Hint */}
+        <div className="font-display text-[9px] uppercase tracking-[0.12em]" style={{ color: 'var(--ink-soft)', minHeight: 14 }}>
+          {tooShort
+            ? <span style={{ color: 'var(--danger, #e53e3e)' }}>MIN 3 CHARACTERS</span>
+            : isConfirming
+              ? <span className="animate-pulse" style={{ color: 'var(--accent-cyan)' }}>CONFIRMING ON-CHAIN…</span>
+              : 'LETTERS, NUMBERS AND _ ONLY'}
+        </div>
+
+        {/* Full-width save button */}
         <button
           onClick={() => setUsername(newName)}
-          disabled={!newName || newName.length < 3 || isPending || isConfirming}
-          className="brutal-btn border-4 border-ink px-4 py-2 font-display text-[11px] tracking-[0.1em] disabled:opacity-40"
+          disabled={!isValid || isBusy}
+          className="brutal-btn flex w-full items-center justify-center gap-2 border-4 border-ink py-3 font-display text-[12px] uppercase tracking-[0.15em] shadow-[4px_4px_0_var(--shadow)] transition-colors disabled:opacity-40 disabled:shadow-none"
           style={{
-            background: 'var(--accent-lime)',
+            background: justSaved ? 'var(--accent-lime)' : 'var(--accent-yellow)',
             color: 'var(--ink-fixed)',
-            boxShadow: '4px 4px 0 var(--shadow)',
           }}
         >
-          {isPending || isConfirming ? (
-            <div className="brutal-loader" />
+          {isBusy ? (
+            <>
+              <div className="brutal-loader" />
+              {isConfirming ? 'CONFIRMING…' : 'SAVING…'}
+            </>
+          ) : justSaved ? (
+            <>
+              <BrutalIcon name="check" size={14} strokeWidth={3} />
+              SAVED!
+            </>
           ) : (
-            'SAVE'
+            'SAVE IDENTITY'
           )}
         </button>
       </div>
-      {isConfirming && (
-        <div className="mt-2 animate-pulse font-display text-[9px] tracking-[0.1em] text-accent-cyan">
-          CONFIRMING ON-CHAIN...
-        </div>
-      )}
     </div>
   )
 }
