@@ -48,6 +48,14 @@ export default defineConfig({
     ],
   },
   build: {
+    // Remove vendor-web3auth from the HTML modulepreload list.
+    // The main entry only loads it via a conditional dynamic import
+    // (Web3Provider, non-MiniPay path). Preloading it for every visitor
+    // would waste 450+ KiB for MiniPay users who never execute it.
+    modulePreload: {
+      resolveDependencies: (_filename, deps) =>
+        deps.filter((d) => !d.includes('vendor-web3auth')),
+    },
     rollupOptions: {
       output: {
         manualChunks: (id) => {
@@ -64,11 +72,6 @@ export default defineConfig({
             id.includes('node_modules/@wagmi')
           ) {
             return 'vendor-wagmi'
-          }
-          // TanStack Query: data-fetching runtime; was bundled into vendor-wagmi,
-          // splitting it out lets wagmi and tanstack load simultaneously.
-          if (id.includes('node_modules/@tanstack')) {
-            return 'vendor-tanstack'
           }
         },
       },

@@ -6,7 +6,6 @@ import { useTheme } from '../hooks/useTheme'
 import { BrutalIcon } from './BrutalIcon'
 import ThemeToggle from './ThemeToggle'
 import { IS_MINIPAY } from '../utils/miniPay'
-import { web3AuthConnector } from '../config/web3auth'
 import { useThemeStore, type UserTheme, type ThemeName } from '../stores/themeStore'
 import LegalModal, { type LegalModalType } from './LegalModal'
 
@@ -104,8 +103,9 @@ const LoginDropdown: React.FC<{ onConnectWallet: () => void }> = ({ onConnectWal
         >
           {/* ── Social (recommended) ── */}
           <button
-            onClick={() => {
+            onClick={async () => {
               setOpen(false)
+              const { web3AuthConnector } = await import('../config/web3auth')
               connect({ connector: web3AuthConnector })
             }}
             disabled={isSocialBusy}
