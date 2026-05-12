@@ -8,6 +8,7 @@ import ThemeToggle from './ThemeToggle'
 import { IS_MINIPAY } from '../utils/miniPay'
 import { useThemeStore, type UserTheme, type ThemeName } from '../stores/themeStore'
 import LegalModal, { type LegalModalType } from './LegalModal'
+import FAQSheet from './FAQSheet'
 
 type HeaderView = 'lobby' | 'classic' | 'tournaments' | 'tournament-play' | 'admin'
 
@@ -160,6 +161,7 @@ const THEME_OPTIONS: { value: UserTheme; label: string; icon: string }[] = [
 
 const SettingsSheet: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const [legalModal, setLegalModal] = React.useState<LegalModalType>(null)
+  const [showFAQ, setShowFAQ] = React.useState(false)
   const { userTheme, setUserTheme } = useThemeStore((s) => ({
     userTheme: s.userTheme,
     setUserTheme: s.setUserTheme,
@@ -279,6 +281,24 @@ const SettingsSheet: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                     <span className="ml-4 text-xl opacity-40">→</span>
                   </button>
                 ))}
+                {/* FAQ */}
+                <button
+                  onClick={() => setShowFAQ(true)}
+                  className="flex w-full items-center justify-between border-[3px] border-ink px-5 py-4 text-left"
+                  style={{
+                    background: 'var(--accent-yellow)',
+                    color: 'var(--ink-fixed)',
+                    boxShadow: '4px 4px 0 var(--shadow)',
+                  }}
+                >
+                  <div>
+                    <div className="font-display text-[12px] uppercase tracking-[0.12em]">Help & FAQ</div>
+                    <div className="mt-0.5 font-body text-[10px]" style={{ color: 'var(--ink-fixed)', opacity: 0.7 }}>Common questions answered</div>
+                  </div>
+                  <span className="ml-4 text-xl opacity-60">→</span>
+                </button>
+
+                {/* Support */}
                 <a
                   href={TELEGRAM_SUPPORT}
                   target="_blank"
@@ -312,6 +332,7 @@ const SettingsSheet: React.FC<{ onClose: () => void }> = ({ onClose }) => {
       </div>
 
       <LegalModal type={legalModal} onClose={() => setLegalModal(null)} />
+      {showFAQ && <FAQSheet onClose={() => setShowFAQ(false)} />}
     </div>
   )
 }

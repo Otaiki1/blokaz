@@ -13,6 +13,7 @@ import NoGasModal from './NoGasModal'
 import { ComboOverlay } from './ComboOverlay'
 import { BrutalIcon } from './BrutalIcon'
 import HowToPlayModal, { hasSeenOnboarding } from './HowToPlayModal'
+import FAQSheet from './FAQSheet'
 import {
   hapticImpact,
   hapticNotification,
@@ -1610,51 +1611,153 @@ const MobileLayout: React.FC<MobileLayoutProps> = ({
   onOpenLeaderboard,
   onBack,
   canvasArea,
-}) => (
-  <div className="flex w-full flex-col flex-1 min-h-0 overflow-hidden">
-    {gameSession && (
-      <>
-        {/* ── Game chrome: back / status / pause ──────────────────── */}
-        <div className="flex shrink-0 items-center justify-between border-b-4 border-ink bg-paper px-3 py-1.5">
-          <button
-            className="brutal-btn border-[3px] border-ink bg-paper p-1.5 text-ink"
-            style={{ boxShadow: '2px 2px 0 var(--shadow)' }}
-            onClick={onBack ?? (() => window.history.back())}
+}) => {
+  const [isPaused, setIsPaused] = useState(false)
+  const [showFAQ, setShowFAQ] = useState(false)
+  const [showHowToPlay, setShowHowToPlay] = useState(false)
+
+  return (
+    <div className="flex w-full flex-col flex-1 min-h-0 overflow-hidden">
+      {/* ── FAQ sheet ─────────────────────────────────────────────── */}
+      {showFAQ && <FAQSheet onClose={() => setShowFAQ(false)} />}
+
+      {/* ── How to play (re-opened from pause) ────────────────────── */}
+      {showHowToPlay && (
+        <HowToPlayModal onDone={() => setShowHowToPlay(false)} />
+      )}
+
+      {gameSession && (
+        <>
+          {/* ── Game chrome: back / status / pause ──────────────────── */}
+          <div className="flex shrink-0 items-center justify-between border-b-4 border-ink bg-paper px-3 py-1.5">
+            <button
+              className="brutal-btn border-[3px] border-ink bg-paper p-1.5 text-ink"
+              style={{ boxShadow: '2px 2px 0 var(--shadow)' }}
+              onClick={onBack ?? (() => window.history.back())}
+            >
+              <BrutalIcon name="back" size={16} strokeWidth={3} />
+            </button>
+
+            {/* centre — intentionally empty */}
+            <div />
+
+            <button
+              className="brutal-btn border-[3px] border-ink bg-paper p-1.5 text-ink"
+              style={{ boxShadow: '2px 2px 0 var(--shadow)' }}
+              onClick={() => setIsPaused(true)}
+            >
+              <BrutalIcon name="pause" size={16} strokeWidth={3} />
+            </button>
+          </div>
+
+          {/* ── Compact score + tension bar ──────────────────────────── */}
+          <div className="shrink-0">
+            <ScoreBar
+              score={score}
+              comboStreak={comboStreak}
+              bestScore={bestScore}
+              compact
+            />
+          </div>
+        </>
+      )}
+
+      {/* ── Canvas fills all remaining vertical space ────────────────── */}
+      <div className={`relative flex flex-col min-h-0 flex-1 ${gameSession ? 'overflow-hidden' : 'overflow-auto'}`}>
+        {canvasArea}
+
+        {/* ── Pause overlay — sits above canvas, blocks all touch ──── */}
+        {isPaused && gameSession && (
+          <div
+            className="absolute inset-0 z-50 flex flex-col items-center justify-center gap-0"
+            style={{ background: 'rgba(0,0,0,0.82)', backdropFilter: 'blur(4px)' }}
           >
-            <BrutalIcon name="back" size={16} strokeWidth={3} />
-          </button>
+            {/* Header strip */}
+            <div
+              className="w-full border-b-4 border-ink px-6 py-4 text-center"
+              style={{ background: 'var(--ink)' }}
+            >
+              <div className="flex items-center justify-center gap-3">
+                <BrutalIcon name="pause" size={16} strokeWidth={3} className="text-paper" />
+                <span className="font-display text-[14px] uppercase tracking-[0.24em] text-paper">
+                  PAUSED
+                </span>
+              </div>
+            </div>
 
-          {/* centre — intentionally empty; sync state shows via canvas overlay */}
-          <div />
+            {/* Score snapshot */}
+            <div
+              className="w-full border-b-4 border-ink px-6 py-3 text-center"
+              style={{ background: 'var(--paper-2)' }}
+            >
+              <div className="font-display text-[10px] uppercase tracking-widest" style={{ color: 'var(--ink-soft)' }}>
+                CURRENT SCORE
+              </div>
+              <div className="font-display text-[2rem] leading-tight tabular-nums" style={{ color: 'var(--ink)', letterSpacing: '-0.04em' }}>
+                {score.toLocaleString()}
+              </div>
+            </div>
 
-          <button
-            className="brutal-btn border-[3px] border-ink bg-paper p-1.5 text-ink"
-            style={{ boxShadow: '2px 2px 0 var(--shadow)' }}
-          >
-            <BrutalIcon name="pause" size={16} strokeWidth={3} />
-          </button>
-        </div>
+            {/* Menu buttons */}
+            <div className="flex w-full flex-col" style={{ background: 'var(--paper)' }}>
+              {/* Resume */}
+              <button
+                onClick={() => setIsPaused(false)}
+                className="brutal-btn flex items-center justify-between border-b-4 border-ink px-6 py-4 font-display text-[12px] uppercase tracking-[0.14em]"
+                style={{ background: 'var(--accent-lime)', color: 'var(--ink-fixed)' }}
+              >
+                <span className="flex items-center gap-3">
+                  <BrutalIcon name="play" size={16} strokeWidth={2.5} />
+                  RESUME GAME
+                </span>
+                <span>→</span>
+              </button>
 
-        {/* ── Compact score + tension bar ──────────────────────────── */}
-        <div className="shrink-0">
-          <ScoreBar
-            score={score}
-            comboStreak={comboStreak}
-            bestScore={bestScore}
-            compact
-          />
-        </div>
-      </>
-    )}
+              {/* How to play */}
+              <button
+                onClick={() => { setIsPaused(false); setShowHowToPlay(true) }}
+                className="brutal-btn flex items-center justify-between border-b-4 border-ink px-6 py-4 font-display text-[12px] uppercase tracking-[0.14em]"
+                style={{ background: 'var(--paper)', color: 'var(--ink)' }}
+              >
+                <span className="flex items-center gap-3">
+                  <BrutalIcon name="star" size={16} strokeWidth={2.5} />
+                  HOW TO PLAY
+                </span>
+                <span style={{ color: 'var(--ink-soft)' }}>→</span>
+              </button>
 
-    {/* ── Canvas fills all remaining vertical space ────────────────── */}
-    {/* overflow-hidden during gameplay keeps canvas crisp.          */}
-    {/* overflow-auto on the start-card lets short phones scroll it.  */}
-    <div className={`flex flex-col min-h-0 flex-1 ${gameSession ? 'overflow-hidden' : 'overflow-auto'}`}>
-      {canvasArea}
+              {/* Help / FAQ */}
+              <button
+                onClick={() => { setIsPaused(false); setShowFAQ(true) }}
+                className="brutal-btn flex items-center justify-between border-b-4 border-ink px-6 py-4 font-display text-[12px] uppercase tracking-[0.14em]"
+                style={{ background: 'var(--paper)', color: 'var(--ink)' }}
+              >
+                <span className="flex items-center gap-3">
+                  <BrutalIcon name="alert" size={16} strokeWidth={2.5} />
+                  HELP & FAQ
+                </span>
+                <span style={{ color: 'var(--ink-soft)' }}>→</span>
+              </button>
+
+              {/* Quit */}
+              <button
+                onClick={onBack ?? (() => window.history.back())}
+                className="brutal-btn flex items-center justify-between px-6 py-4 font-display text-[12px] uppercase tracking-[0.14em]"
+                style={{ background: 'var(--paper)', color: 'var(--piece-red)' }}
+              >
+                <span className="flex items-center gap-3">
+                  <BrutalIcon name="close" size={16} strokeWidth={2.5} />
+                  QUIT GAME
+                </span>
+                <span style={{ color: 'var(--piece-red)', opacity: 0.5 }}>→</span>
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
-  </div>
-)
+  )
+}
 
 interface DesktopLayoutProps {
   score: number
