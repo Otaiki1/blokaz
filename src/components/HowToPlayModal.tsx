@@ -194,7 +194,7 @@ const STEPS: Step[] = [
     tag: 'GAME OVER',
     tagColor: 'var(--piece-red)',
     title: <>GAME ENDS WHEN<br />NO PIECE FITS</>,
-    body: 'The game ends when none of the three tray pieces can be placed anywhere on the board. Your score is submitted to the network and ranked on the weekly leaderboard.',
+    body: 'The game ends when none of the three tray pieces can be placed anywhere on the board. Your score is saved and ranked on the weekly leaderboard.',
     visual: (
       <div className="flex flex-col items-center gap-3">
         <div className="grid border-[3px] border-ink" style={{ gridTemplateColumns: 'repeat(5, 22px)' }}>
@@ -230,23 +230,23 @@ const STEPS: Step[] = [
           </div>
         </div>
         <p className="font-display text-[9px] uppercase tracking-widest text-center" style={{ color: 'var(--ink-soft)' }}>
-          Scores go to the network automatically
+          Scores are saved automatically
         </p>
       </div>
     ),
   },
 
-  // ── Step 5: Wallet popups ────────────────────────────────────────────────
+  // ── Step 5: App popups ────────────────────────────────────────────────
   {
     tag: 'HEADS UP',
     tagColor: 'var(--accent-yellow)',
-    title: <>APPROVE WALLET<br />POPUPS TO PLAY</>,
-    body: 'Blokaz runs on the Celo network. Your wallet will pop up twice per game — once when you start, and once when your score is submitted. Always tap CONFIRM to proceed.',
+    title: <>APPROVE APP<br />POPUPS TO PLAY</>,
+    body: 'The app will ask for your approval twice per game — once when you start, and once when your score is saved. Just tap CONFIRM and you\'re good to go.',
     visual: (
       <div className="flex flex-col items-center gap-3 w-full px-2">
         {[
-          { moment: 'GAME START', action: 'Registers your session on the network', icon: 'play' as const, color: 'var(--accent-lime)' },
-          { moment: 'GAME OVER', action: 'Submits your final score to the network', icon: 'trending' as const, color: 'var(--accent-yellow)' },
+          { moment: 'GAME START', action: 'Starts and saves your game', icon: 'play' as const, color: 'var(--accent-lime)' },
+          { moment: 'GAME OVER', action: 'Saves your final score', icon: 'trending' as const, color: 'var(--accent-yellow)' },
         ].map(({ moment, action, icon, color }) => (
           <div
             key={moment}
