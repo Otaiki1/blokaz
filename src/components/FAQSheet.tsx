@@ -111,7 +111,7 @@ const FAQSheet: React.FC<FAQSheetProps> = ({ onClose }) => {
   const toggle = (i: number) => setOpenIndex(prev => (prev === i ? null : i))
 
   return (
-    <div className="fixed inset-0 z-[350] flex flex-col">
+    <div className="fixed inset-0 z-[400] flex flex-col pb-16 sm:pb-0">
       {/* Backdrop */}
       <button
         className="absolute inset-0 cursor-default"

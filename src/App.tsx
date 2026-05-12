@@ -101,6 +101,7 @@ const App: React.FC = () => {
       {!isPlayingGame && (
         <Header
           onShowLeaderboard={() => setShowLeaderboard(true)}
+          onHideLeaderboard={() => setShowLeaderboard(false)}
           showLeaderboardAction={true}
           isLeaderboardOpen={showLeaderboard}
           activeView={activeView}

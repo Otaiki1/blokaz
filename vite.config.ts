@@ -15,7 +15,7 @@ const deferCssPlugin = {
       /<link rel="stylesheet" crossorigin href="(\/assets\/[^"]+\.css)">/g,
       (_: string, href: string) =>
         `<link rel="preload" as="style" onload="this.onload=null;this.rel='stylesheet'" href="${href}" crossorigin>` +
-        `<noscript><link rel="stylesheet" href="${href}" crossorigin></noscript>`,
+        `<noscript><link rel="stylesheet" href="${href}" crossorigin></noscript>`
     )
   },
 }
@@ -44,6 +44,7 @@ export default defineConfig({
     allowedHosts: [
       'aptly-letter-rocklike.ngrok-free.dev',
       'd6c4-102-91-103-49.ngrok-free.app',
+      'b463-2c0f-f5c0-802-19f2-b1a7-2247-709b-4484.ngrok-free.app',
       'all',
     ],
   },
@@ -61,7 +62,10 @@ export default defineConfig({
         manualChunks: (id) => {
           // Web3Auth + toruslabs: large social-login SDK — split out so the main
           // entry stays small and these heavy modules load in parallel.
-          if (id.includes('node_modules/@web3auth') || id.includes('node_modules/@toruslabs')) {
+          if (
+            id.includes('node_modules/@web3auth') ||
+            id.includes('node_modules/@toruslabs')
+          ) {
             return 'vendor-web3auth'
           }
           // wagmi + viem: separate from main so the JS execution graph parallelises

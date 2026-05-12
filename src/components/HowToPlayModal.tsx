@@ -365,7 +365,7 @@ const HowToPlayModal: React.FC<HowToPlayModalProps> = ({ onDone }) => {
   }
 
   return (
-    <div className="fixed inset-0 z-[300] flex items-end justify-center sm:items-center px-0 sm:px-4">
+    <div className="fixed inset-0 z-[400] flex items-end justify-center sm:items-center px-0 sm:px-4 pb-16 sm:pb-0">
       {/* Backdrop */}
       <div
         className="absolute inset-0"

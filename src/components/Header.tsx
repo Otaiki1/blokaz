@@ -9,11 +9,13 @@ import { IS_MINIPAY } from '../utils/miniPay'
 import { useThemeStore, type UserTheme, type ThemeName } from '../stores/themeStore'
 import LegalModal, { type LegalModalType } from './LegalModal'
 import FAQSheet from './FAQSheet'
+import HowToPlayModal from './HowToPlayModal'
 
 type HeaderView = 'lobby' | 'classic' | 'tournaments' | 'tournament-play' | 'admin'
 
 interface HeaderProps {
   onShowLeaderboard?: () => void
+  onHideLeaderboard?: () => void
   onViewChange: (view: 'lobby' | 'classic' | 'tournaments' | 'admin') => void
   activeView: HeaderView
   showLeaderboardAction: boolean
@@ -162,6 +164,7 @@ const THEME_OPTIONS: { value: UserTheme; label: string; icon: string }[] = [
 const SettingsSheet: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const [legalModal, setLegalModal] = React.useState<LegalModalType>(null)
   const [showFAQ, setShowFAQ] = React.useState(false)
+  const [showHowToPlay, setShowHowToPlay] = React.useState(false)
   const { userTheme, setUserTheme } = useThemeStore((s) => ({
     userTheme: s.userTheme,
     setUserTheme: s.setUserTheme,
@@ -281,6 +284,23 @@ const SettingsSheet: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                     <span className="ml-4 text-xl opacity-40">→</span>
                   </button>
                 ))}
+                {/* How to Play */}
+                <button
+                  onClick={() => setShowHowToPlay(true)}
+                  className="flex w-full items-center justify-between border-[3px] border-ink px-5 py-4 text-left"
+                  style={{
+                    background: 'var(--accent-lime)',
+                    color: 'var(--ink-fixed)',
+                    boxShadow: '4px 4px 0 var(--shadow)',
+                  }}
+                >
+                  <div>
+                    <div className="font-display text-[12px] uppercase tracking-[0.12em]">How to Play</div>
+                    <div className="mt-0.5 font-body text-[10px]" style={{ color: 'var(--ink-fixed)', opacity: 0.7 }}>Step-by-step game guide</div>
+                  </div>
+                  <span className="ml-4 text-xl opacity-60">→</span>
+                </button>
+
                 {/* FAQ */}
                 <button
                   onClick={() => setShowFAQ(true)}
@@ -333,6 +353,7 @@ const SettingsSheet: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 
       <LegalModal type={legalModal} onClose={() => setLegalModal(null)} />
       {showFAQ && <FAQSheet onClose={() => setShowFAQ(false)} />}
+      {showHowToPlay && <HowToPlayModal onDone={() => setShowHowToPlay(false)} />}
     </div>
   )
 }
@@ -344,50 +365,88 @@ const MobileBottomNav: React.FC<{
   isLeaderboardOpen: boolean
   onViewChange: (view: 'lobby' | 'classic' | 'tournaments' | 'admin') => void
   onShowLeaderboard?: () => void
+  onHideLeaderboard?: () => void
   isOwner: boolean
-}> = ({ activeView, isLeaderboardOpen, onViewChange, onShowLeaderboard, isOwner }) => {
+}> = ({ activeView, isLeaderboardOpen, onViewChange, onShowLeaderboard, onHideLeaderboard, isOwner }) => {
   const [settingsOpen, setSettingsOpen] = useState(false)
+  // Prevent double-fires from rapid taps
+  const tapping = useRef(false)
+
+  const go = (action: () => void) => {
+    if (tapping.current) return
+    tapping.current = true
+    action()
+    setTimeout(() => { tapping.current = false }, 350)
+  }
+
+  // Close all overlays and navigate — guards against same-view re-taps
+  const navigate = (view: 'lobby' | 'classic' | 'tournaments' | 'admin') => {
+    go(() => {
+      setSettingsOpen(false)
+      // Close leaderboard if open
+      if (isLeaderboardOpen) onHideLeaderboard?.()
+      // No-op if already on this view (prevents spurious forceReset)
+      const alreadyThere =
+        view === 'lobby' ? activeView === 'lobby' :
+        view === 'classic' ? activeView === 'classic' :
+        view === 'tournaments' ? (activeView === 'tournaments' || activeView === 'tournament-play') :
+        view === 'admin' ? activeView === 'admin' : false
+      if (!alreadyThere) onViewChange(view)
+    })
+  }
+
+  const openLeaderboard = () => {
+    go(() => {
+      setSettingsOpen(false)
+      if (!isLeaderboardOpen) onShowLeaderboard?.()
+    })
+  }
+
+  const toggleSettings = () => {
+    go(() => {
+      if (isLeaderboardOpen) onHideLeaderboard?.()
+      setSettingsOpen(v => !v)
+    })
+  }
 
   const tabs = [
     {
       label: 'HOME',
       icon: 'home' as const,
-      active: activeView === 'lobby' && !settingsOpen,
-      onClick: () => { setSettingsOpen(false); onViewChange('lobby') },
+      active: activeView === 'lobby' && !isLeaderboardOpen && !settingsOpen,
+      onClick: () => navigate('lobby'),
     },
     {
       label: 'CLASSIC',
       icon: 'zap' as const,
       active: activeView === 'classic' && !isLeaderboardOpen && !settingsOpen,
-      onClick: () => { setSettingsOpen(false); onViewChange('classic') },
+      onClick: () => navigate('classic'),
     },
     {
       label: 'TOURNEY',
       icon: 'trophy' as const,
-      active: (activeView === 'tournaments' || activeView === 'tournament-play') && !settingsOpen,
-      onClick: () => { setSettingsOpen(false); onViewChange('tournaments') },
+      active: (activeView === 'tournaments' || activeView === 'tournament-play') && !isLeaderboardOpen && !settingsOpen,
+      onClick: () => navigate('tournaments'),
     },
     {
       label: 'RANKS',
       icon: 'trending' as const,
       active: isLeaderboardOpen && !settingsOpen,
-      onClick: () => { setSettingsOpen(false); onShowLeaderboard?.() },
+      onClick: openLeaderboard,
     },
     {
       label: 'SETTINGS',
       icon: 'wrench' as const,
       active: settingsOpen,
-      onClick: () => setSettingsOpen((v) => !v),
+      onClick: toggleSettings,
     },
     ...(isOwner
-      ? [
-          {
-            label: 'ADMIN',
-            icon: 'alert' as const,
-            active: activeView === 'admin' && !settingsOpen,
-            onClick: () => { setSettingsOpen(false); onViewChange('admin') },
-          },
-        ]
+      ? [{
+          label: 'ADMIN',
+          icon: 'alert' as const,
+          active: activeView === 'admin' && !isLeaderboardOpen && !settingsOpen,
+          onClick: () => navigate('admin'),
+        }]
       : []),
   ]
 
@@ -395,17 +454,24 @@ const MobileBottomNav: React.FC<{
     <>
       {settingsOpen && <SettingsSheet onClose={() => setSettingsOpen(false)} />}
       <nav
-        className="fixed bottom-0 left-0 right-0 z-[210] flex h-16 border-t-4 border-ink bg-paper lg:hidden"
-        style={{ boxShadow: '0 -3px 0 var(--shadow)' }}
+        className="fixed bottom-0 left-0 right-0 z-[210] flex border-t-4 border-ink bg-paper lg:hidden"
+        style={{
+          boxShadow: '0 -3px 0 var(--shadow)',
+          paddingBottom: 'env(safe-area-inset-bottom)',
+        }}
       >
         {tabs.map((tab) => (
           <button
             key={tab.label}
             onClick={tab.onClick}
-            className={`flex flex-1 flex-col items-center justify-center gap-1 font-display text-[8px] tracking-[0.14em] uppercase ${
-              tab.active ? 'bg-ink' : ''
+            className={`flex h-16 flex-1 flex-col items-center justify-center gap-1 font-display text-[8px] tracking-[0.14em] uppercase transition-colors active:opacity-70 ${
+              tab.active ? 'bg-ink' : 'bg-paper'
             }`}
-            style={{ color: tab.active ? 'var(--paper)' : 'var(--ink)' }}
+            style={{
+              color: tab.active ? 'var(--paper)' : 'var(--ink)',
+              touchAction: 'manipulation',
+              WebkitTapHighlightColor: 'transparent',
+            }}
           >
             <BrutalIcon name={tab.icon} size={18} strokeWidth={2.5} />
             {tab.label}
@@ -421,6 +487,7 @@ const truncateAddress = (value?: string) =>
 
 export const Header: React.FC<HeaderProps> = ({
   onShowLeaderboard,
+  onHideLeaderboard,
   onViewChange,
   activeView,
   showLeaderboardAction,
@@ -607,6 +674,7 @@ export const Header: React.FC<HeaderProps> = ({
       isLeaderboardOpen={isLeaderboardOpen ?? false}
       onViewChange={onViewChange}
       onShowLeaderboard={onShowLeaderboard}
+      onHideLeaderboard={onHideLeaderboard}
       isOwner={!!isOwner}
     />
     </>

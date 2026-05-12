@@ -14,14 +14,14 @@ export type ThemeMode =
 const STORAGE_KEY = 'blokaz:theme'
 const TRANSITION_MS = 180
 
-const DEFAULT_MODE_THEME: Record<ThemeMode, ThemeName> = {
-  lobby: 'light',
-  classic: 'light',
-  tournaments: 'dark-navy',
-  'tournament-play': 'dark-navy',
-  leaderboard: 'dark-forest',
-  payouts: 'dark-forest',
-  admin: 'dark-navy',
+// When userTheme is 'auto', all pages use the same base theme derived from
+// the OS preference — no per-page theme switching. Light OS → light,
+// dark OS → dark-navy. Users who want a specific look pick it in Settings.
+const getOsTheme = (): ThemeName => {
+  if (typeof window === 'undefined') return 'light'
+  return window.matchMedia('(prefers-color-scheme: dark)').matches
+    ? 'dark-navy'
+    : 'light'
 }
 
 const CYCLE_ORDER: UserTheme[] = ['auto', 'light', 'dark-navy', 'dark-forest']
@@ -39,7 +39,9 @@ const computeInitialUserTheme = (): UserTheme => {
   return 'auto'
 }
 
-const getModeTheme = (mode: ThemeMode): ThemeName => DEFAULT_MODE_THEME[mode]
+// Mode theme is now always the OS theme — page navigation no longer
+// changes the active theme when the user is on 'auto'.
+const getModeTheme = (_mode: ThemeMode): ThemeName => getOsTheme()
 
 const getEffectiveTheme = (userTheme: UserTheme, modeTheme: ThemeName) =>
   userTheme === 'auto' ? modeTheme : userTheme
@@ -96,6 +98,19 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
       initialized: true,
     })
     applyTheme(effectiveTheme, userTheme, modeTheme)
+
+    // Keep 'auto' in sync if the user changes their OS dark/light preference
+    if (typeof window !== 'undefined') {
+      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+        const { userTheme: current, mode: currentMode } = useThemeStore.getState()
+        if (current === 'auto') {
+          const newModeTheme = getModeTheme(currentMode)
+          const newEffective = getEffectiveTheme('auto', newModeTheme)
+          set({ modeTheme: newModeTheme, effectiveTheme: newEffective })
+          applyTheme(newEffective, 'auto', newModeTheme)
+        }
+      })
+    }
   },
 
   setUserTheme: (userTheme) => {
