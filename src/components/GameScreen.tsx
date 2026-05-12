@@ -626,6 +626,21 @@ const GameScreen: React.FC<GameScreenProps> = ({
     if (!isConnected && !gameSession && !IS_MINIPAY) handleStartGame()
   }, [isConnected, gameSession])
 
+  // 4. Start tx rejection → abandon session and go back to lobby
+  useEffect(() => {
+    if (!startGameError) return
+    const msg = (startGameError as any)?.message?.toLowerCase() ?? ''
+    const isRejection =
+      msg.includes('rejected') ||
+      msg.includes('denied') ||
+      msg.includes('cancelled') ||
+      (startGameError as any)?.code === 4001
+    if (isRejection) {
+      forceReset()
+      onBack?.()
+    }
+  }, [startGameError])
+
   // Canvas init
   useEffect(() => {
     if (!canvasRef.current || !gameSession) return

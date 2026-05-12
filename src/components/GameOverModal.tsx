@@ -555,45 +555,71 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
             )}
 
             {/* Submit score CTA */}
-            <button
-              onClick={isAllSuccess ? () => { resetForNextGame(); onPlayAgain() } : handleSubmit}
-              disabled={isRegistering || (!isAllSuccess && !canSubmit)}
-              className="brutal-btn flex w-full flex-col items-center justify-center border-4 border-ink font-display uppercase disabled:opacity-50"
-              style={{
-                background: isAllSuccess ? 'var(--accent-lime)' : 'var(--ink)',
-                color: isAllSuccess ? accentTextColor : 'var(--paper)',
-                boxShadow: '5px 5px 0 var(--shadow)',
-              }}
-            >
-              <div className="flex items-center justify-center gap-2 py-3.5 text-sm tracking-[0.15em]">
-                {isRegistering
-                  ? <div className="brutal-loader" />
-                  : <BrutalIcon name="play" size={18} strokeWidth={2.5} />}
-                {isRegistering
-                  ? 'SUBMITTING...'
-                  : isAllSuccess
-                    ? 'PLAY AGAIN'
-                    : `PLAY AGAIN${countdown !== null && countdown > 0 ? ` (${countdown}s)` : ''}`}
-              </div>
-              {/* Progress bar during countdown */}
-              {countdown !== null && countdown > 0 && !isRegistering && !isAllSuccess && (
-                <div className="w-full border-t-[3px] border-ink/30">
-                  <div
-                    className="h-1.5"
-                    style={{
-                      width: `${(countdown / 10) * 100}%`,
-                      background: 'var(--paper)',
-                      transition: 'width 1s linear',
-                    }}
-                  />
+            {hasError ? (
+              <div className="flex flex-col gap-2">
+                <div
+                  className="border-[3px] border-danger p-4"
+                  style={{ background: 'var(--paper-2)', boxShadow: '4px 4px 0 var(--danger)' }}
+                >
+                  <div className="mb-1.5 flex items-center gap-2 font-display text-[11px] uppercase tracking-[0.12em] text-danger">
+                    <BrutalIcon name="alert" size={12} strokeWidth={2.5} />
+                    SCORE NOT SAVED
+                  </div>
+                  <p className="mb-3 font-body text-[11px] leading-relaxed" style={{ color: 'var(--ink-soft)' }}>
+                    Something went wrong while saving your score. Tap below to try again — your score is still here.
+                  </p>
+                  <button
+                    onClick={handleSubmit}
+                    disabled={!canSubmit || isRegistering}
+                    className="brutal-btn flex w-full items-center justify-center gap-2 border-[3px] border-ink py-3 font-display text-[11px] uppercase tracking-widest disabled:opacity-50"
+                    style={{ background: 'var(--danger)', color: '#fff', boxShadow: '3px 3px 0 rgba(0,0,0,0.25)' }}
+                  >
+                    {isRegistering ? <div className="brutal-loader" /> : <BrutalIcon name="play" size={13} strokeWidth={2.5} />}
+                    RETRY SAVING SCORE
+                  </button>
                 </div>
-              )}
-            </button>
-
-            {hasError && (
-              <div className="border-[3px] border-danger bg-paper-2 px-3 py-1.5 text-center font-display text-[9px] uppercase text-danger">
-                Couldn't save — tap to try again
+                <button
+                  onClick={() => { resetForNextGame(); onPlayAgain() }}
+                  className="brutal-btn flex w-full items-center justify-center gap-2 border-[3px] border-ink bg-paper-2 py-2.5 font-display text-[10px] uppercase tracking-widest"
+                  style={{ boxShadow: '3px 3px 0 var(--shadow)', color: 'var(--ink)' }}
+                >
+                  SKIP &amp; PLAY AGAIN
+                </button>
               </div>
+            ) : (
+              <button
+                onClick={isAllSuccess ? () => { resetForNextGame(); onPlayAgain() } : handleSubmit}
+                disabled={isRegistering || (!isAllSuccess && !canSubmit)}
+                className="brutal-btn flex w-full flex-col items-center justify-center border-4 border-ink font-display uppercase disabled:opacity-50"
+                style={{
+                  background: isAllSuccess ? 'var(--accent-lime)' : 'var(--ink)',
+                  color: isAllSuccess ? accentTextColor : 'var(--paper)',
+                  boxShadow: '5px 5px 0 var(--shadow)',
+                }}
+              >
+                <div className="flex items-center justify-center gap-2 py-3.5 text-sm tracking-[0.15em]">
+                  {isRegistering
+                    ? <div className="brutal-loader" />
+                    : <BrutalIcon name="play" size={18} strokeWidth={2.5} />}
+                  {isRegistering
+                    ? 'SUBMITTING...'
+                    : isAllSuccess
+                      ? 'PLAY AGAIN'
+                      : `PLAY AGAIN${countdown !== null && countdown > 0 ? ` (${countdown}s)` : ''}`}
+                </div>
+                {countdown !== null && countdown > 0 && !isRegistering && !isAllSuccess && (
+                  <div className="w-full border-t-[3px] border-ink/30">
+                    <div
+                      className="h-1.5"
+                      style={{
+                        width: `${(countdown / 10) * 100}%`,
+                        background: 'var(--paper)',
+                        transition: 'width 1s linear',
+                      }}
+                    />
+                  </div>
+                )}
+              </button>
             )}
 
             {/* Share / Leaderboard */}
