@@ -76,10 +76,14 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
   const [selectedToken, setSelectedToken] = React.useState<StablecoinSymbol>(defaultToken)
 
   const handleStableRevive = async () => {
+    setCountdown(null)
+    autoSubmitTriggeredRef.current = true // prevent auto-submit after revival
     await payForRevive(selectedToken)
   }
 
   const [showShareSheet, setShowShareSheet] = React.useState(false)
+  const [countdown, setCountdown] = React.useState<number | null>(null)
+  const autoSubmitTriggeredRef = React.useRef(false)
 
   const { submitScore, isPending, isConfirming, isSuccess, error } =
     useSubmitScore()
@@ -216,11 +220,6 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
   React.useEffect(() => {
     if (isAllSuccess) {
       clearStoredGameSession(storageKey)
-      const timer = setTimeout(() => {
-        resetForNextGame()
-        onPlayAgain()
-      }, 800)
-      return () => clearTimeout(timer)
     }
   }, [isAllSuccess, storageKey])
 
@@ -238,6 +237,36 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
       return () => clearTimeout(timer)
     }
   }, [isTournamentMode, canSubmit, isRegistering, isAllSuccess])
+
+  // Classic mode: start 10s countdown once we have everything needed to submit
+  React.useEffect(() => {
+    if (isTournamentMode || !canSubmit || isRegistering || isAllSuccess) return
+    if (countdown !== null) return
+    setCountdown(10)
+  }, [isTournamentMode, canSubmit, isRegistering, isAllSuccess])
+
+  // Tick the countdown down each second
+  React.useEffect(() => {
+    if (countdown === null || countdown <= 0) return
+    const t = setTimeout(() => setCountdown(c => (c !== null && c > 0 ? c - 1 : c)), 1000)
+    return () => clearTimeout(t)
+  }, [countdown])
+
+  // Auto-submit when countdown reaches 0
+  React.useEffect(() => {
+    if (countdown === 0 && canSubmit && !isRegistering && !isAllSuccess && !autoSubmitTriggeredRef.current) {
+      autoSubmitTriggeredRef.current = true
+      handleSubmit()
+    }
+  }, [countdown])
+
+  // On submission error: reset so user can retry manually
+  React.useEffect(() => {
+    if (hasError) {
+      autoSubmitTriggeredRef.current = false
+      setCountdown(null)
+    }
+  }, [hasError])
 
   const shadowColor = isTournamentMode
     ? 'var(--accent-pink)'
@@ -512,20 +541,58 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
               </div>
             )}
 
+            {/* Fallback when game was never registered (start approval was skipped) */}
+            {!effectiveGameId && !isLoading && (
+              <div className="border-[3px] border-ink bg-paper-2 p-4" style={{ boxShadow: '3px 3px 0 var(--shadow)' }}>
+                <div className="mb-1 flex items-center gap-2 font-display text-[10px] uppercase tracking-[0.12em]" style={{ color: 'var(--ink)' }}>
+                  <BrutalIcon name="alert" size={11} strokeWidth={2.5} />
+                  SCORE NOT SAVED
+                </div>
+                <p className="font-body text-[11px] leading-relaxed" style={{ color: 'var(--ink-soft)' }}>
+                  Your game wasn't registered — the approval at the start was cancelled. Your score won't appear on the leaderboard, but you can play again.
+                </p>
+              </div>
+            )}
+
             {/* Submit score CTA */}
             <button
-              onClick={handleSubmit}
-              disabled={!canSubmit}
-              className="brutal-btn flex w-full items-center justify-center gap-2 border-4 border-ink bg-accent-lime py-3.5 font-display text-sm uppercase tracking-[0.15em] disabled:opacity-50"
-              style={{ boxShadow: '5px 5px 0 var(--shadow)', color: accentTextColor }}
+              onClick={isAllSuccess ? () => { resetForNextGame(); onPlayAgain() } : handleSubmit}
+              disabled={isRegistering || (!isAllSuccess && !canSubmit)}
+              className="brutal-btn flex w-full flex-col items-center justify-center border-4 border-ink font-display uppercase disabled:opacity-50"
+              style={{
+                background: isAllSuccess ? 'var(--accent-lime)' : 'var(--ink)',
+                color: isAllSuccess ? accentTextColor : 'var(--paper)',
+                boxShadow: '5px 5px 0 var(--shadow)',
+              }}
             >
-              {isRegistering ? <div className="brutal-loader" /> : <BrutalIcon name="play" size={18} strokeWidth={2.5} />}
-              {isAllSuccess ? 'REPLAYING...' : 'SUBMIT + PLAY AGAIN'}
+              <div className="flex items-center justify-center gap-2 py-3.5 text-sm tracking-[0.15em]">
+                {isRegistering
+                  ? <div className="brutal-loader" />
+                  : <BrutalIcon name="play" size={18} strokeWidth={2.5} />}
+                {isRegistering
+                  ? 'SUBMITTING...'
+                  : isAllSuccess
+                    ? 'PLAY AGAIN'
+                    : `PLAY AGAIN${countdown !== null && countdown > 0 ? ` (${countdown}s)` : ''}`}
+              </div>
+              {/* Progress bar during countdown */}
+              {countdown !== null && countdown > 0 && !isRegistering && !isAllSuccess && (
+                <div className="w-full border-t-[3px] border-ink/30">
+                  <div
+                    className="h-1.5"
+                    style={{
+                      width: `${(countdown / 10) * 100}%`,
+                      background: 'var(--paper)',
+                      transition: 'width 1s linear',
+                    }}
+                  />
+                </div>
+              )}
             </button>
 
             {hasError && (
               <div className="border-[3px] border-danger bg-paper-2 px-3 py-1.5 text-center font-display text-[9px] uppercase text-danger">
-                Submission failed — try again
+                Couldn't save — tap to try again
               </div>
             )}
 

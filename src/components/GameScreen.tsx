@@ -1147,26 +1147,42 @@ const ClassicStartCard: React.FC<{
     </button>
 
     {sessionConflict && (
-      <div className="mt-6 border-4 border-danger bg-paper-2 p-4 shadow-[4px_4px_0_var(--shadow)]">
-        <div className="mb-2 flex items-center font-display text-xs uppercase tracking-widest text-piece-red">
-          <BrutalIcon name="alert" size={14} className="mr-2" /> DESYNC DETECTED
-        </div>
+      <div className="fixed inset-0 z-[500] flex items-center justify-center px-5">
+        {/* Backdrop */}
+        <div className="absolute inset-0" style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(6px)' }} />
+        {/* Modal */}
         <div
-          className="mb-4 font-body text-[11px] leading-relaxed"
-          style={{ color: 'var(--ink-soft)' }}
+          className="relative w-full max-w-sm border-4 border-ink"
+          style={{ background: 'var(--paper)', boxShadow: '8px 8px 0 var(--danger)' }}
         >
-          Blockchain has an active game that doesn't match your browser. You
-          must reset.
+          {/* Header strip */}
+          <div
+            className="flex items-center gap-3 border-b-4 border-ink px-5 py-4"
+            style={{ background: 'var(--danger)' }}
+          >
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center border-[3px] border-white">
+              <BrutalIcon name="alert" size={18} strokeWidth={3} className="text-white" />
+            </div>
+            <div>
+              <div className="font-display text-[13px] uppercase tracking-[0.14em] text-white">SESSION CONFLICT</div>
+              <div className="font-body text-[10px] text-white opacity-75">Action required</div>
+            </div>
+          </div>
+          {/* Body */}
+          <div className="px-5 py-5">
+            <p className="mb-5 font-body text-[13px] leading-relaxed" style={{ color: 'var(--ink-soft)' }}>
+              Your app has a saved game that doesn't match your active session. You need to reset before starting a new game.
+            </p>
+            <button
+              onClick={() => { forceReset(); setSessionConflict(false) }}
+              className="brutal-btn flex w-full items-center justify-center gap-2 border-[3px] border-ink py-3.5 font-display text-[12px] uppercase tracking-widest text-white"
+              style={{ background: 'var(--danger)', boxShadow: '4px 4px 0 rgba(0,0,0,0.3)' }}
+            >
+              <BrutalIcon name="alert" size={14} strokeWidth={2.5} />
+              RESET &amp; START FRESH
+            </button>
+          </div>
         </div>
-        <button
-          onClick={() => {
-            forceReset()
-            setSessionConflict(false)
-          }}
-          className="brutal-btn w-full border-[3px] border-ink bg-danger py-2 font-display text-[10px] uppercase tracking-widest text-white shadow-[3px_3px_0_var(--shadow)]"
-        >
-          RESET SESSION
-        </button>
       </div>
     )}
     <div
@@ -1192,9 +1208,23 @@ const ClassicStartCard: React.FC<{
     </div>
 
     {startGameError && (
-      <div className="mt-2 break-all border-4 border-red-500 bg-red-50 p-3 font-display text-[10px] uppercase tracking-widest text-red-700">
-        <BrutalIcon name="alert" size={12} className="mr-1" />
-        TX ERROR: {startGameError.message?.slice(0, 120)}
+      <div className="border-4 border-danger bg-paper-2 p-4" style={{ boxShadow: '4px 4px 0 var(--shadow)' }}>
+        <div className="mb-1.5 flex items-center gap-2 font-display text-[11px] uppercase tracking-[0.12em] text-danger">
+          <BrutalIcon name="alert" size={12} strokeWidth={2.5} />
+          COULDN'T START YOUR GAME
+        </div>
+        <p className="mb-3 font-body text-[11px] leading-relaxed" style={{ color: 'var(--ink-soft)' }}>
+          The approval was cancelled or failed. Tap below to try again — your game won't start until it goes through.
+        </p>
+        <button
+          onClick={handleStartGame}
+          disabled={isPending || isConfirming}
+          className="brutal-btn flex w-full items-center justify-center gap-2 border-[3px] border-ink py-2.5 font-display text-[11px] uppercase tracking-widest disabled:opacity-50"
+          style={{ background: 'var(--accent-yellow)', color: 'var(--ink-fixed)', boxShadow: '3px 3px 0 var(--shadow)' }}
+        >
+          {isPending || isConfirming ? <div className="brutal-loader" /> : <BrutalIcon name="play" size={13} strokeWidth={2.5} />}
+          TRY AGAIN
+        </button>
       </div>
     )}
 
