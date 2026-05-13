@@ -58,7 +58,7 @@ const TICKER_ITEMS = [
   '▶ SMASH',
   '◆ STAKE',
   '⬛ PLAY ON-CHAIN',
-  '◆ WIN USDC',
+  '◆ WIN USDT',
   '▶ FREE TO PLAY',
 ]
 

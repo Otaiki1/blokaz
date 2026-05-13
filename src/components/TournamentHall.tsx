@@ -45,6 +45,15 @@ const TournamentHall: React.FC<TournamentHallProps> = ({
       }, 0n),
     [tournamentRows]
   )
+  const activeCount = useMemo(() => {
+    const now = BigInt(Math.floor(Date.now() / 1000))
+    return (tournamentRows ?? []).filter(row => {
+      if (row.status !== 'success' || !row.result) return false
+      const endTime = (row.result as readonly unknown[])[3] as bigint
+      return now < endTime
+    }).length
+  }, [tournamentRows])
+
   const formattedPrizePool = useMemo(() => {
     const raw = Number(formatUnits(totalPrizePool, 6))
     if (!Number.isFinite(raw) || raw === 0) return '0'
@@ -76,7 +85,7 @@ const TournamentHall: React.FC<TournamentHallProps> = ({
               className="font-display text-paper"
               style={{ fontSize: 56, letterSpacing: '-0.04em', lineHeight: 1 }}
             >
-              {formattedPrizePool} USDC
+              {formattedPrizePool} USDT
             </div>
           </div>
           <div className="mt-5 flex items-center gap-3">
@@ -84,7 +93,7 @@ const TournamentHall: React.FC<TournamentHallProps> = ({
               className="font-display text-paper"
               style={{ fontSize: 32, letterSpacing: '-0.03em', lineHeight: 1 }}
             >
-              {count?.toString() || '0'} LIVE BRACKETS
+              {activeCount} LIVE BRACKETS
             </div>
             <span className="font-display text-paper" style={{ fontSize: 28 }}>→</span>
           </div>
@@ -93,7 +102,7 @@ const TournamentHall: React.FC<TournamentHallProps> = ({
               className="border-2 border-paper px-3 py-1 font-display text-[10px] tracking-[0.12em]"
               style={{ background: 'var(--accent-lime)', color: 'var(--ink-fixed)' }}
             >
-              {count?.toString() || '0'} ACTIVE
+              {activeCount} ACTIVE
             </span>
           </div>
           <div className="mt-2 flex flex-wrap gap-3">

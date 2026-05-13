@@ -143,6 +143,7 @@ const TournamentCard: React.FC<TournamentCardProps> = ({
   }
   const isStarted = now >= startTime
   const isEnded = now >= endTime
+  if (isEnded) return null
   const isFull = playerCount >= maxPlayers
   // needsApproval: undefined allowance (still loading) also counts as needing approval.
   // justApproved overrides: once the approve tx confirms, show JOIN immediately
@@ -267,7 +268,7 @@ const TournamentCard: React.FC<TournamentCardProps> = ({
               fontSize: 18,
             }}
           >
-            {formatAmount(entryFee)} USDC
+            {formatAmount(entryFee)} USDT
           </div>
         </div>
       </div>
@@ -284,7 +285,7 @@ const TournamentCard: React.FC<TournamentCardProps> = ({
       {/* Meta tiles */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
         {[
-          { label: 'POOL', value: `${formatAmount(prizePool)} USDC` },
+          { label: 'POOL', value: `${formatAmount(prizePool)} USDT` },
           {
             label: 'PLAYERS',
             value: `${playerCount}/${maxPlayers === 0n ? '∞' : maxPlayers}`,
