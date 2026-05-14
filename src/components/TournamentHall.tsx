@@ -1,5 +1,8 @@
-import React, { useMemo } from 'react'
+import React, { useMemo, useState } from 'react'
 import TournamentSection from './TournamentSection'
+import TournamentHowToPlay, {
+  hasSeenTournamentOnboarding,
+} from './TournamentHowToPlay'
 import { useTournamentCount } from '../hooks/useBlokzGame'
 import { useReadContracts } from 'wagmi'
 import { formatUnits } from 'viem'
@@ -18,6 +21,9 @@ const TournamentHall: React.FC<TournamentHallProps> = ({
   onBack,
   onEnterMatch,
 }) => {
+  const [showHowToPlay, setShowHowToPlay] = useState(
+    () => !hasSeenTournamentOnboarding()
+  )
   const { count } = useTournamentCount()
   const tournamentContracts = useMemo(
     () =>
@@ -68,6 +74,10 @@ const TournamentHall: React.FC<TournamentHallProps> = ({
       className="brutal-grid-bg min-h-screen w-full"
       style={{ background: 'var(--paper)' }}
     >
+      {showHowToPlay && (
+        <TournamentHowToPlay onDone={() => setShowHowToPlay(false)} />
+      )}
+
       <div className="relative z-10 mx-auto w-full max-w-3xl px-4 pb-16">
         {/* Hero */}
         <div
@@ -104,6 +114,13 @@ const TournamentHall: React.FC<TournamentHallProps> = ({
             >
               {activeCount} ACTIVE
             </span>
+            <button
+              onClick={() => setShowHowToPlay(true)}
+              className="brutal-btn flex items-center gap-2 border-2 border-paper px-3 py-1 font-display text-[10px] tracking-[0.12em] text-paper opacity-80 hover:opacity-100"
+            >
+              <BrutalIcon name="alert" size={10} strokeWidth={2.5} className="text-paper" />
+              HOW TO PARTICIPATE
+            </button>
           </div>
           <div className="mt-2 flex flex-wrap gap-3">
             <span className="border-2 border-paper px-3 py-1 font-display text-[10px] tracking-[0.12em] text-paper">
