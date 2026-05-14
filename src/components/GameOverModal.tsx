@@ -85,6 +85,7 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
 
   const [showShareSheet, setShowShareSheet] = React.useState(false)
   const [countdown, setCountdown] = React.useState<number | null>(null)
+  const [signerError, setSignerError] = React.useState<string | null>(null)
   const autoSubmitTriggeredRef = React.useRef(false)
 
   const { submitScore, isPending, isConfirming, isSuccess, error } =
@@ -174,6 +175,7 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
     if (isRegistering || isAllSuccess) return
     const packed = packMoves(gameSession.moveHistory)
     if (isTournamentMode) {
+      setSignerError(null)
       try {
         const { signature, deadline } = await requestSubmitSignature(
           tournamentId!,
@@ -192,6 +194,7 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
         )
       } catch (err) {
         console.error('Failed to get submission signature:', err)
+        setSignerError('Could not reach signing server — tap retry to try again.')
       }
     } else {
       submitScore(
@@ -555,6 +558,7 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
                       {stableError}
                     </div>
                   )}
+
                 </div>
               </div>
             )}
@@ -573,6 +577,11 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
             )}
 
             {/* Submit score CTA */}
+            {signerError && (
+              <div className="border-[3px] border-danger px-3 py-2 font-display text-[9px] uppercase tracking-[0.12em] text-danger" style={{ background: 'var(--paper-2)' }}>
+                <BrutalIcon name="alert" size={10} strokeWidth={2.5} /> {signerError}
+              </div>
+            )}
             {hasError ? (
               <div className="flex flex-col gap-2">
                 <div

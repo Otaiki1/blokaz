@@ -16,7 +16,7 @@ contract DeployBlokz is Script {
         address deployerAddress = vm.addr(deployerPrivateKey);
         
         // Addresses
-        address usdc = vm.envOr("USDC_ADDRESS", address(0xcebA9300f2b948710d2653dD7B07f33A8B32118C));
+        address usdt = vm.envOr("USDT_ADDRESS", address(0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e));
         address game = vm.envOr("GAME_ADDRESS", address(0x16C3A18FDcb6905f58311C5b8a6e91e447Fefe43));
         
         // Trusted Signer 
@@ -32,7 +32,7 @@ contract DeployBlokz is Script {
         bytes memory initData = abi.encodeWithSelector(
             BlokzTournament.initialize.selector,
             game,
-            usdc,
+            usdt,
             deployerAddress, // Admin
             trustedSigner   // Signer
         );
@@ -42,7 +42,7 @@ contract DeployBlokz is Script {
         
         console.log("BlokzTournament PROXY deployed at:", tournamentProxy);
         console.log("-----------------------------------------");
-        console.log("USDC Address:", usdc);
+        console.log("Payment Token (USDT):", usdt);
         console.log("Admin Address:", deployerAddress);
         console.log("Trusted Signer:", trustedSigner);
 

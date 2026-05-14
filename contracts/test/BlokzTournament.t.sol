@@ -364,7 +364,7 @@ contract BlokzTournamentTest is Test {
         
         // 4. Verify V1 state is preserved in V2 context
         assertEq(tournament.protocolFeeBps(), 1234);
-        assertEq(tournament.USDC(), address(usdc));
+        assertEq(tournament.paymentToken(), address(usdc));
         
         (,,uint64 startV1,,,,,) = tournament.tournaments(tidV1);
         assertEq(startV1, uint64(block.timestamp + 10));

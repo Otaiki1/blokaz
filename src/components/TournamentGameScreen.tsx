@@ -67,6 +67,7 @@ const TournamentGameScreen: React.FC<TournamentGameScreenProps> = ({
     isPending,
     isConfirming,
     isSuccess,
+    error: contractError,
   } = useStartTournamentGame()
 
   const [currentSeed, setCurrentSeed] = useState<{
@@ -76,6 +77,7 @@ const TournamentGameScreen: React.FC<TournamentGameScreenProps> = ({
   const [isLeaderboardOpen, setIsLeaderboardOpen] = useState(false)
   const [isSyncingContract, setIsSyncingContract] = useState(true)
   const [sessionConflict, setSessionConflict] = useState(false)
+  const [signerError, setSignerError] = useState<string | null>(null)
   const [canvasDims, setCanvasDims] = useState<{
     gridSize: number
     trayY: number
@@ -187,6 +189,7 @@ const TournamentGameScreen: React.FC<TournamentGameScreenProps> = ({
       contractAddress: TOURNAMENT_ADDRESS,
     })
 
+    setSignerError(null)
     try {
       const { signature, nonce, deadline } = await requestStartSignature(
         tournamentId!,
@@ -197,6 +200,7 @@ const TournamentGameScreen: React.FC<TournamentGameScreenProps> = ({
     } catch (err) {
       console.error('Failed to get start signature:', err)
       hapticError()
+      setSignerError('Could not reach signing server. Check your connection and try again.')
     }
   }
 
@@ -563,6 +567,12 @@ const TournamentGameScreen: React.FC<TournamentGameScreenProps> = ({
                 'COMMENCE MATCH'
               )}
             </button>
+
+            {(signerError || contractError) && (
+              <div className="mt-3 border-[3px] border-danger bg-paper-2 px-3 py-2 font-display text-[9px] uppercase tracking-[0.12em] text-danger">
+                {signerError ?? (contractError?.message?.slice(0, 120) ?? 'Transaction failed — check your wallet')}
+              </div>
+            )}
 
             {sessionConflict && (
               <div className="mt-4 border-4 border-danger bg-paper-2 p-4 text-left">

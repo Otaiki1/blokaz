@@ -36,7 +36,7 @@ contract BlokzTournament is
     bytes32 public constant TRUSTED_SIGNER = keccak256("TRUSTED_SIGNER");
     bytes32 public constant UPGRADER_ROLE = keccak256("UPGRADER_ROLE");
 
-    address public USDC;
+    address public paymentToken;
     IBlokzGame public legacyGame;
 
     // EIP-712 Type Hashes
@@ -103,6 +103,7 @@ contract BlokzTournament is
     event TournamentFinalized(uint256 indexed tid, uint256 totalPrize);
     event RewardPaid(uint256 indexed tid, address indexed player, uint256 amount);
     event FeeUpdated(uint16 oldFee, uint16 newFee);
+    event PaymentTokenUpdated(address indexed oldToken, address indexed newToken);
 
     // ────────────────────────────────────────────────────────────────── Errors ──
 
@@ -133,9 +134,9 @@ contract BlokzTournament is
     }
 
     function initialize(
-        address _legacyGame, 
-        address _usdc, 
-        address admin, 
+        address _legacyGame,
+        address _paymentToken,
+        address admin,
         address signer
     ) external initializer {
         __AccessControl_init();
@@ -143,7 +144,7 @@ contract BlokzTournament is
         __EIP712_init("BlokzTournament", "1");
 
         legacyGame = IBlokzGame(_legacyGame);
-        USDC = _usdc;
+        paymentToken = _paymentToken;
         protocolFeeBps = 1000; // Default 10%
 
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
@@ -195,6 +196,12 @@ contract BlokzTournament is
         protocolFeeBps = newFee;
     }
 
+    function setPaymentToken(address newToken) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(newToken != address(0), "zero address");
+        emit PaymentTokenUpdated(paymentToken, newToken);
+        paymentToken = newToken;
+    }
+
     function pause() external onlyRole(DEFAULT_ADMIN_ROLE) {
         _pause();
     }
@@ -215,7 +222,7 @@ contract BlokzTournament is
         if (inTournament[tid][msg.sender]) revert AlreadyInTournament();
 
         if (t.entryFee > 0) {
-            IERC20(USDC).safeTransferFrom(msg.sender, address(this), t.entryFee);
+            IERC20(paymentToken).safeTransferFrom(msg.sender, address(this), t.entryFee);
             t.prizePool += t.entryFee;
         }
 
@@ -328,7 +335,7 @@ contract BlokzTournament is
         for (uint256 i = 0; i < winnerCount && i < sorted.length; i++) {
             uint256 reward = (distributablePool * t.rewardsBps[i]) / 10000;
             if (reward > 0) {
-                IERC20(USDC).safeTransfer(sorted[i], reward);
+                IERC20(paymentToken).safeTransfer(sorted[i], reward);
                 emit RewardPaid(tid, sorted[i], reward);
             }
         }
@@ -391,6 +398,6 @@ contract BlokzTournament is
     function withdrawProtocolRevenue(address to) external onlyRole(DEFAULT_ADMIN_ROLE) {
         uint256 amount = protocolRevenue;
         protocolRevenue = 0;
-        IERC20(USDC).safeTransfer(to, amount);
+        IERC20(paymentToken).safeTransfer(to, amount);
     }
 }

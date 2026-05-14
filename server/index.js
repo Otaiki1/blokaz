@@ -3,7 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { createWalletClient, createPublicClient, http, hashTypedData } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { celoSepolia } from 'viem/chains';
+import { celo } from 'viem/chains';
 
 dotenv.config();
 
@@ -19,7 +19,7 @@ const RPC_URL = process.env.RPC_URL;
 
 const account = privateKeyToAccount(SIGNER_PRIVATE_KEY);
 const publicClient = createPublicClient({
-  chain: celoSepolia,
+  chain: celo,
   transport: http(RPC_URL),
 });
 
