@@ -71,6 +71,8 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
     isPaying: isStablePaying,
     error: stableError,
     payForRevive,
+    getReviveCost,
+    reviveCount,
   } = useStablecoinRevive()
 
   const [selectedToken, setSelectedToken] = React.useState<StablecoinSymbol>(defaultToken)
@@ -367,6 +369,15 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
 
   const visibleTokens = Object.keys(STABLECOIN_TOKENS) as StablecoinSymbol[]
 
+  const formatReviveCost = (sym: StablecoinSymbol) => {
+    const cost = getReviveCost(sym)
+    const decimals = STABLECOIN_TOKENS[sym].decimals
+    const dollars = Number(cost) / 10 ** decimals
+    return dollars < 0.01
+      ? `$${dollars.toFixed(3)}`
+      : `$${dollars.toFixed(2)}`
+  }
+
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto">
       {/* Backdrop */}
@@ -480,8 +491,15 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
                     <div className="flex h-5 w-5 items-center justify-center border-[2px] border-ink text-[10px]" style={{ background: 'var(--accent-cyan)', color: 'var(--ink-fixed)' }}>⚡</div>
                     CONTINUE YOUR RUN
                   </div>
-                  <div className="border-[2px] border-ink px-2 py-0.5 font-display text-[8px] uppercase tracking-wider" style={{ background: 'var(--accent-cyan)', color: 'var(--ink-fixed)' }}>
-                    $0.001
+                  <div className="flex items-center gap-1.5">
+                    {reviveCount > 0 && (
+                      <div className="border-[2px] border-ink px-2 py-0.5 font-display text-[8px] uppercase tracking-wider" style={{ background: 'var(--danger)', color: '#fff' }}>
+                        ×{reviveCount + 1}
+                      </div>
+                    )}
+                    <div className="border-[2px] border-ink px-2 py-0.5 font-display text-[8px] uppercase tracking-wider" style={{ background: 'var(--accent-cyan)', color: 'var(--ink-fixed)' }}>
+                      {formatReviveCost(selectedToken)}
+                    </div>
                   </div>
                 </div>
 
@@ -527,7 +545,7 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
                     {isStablePaying
                       ? <div className="brutal-loader" />
                       : canAfford(selectedToken)
-                        ? <><BrutalIcon name="zap" size={13} strokeWidth={2.5} />REVIVE WITH {selectedToken}</>
+                        ? <><BrutalIcon name="zap" size={13} strokeWidth={2.5} />REVIVE — {formatReviveCost(selectedToken)} {selectedToken}</>
                         : <span>NOT ENOUGH {selectedToken} — TOP UP</span>
                     }
                   </button>

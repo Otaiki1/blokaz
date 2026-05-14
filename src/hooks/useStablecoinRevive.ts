@@ -31,7 +31,7 @@ export function isMiniPayBrowser(): boolean {
 
 export function useStablecoinRevive() {
   const { address } = useAccount()
-  const { reviveGame } = useGameStore()
+  const { reviveGame, reviveCount } = useGameStore()
   const { writeContractAsync } = useWriteContract()
   const writeRef = useRef(writeContractAsync)
   useEffect(() => { writeRef.current = writeContractAsync }, [writeContractAsync])
@@ -39,6 +39,13 @@ export function useStablecoinRevive() {
   const [isPaying, setIsPaying] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const isPayingRef = useRef(false)
+
+  // Cost doubles with each revive: $0.001 → $0.002 → $0.004 → …
+  const getReviveCost = useCallback(
+    (sym: StablecoinSymbol): bigint =>
+      STABLECOIN_TOKENS[sym].reviveCost * (2n ** BigInt(reviveCount)),
+    [reviveCount]
+  )
 
   const { data: usdcBal } = useBalance({
     address,
@@ -63,9 +70,9 @@ export function useStablecoinRevive() {
   }
 
   const canAfford = useCallback(
-    (sym: StablecoinSymbol) => balances[sym] >= STABLECOIN_TOKENS[sym].reviveCost,
+    (sym: StablecoinSymbol) => balances[sym] >= getReviveCost(sym),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [balances.USDC, balances.USDT, balances.USDm]
+    [balances.USDC, balances.USDT, balances.USDm, getReviveCost]
   )
 
   // First affordable token (USDC preferred on MiniPay)
@@ -89,7 +96,7 @@ export function useStablecoinRevive() {
           address: token.address,
           abi: ERC20_TRANSFER_ABI,
           functionName: 'transfer',
-          args: [GAME_TREASURY, token.reviveCost],
+          args: [GAME_TREASURY, getReviveCost(sym)],
           ...txOverrides,
         })
         reviveGame()
@@ -114,5 +121,7 @@ export function useStablecoinRevive() {
     isPaying,
     error,
     payForRevive,
+    getReviveCost,
+    reviveCount,
   }
 }

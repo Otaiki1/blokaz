@@ -12,6 +12,7 @@ interface GameState {
   onChainSeed: `0x${string}` | null
   onChainStatus: 'none' | 'pending' | 'syncing' | 'registered' | 'failed'
   tournamentId: bigint | null
+  reviveCount: number
 
   startGame: (seed: bigint, preserveOnChain?: boolean) => void
   setOnChainData: (gameId: bigint, seed: `0x${string}`, status?: 'registered' | 'pending' | 'syncing' | 'failed') => void
@@ -34,6 +35,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   onChainSeed: null,
   onChainStatus: 'none',
   tournamentId: null,
+  reviveCount: 0,
 
   startGame: (seed, preserveOnChain = false) => {
     const session = new GameSession(seed)
@@ -45,7 +47,8 @@ export const useGameStore = create<GameState>((set, get) => ({
       score: 0,
       comboStreak: 0,
       currentPieces: session.currentPieces,
-      isGameOver: false
+      isGameOver: false,
+      reviveCount: 0,
     }
 
     if (!preserveOnChain) {
@@ -88,12 +91,13 @@ export const useGameStore = create<GameState>((set, get) => ({
   },
   
   reviveGame: () => {
-    const { gameSession } = get()
+    const { gameSession, reviveCount } = get()
     if (!gameSession) return
     gameSession.revive()
     set({
       isGameOver: false,
       currentPieces: [...gameSession.currentPieces],
+      reviveCount: reviveCount + 1,
     })
     // @ts-ignore
     window.currentPieces = gameSession.currentPieces
@@ -109,7 +113,8 @@ export const useGameStore = create<GameState>((set, get) => ({
       onChainGameId: null,
       onChainSeed: null,
       onChainStatus: 'none',
-      tournamentId: keepTournamentId ? get().tournamentId : null
+      tournamentId: keepTournamentId ? get().tournamentId : null,
+      reviveCount: 0,
     })
   },
 
