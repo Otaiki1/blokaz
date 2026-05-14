@@ -56,7 +56,7 @@ const TournamentCard: React.FC<TournamentCardProps> = ({
     refetch: refetchIn,
   } = useInTournament(id, address)
   const { allowance, refetch: refetchAllowance } = useUSDCAllowance(address)
-  const { balance: usdcBalance } = useUSDCBalance(IS_MINIPAY ? address : undefined)
+  const { balance: usdtBalance } = useUSDCBalance(IS_MINIPAY ? address : undefined)
   const {
     approve,
     isPending: isApproving,
@@ -149,8 +149,8 @@ const TournamentCard: React.FC<TournamentCardProps> = ({
   // justApproved overrides: once the approve tx confirms, show JOIN immediately
   // without waiting for the allowance refetch to settle.
   const needsApproval = !justApproved && (allowance === undefined || allowance < entryFee)
-  // In MiniPay, check if user has enough USDC to cover the entry fee
-  const hasInsufficientUSDC = IS_MINIPAY && usdcBalance !== undefined && usdcBalance < entryFee
+  // In MiniPay, check if user has enough USDT to cover the entry fee
+  const hasInsufficientUSDT = IS_MINIPAY && usdtBalance !== undefined && usdtBalance < entryFee
   const formatTime = (ts: bigint) =>
     new Date(Number(ts) * 1000).toLocaleDateString()
   const formatDateTime = (ts: bigint) =>
@@ -164,8 +164,8 @@ const TournamentCard: React.FC<TournamentCardProps> = ({
   const tagStyle = TAG_STYLES[index % 4]
 
   const handleJoin = () => {
-    // MiniPay: redirect to Deposit screen if USDC balance is too low
-    if (IS_MINIPAY && hasInsufficientUSDC) {
+    // MiniPay: redirect to Deposit screen if USDT balance is too low
+    if (IS_MINIPAY && hasInsufficientUSDT) {
       window.open(MINIPAY_DEPOSIT_URL, '_blank')
       return
     }
@@ -436,7 +436,7 @@ const TournamentCard: React.FC<TournamentCardProps> = ({
             style={{
               ...insetFullWidthCtaStyle,
               opacity: isEnded || isFull ? 0.5 : 1,
-              background: hasInsufficientUSDC ? 'var(--accent-yellow)' : insetFullWidthCtaStyle.background,
+              background: hasInsufficientUSDT ? 'var(--accent-yellow)' : insetFullWidthCtaStyle.background,
             }}
           >
             {isApproving || isConfirmingApprove
@@ -445,7 +445,7 @@ const TournamentCard: React.FC<TournamentCardProps> = ({
                 ? 'JOINING...'
                 : isFull
                   ? 'TOURNAMENT FULL'
-                  : hasInsufficientUSDC
+                  : hasInsufficientUSDT
                     ? '+ DEPOSIT TO JOIN'
                     : needsApproval
                       ? 'APPROVE & JOIN'

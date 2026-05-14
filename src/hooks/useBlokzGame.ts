@@ -53,7 +53,7 @@ function useFreshNonce() {
 
 const GAME_ADDRESS = contractInfo.game as `0x${string}`
 const TOURNAMENT_ADDRESS = contractInfo.tournament as `0x${string}`
-export const USDC_ADDRESS = '0xcebA9300f2b948710d2653dD7B07f33A8B32118C' as const
+export const USDC_ADDRESS = '0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e' as const
 export const USDC_DECIMALS = 6
 
 const ERC20_ABI = [
