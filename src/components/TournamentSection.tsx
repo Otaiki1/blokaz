@@ -36,7 +36,6 @@ interface TournamentCardProps {
   index: number
   onStartMatch: (id: bigint) => void
   onViewRankings: (id: bigint, prizePool: bigint) => void
-  onBack?: () => void
 }
 
 const isUserRejection = (err?: Error | null) => {
@@ -50,7 +49,6 @@ const TournamentCard: React.FC<TournamentCardProps> = ({
   index,
   onStartMatch,
   onViewRankings,
-  onBack,
 }) => {
   const { address } = useAccount()
   const {
@@ -113,11 +111,6 @@ const TournamentCard: React.FC<TournamentCardProps> = ({
     if (isFinalizeSuccess) refetchTournament()
   }, [isFinalizeSuccess, refetchTournament])
 
-  useEffect(() => {
-    if (isUserRejection(approveError) || isUserRejection(joinError)) {
-      onBack?.()
-    }
-  }, [approveError, joinError, onBack])
 
   const [now, setNow] = useState(BigInt(Math.floor(Date.now() / 1000)))
   useEffect(() => {
@@ -464,7 +457,8 @@ const TournamentCard: React.FC<TournamentCardProps> = ({
                       ? 'APPROVE & JOIN'
                       : 'JOIN TOURNAMENT'}
           </button>
-          {(approveError || joinError) && (
+          {((approveError && !isUserRejection(approveError)) ||
+            (joinError && !isUserRejection(joinError))) && (
             <div
               className="mt-2 border-2 border-danger py-1 text-center font-display"
               style={{
@@ -473,9 +467,7 @@ const TournamentCard: React.FC<TournamentCardProps> = ({
                 fontSize: 10,
               }}
             >
-              {approveError?.message ||
-                joinError?.message ||
-                'Transaction failed'}
+              {approveError?.message || joinError?.message || 'Transaction failed'}
             </div>
           )}
         </>
@@ -486,12 +478,10 @@ const TournamentCard: React.FC<TournamentCardProps> = ({
 
 interface TournamentSectionProps {
   onStartMatch?: (id: bigint) => void
-  onBack?: () => void
 }
 
 const TournamentSection: React.FC<TournamentSectionProps> = ({
   onStartMatch,
-  onBack,
 }) => {
   const { count, isLoading } = useTournamentCount()
   const { setTournamentId } = useGameStore()
@@ -545,7 +535,6 @@ const TournamentSection: React.FC<TournamentSectionProps> = ({
               index={i + 1}
               onStartMatch={handleStartMatch}
               onViewRankings={handleOpenLeaderboard}
-              onBack={onBack}
             />
           ))
         ) : (

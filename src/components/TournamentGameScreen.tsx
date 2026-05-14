@@ -180,14 +180,18 @@ const TournamentGameScreen: React.FC<TournamentGameScreenProps> = ({
     }
   }, [isConnected, address, setTournamentId, tournamentId])
 
-  // ── Redirect if no tournament selected ──────────────────────────────────────
+  // ── Redirect if no tournament selected (only after hydration) ───────────────
   useEffect(() => {
-    if (tournamentId === null) {
+    if (!isSyncingContract && tournamentId === null) {
       onBackToHall()
     }
-  }, [tournamentId, onBackToHall])
+  }, [tournamentId, isSyncingContract, onBackToHall])
 
   // ── Contract tx rejection → back to hall ────────────────────────────────────
+  // Don't call forceReset() here — App.tsx hashchange handler already fires
+  // forceReset() via setTimeout when navigating to 'tournaments'. Calling it
+  // twice sets tournamentId=null which would trigger the redirect above and
+  // cause a blank-page flash before TournamentHall loads.
   useEffect(() => {
     if (!contractError) return
     const msg = (contractError as any)?.message?.toLowerCase() ?? ''
@@ -197,10 +201,9 @@ const TournamentGameScreen: React.FC<TournamentGameScreenProps> = ({
       msg.includes('cancelled') ||
       (contractError as any)?.code === 4001
     if (isRejection) {
-      forceReset()
       onBackToHall()
     }
-  }, [contractError, forceReset, onBackToHall])
+  }, [contractError, onBackToHall])
 
   // ── Handle Start ─────────────────────────────────────────────────────────────
   const handleStartGame = async () => {
