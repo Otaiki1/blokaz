@@ -22,6 +22,9 @@ import {
   readStoredGameSession,
 } from '../utils/gameSessionStorage'
 import { BrutalIcon } from './BrutalIcon'
+import { IS_MINIPAY } from '../utils/miniPay'
+
+const MINIPAY_DEPOSIT_URL = 'https://minipay.opera.com/add_cash'
 
 const GAME_ADDRESS = contractInfo.game as `0x${string}`
 const TOURNAMENT_ADDRESS = contractInfo.tournament as `0x${string}`
@@ -525,8 +528,12 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
 
                   {/* Revive button */}
                   <button
-                    onClick={handleStableRevive}
-                    disabled={isStablePaying || !canAfford(selectedToken)}
+                    onClick={canAfford(selectedToken)
+                      ? handleStableRevive
+                      : IS_MINIPAY
+                        ? () => window.open(MINIPAY_DEPOSIT_URL, '_blank')
+                        : undefined}
+                    disabled={isStablePaying || (!canAfford(selectedToken) && !IS_MINIPAY)}
                     className="brutal-btn flex w-full items-center justify-center gap-2 border-[3px] border-ink py-3 font-display text-[11px] uppercase tracking-wider shadow-[3px_3px_0_var(--shadow)] disabled:opacity-50"
                     style={{ background: 'var(--accent-cyan)', color: 'var(--ink-fixed)' }}
                   >
@@ -534,7 +541,9 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
                       ? <div className="brutal-loader" />
                       : canAfford(selectedToken)
                         ? <><BrutalIcon name="zap" size={13} strokeWidth={2.5} />REVIVE — {formatReviveCost(selectedToken)} {selectedToken}</>
-                        : <span>NOT ENOUGH {selectedToken} — TOP UP</span>
+                        : IS_MINIPAY
+                          ? <span>NOT ENOUGH {selectedToken} — DEPOSIT</span>
+                          : <span>NOT ENOUGH {selectedToken}</span>
                     }
                   </button>
 

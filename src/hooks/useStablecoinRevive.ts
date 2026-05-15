@@ -75,9 +75,13 @@ export function useStablecoinRevive() {
     [balances.USDC, balances.USDT, balances.USDm, getReviveCost]
   )
 
-  // First affordable token (USDC preferred on MiniPay)
+  // Token the user holds the most of (by USD value) — MiniPay requirement
   const defaultToken: StablecoinSymbol =
-    (Object.keys(STABLECOIN_TOKENS) as StablecoinSymbol[]).find(canAfford) ?? 'USDC'
+    (Object.keys(STABLECOIN_TOKENS) as StablecoinSymbol[]).sort((a, b) => {
+      const aUsd = Number(balances[a as StablecoinSymbol]) / 10 ** STABLECOIN_TOKENS[a as StablecoinSymbol].decimals
+      const bUsd = Number(balances[b as StablecoinSymbol]) / 10 ** STABLECOIN_TOKENS[b as StablecoinSymbol].decimals
+      return bUsd - aUsd
+    })[0] as StablecoinSymbol ?? 'USDC'
 
   const hasAnyBalance = (Object.keys(STABLECOIN_TOKENS) as StablecoinSymbol[]).some(canAfford)
 
