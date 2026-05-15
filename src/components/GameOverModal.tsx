@@ -228,26 +228,11 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
     }
   }, [isAllSuccess, storageKey])
 
-  const submissionTriggeredRef = React.useRef(false)
+  // Start countdown once we have everything needed to submit (5s tournament, 10s classic)
   React.useEffect(() => {
-    if (
-      isTournamentMode &&
-      canSubmit &&
-      !submissionTriggeredRef.current &&
-      !isRegistering &&
-      !isAllSuccess
-    ) {
-      submissionTriggeredRef.current = true
-      const timer = setTimeout(() => handleSubmit(), 800)
-      return () => clearTimeout(timer)
-    }
-  }, [isTournamentMode, canSubmit, isRegistering, isAllSuccess])
-
-  // Classic mode: start 10s countdown once we have everything needed to submit
-  React.useEffect(() => {
-    if (isTournamentMode || !canSubmit || isRegistering || isAllSuccess) return
+    if (!canSubmit || isRegistering || isAllSuccess) return
     if (countdown !== null) return
-    setCountdown(10)
+    setCountdown(isTournamentMode ? 5 : 10)
   }, [isTournamentMode, canSubmit, isRegistering, isAllSuccess])
 
   // Tick the countdown down each second
@@ -632,14 +617,16 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
                     ? 'SUBMITTING...'
                     : isAllSuccess
                       ? 'PLAY AGAIN'
-                      : `PLAY AGAIN${countdown !== null && countdown > 0 ? ` (${countdown}s)` : ''}`}
+                      : isTournamentMode
+                        ? `SUBMIT SCORE${countdown !== null && countdown > 0 ? ` (${countdown}s)` : ''}`
+                        : `PLAY AGAIN${countdown !== null && countdown > 0 ? ` (${countdown}s)` : ''}`}
                 </div>
                 {countdown !== null && countdown > 0 && !isRegistering && !isAllSuccess && (
                   <div className="w-full border-t-[3px] border-ink/30">
                     <div
                       className="h-1.5"
                       style={{
-                        width: `${(countdown / 10) * 100}%`,
+                        width: `${(countdown / (isTournamentMode ? 5 : 10)) * 100}%`,
                         background: 'var(--paper)',
                         transition: 'width 1s linear',
                       }}

@@ -113,6 +113,13 @@ const TournamentGameScreen: React.FC<TournamentGameScreenProps> = ({
     seed: `0x${string}`
     hash: `0x${string}`
   } | null>(null)
+  const prefetchedSigRef = useRef<{
+    signature: `0x${string}`
+    nonce: bigint
+    deadline: bigint
+    seed: `0x${string}`
+    hash: `0x${string}`
+  } | null>(null)
   const [isLeaderboardOpen, setIsLeaderboardOpen] = useState(false)
   const [isSyncingContract, setIsSyncingContract] = useState(true)
   const [sessionConflict, setSessionConflict] = useState(false)
@@ -136,6 +143,29 @@ const TournamentGameScreen: React.FC<TournamentGameScreenProps> = ({
       lastAddressRef.current = address
     }
   }, [address, forceReset])
+
+  // ── Pre-fetch start signature so wallet popup fires instantly ───────────────
+  useEffect(() => {
+    if (gameSession || !tournamentId || !isConnected || !address || isSyncingContract) return
+    const nowSec = BigInt(Math.floor(Date.now() / 1000))
+    const existing = prefetchedSigRef.current
+    if (existing && existing.deadline > nowSec + 60n) return
+
+    let cancelled = false
+    const { seed, hash } = generateGameSeed(address)
+
+    requestStartSignature(tournamentId, hash, address)
+      .then((sig) => {
+        if (!cancelled) prefetchedSigRef.current = { ...sig, seed, hash }
+      })
+      .catch(() => {
+        // silent — handleStartGame falls back to on-demand fetch
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [gameSession, tournamentId, isConnected, address, isSyncingContract])
 
   // ── Hydration & Reconciliation ───────────────────────────────────────────────
   useEffect(() => {
@@ -222,6 +252,29 @@ const TournamentGameScreen: React.FC<TournamentGameScreenProps> = ({
       return
     }
 
+    // Use pre-fetched signature if still valid (deadline > now + 60s) — fires wallet instantly
+    const nowSec = BigInt(Math.floor(Date.now() / 1000))
+    const prefetch = prefetchedSigRef.current
+    if (prefetch && prefetch.deadline > nowSec + 60n) {
+      prefetchedSigRef.current = null
+      const { seed, hash, signature, nonce, deadline } = prefetch
+      const localSeed = BigInt(hash.slice(0, 18))
+      startGame(localSeed)
+      setCurrentSeed({ seed, hash })
+      setOnChainData(0n, seed, 'pending')
+      writeStoredGameSession(TOURNAMENT_SESSION_STORAGE_KEY, {
+        address,
+        seed,
+        hash,
+        gameId: null,
+        tournamentId: tournamentId?.toString(),
+        contractAddress: TOURNAMENT_ADDRESS,
+      })
+      contractStartTournamentGame(tournamentId!, hash, nonce, deadline, signature)
+      return
+    }
+
+    // Fallback: fetch signature on demand
     const { seed, hash } = generateGameSeed(address)
     const localSeed = BigInt(hash.slice(0, 18))
     startGame(localSeed)
