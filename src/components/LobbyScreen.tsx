@@ -3,7 +3,7 @@ import { BrutalIcon } from './BrutalIcon'
 import { useAccount } from 'wagmi'
 import { useReadContracts } from 'wagmi'
 import { formatUnits } from 'viem'
-import { useLeaderboard, useTournamentCount, USDC_DECIMALS } from '../hooks/useBlokzGame'
+import { useLeaderboard, useTournamentCount, USDC_DECIMALS, useUsername } from '../hooks/useBlokzGame'
 import { useTheme } from '../hooks/useTheme'
 import { BLOKZ_TOURNAMENT_ABI } from '../constants/abi'
 import contractInfo from '../contract.json'
@@ -209,6 +209,12 @@ const MiniMetric: React.FC<{ label: string; value: string; background: string }>
       </div>
     </div>
   )
+}
+
+const LobbyPlayerName: React.FC<{ address: string }> = ({ address }) => {
+  const { username, isLoading } = useUsername(address as `0x${string}`)
+  if (isLoading) return <span className="inline-block h-3 w-20 animate-pulse rounded-sm bg-current opacity-20" />
+  return <span>{username ?? `${address.slice(0, 6)}…${address.slice(-4)}`}</span>
 }
 
 const LobbyScreen: React.FC<LobbyScreenProps> = ({ onPlayClassic, onPlayTournaments }) => {
@@ -657,7 +663,7 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({ onPlayClassic, onPlayTourname
                         >
                           <span className="w-6 font-display text-[16px]">#{index + 1}</span>
                           <span className="min-w-0 flex-1 truncate font-display text-[11px] tracking-[0.08em]">
-                            {entry.player.slice(0, 6)}…{entry.player.slice(-4)}
+                            <LobbyPlayerName address={entry.player} />
                           </span>
                           <span className="font-display text-[12px]" style={{ letterSpacing: '-0.02em' }}>
                             {entry.score.toLocaleString()}

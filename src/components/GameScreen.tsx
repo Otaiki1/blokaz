@@ -205,6 +205,13 @@ const DangerWatch: React.FC<{ currentPieces?: (ShapeDefinition | null)[] }> = ({
   )
 }
 
+const LadderPlayerName: React.FC<{ address: string }> = ({ address }) => {
+  const { username, isLoading } = useUsername(address as `0x${string}`)
+  if (isLoading) return <span className="inline-block h-3 w-20 animate-pulse rounded-sm bg-current opacity-20" />
+  const display = username ?? `${address.slice(0, 6)}…${address.slice(-4)}`
+  return <span>{display}</span>
+}
+
 const LiveLadder: React.FC<{ currentScore: number }> = ({ currentScore }) => {
   const { leaderboard, isLoading } = useLeaderboard()
   const { address } = useAccount()
@@ -265,7 +272,7 @@ const LiveLadder: React.FC<{ currentScore: number }> = ({ currentScore }) => {
               >
                 <span className="w-6 font-display text-sm">#{i + 1}</span>
                 <span className="flex-1 truncate font-display text-xs">
-                  @{entry.player.slice(0, 8)}
+                  <LadderPlayerName address={entry.player} />
                 </span>
                 <span className="font-display text-xs tabular-nums tracking-tighter">
                   {entry.score.toLocaleString()}
