@@ -304,16 +304,19 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({ onPlayClassic, onPlayTourname
   const nextChainWidth = `${Math.min(100, 28 + streak * 10)}%`
   const topThree = sortedLeaderboard.slice(0, 3)
   const currentRank = playerStats?.rank
-  const shareScore = playerStats?.bestScore ?? sortedLeaderboard[0]?.score ?? 0
+  const localBest = (() => {
+    try { return Number(localStorage.getItem('blokaz:best_score') ?? 0) || 0 } catch { return 0 }
+  })()
+  const shareScore = Math.max(playerStats?.bestScore ?? 0, localBest)
 
+  const HASHTAGS = `#miniapps #minipay #playblokaz #celo`
   const handleShareBestScore = () => {
-    const message = `BLOKAZ best: ${shareScore.toLocaleString()}`
-    if (navigator.share) {
-      void navigator.share({ title: 'BLOKAZ', text: message, url: window.location.href })
-      return
-    }
+    if (shareScore === 0) return
+    const leaderboardRank = playerStats?.rank
+    const rankLine = leaderboardRank ? `\nrank #${leaderboardRank} on the weekly ladder` : ''
+    const text = `my best score on @playblokaz is ${shareScore.toLocaleString()} 🎮${rankLine}\n\ncan you beat it? blokaz.xyz\n\n${HASHTAGS}`
     window.open(
-      `https://twitter.com/intent/tweet?text=${encodeURIComponent(`${message} on BLOKAZ`)}`,
+      `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`,
       '_blank', 'noopener,noreferrer'
     )
   }

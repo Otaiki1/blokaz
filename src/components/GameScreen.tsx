@@ -454,18 +454,32 @@ const GameScreen: React.FC<GameScreenProps> = ({
   // ─────────────────────────────────────────────────────────────────────────
 
   const { leaderboard: lbData } = useLeaderboard()
+
+  const BEST_SCORE_KEY = 'blokaz:best_score'
+  const getStoredBest = () => {
+    try { return Number(localStorage.getItem(BEST_SCORE_KEY) ?? 0) || 0 } catch { return 0 }
+  }
+  const [localBest, setLocalBest] = React.useState(getStoredBest)
+
+  // Update all-time best whenever a game ends with a new high score
+  React.useEffect(() => {
+    if (isGameOver && score > 0) {
+      const current = getStoredBest()
+      if (score > current) {
+        try { localStorage.setItem(BEST_SCORE_KEY, String(score)) } catch {}
+        setLocalBest(score)
+      }
+    }
+  }, [isGameOver, score])
+
   const bestScore = React.useMemo(() => {
-    if (!lbData || !address) return undefined
-    const entries = lbData as readonly {
-      player: `0x${string}`
-      score: number
-      gameId: bigint
-    }[]
-    const mine = entries.filter(
-      (e) => e.player.toLowerCase() === address.toLowerCase()
-    )
-    return mine.length > 0 ? Math.max(...mine.map((e) => e.score)) : undefined
-  }, [lbData, address])
+    const entries = (lbData ?? []) as readonly { player: `0x${string}`; score: number; gameId: bigint }[]
+    const lbBest = address
+      ? Math.max(0, ...entries.filter(e => e.player.toLowerCase() === address.toLowerCase()).map(e => e.score))
+      : 0
+    const allTimeBest = Math.max(localBest, lbBest, score)
+    return allTimeBest > 0 ? allTimeBest : undefined
+  }, [lbData, address, localBest, score])
 
   const {
     gameId: onChainActiveGameId,
@@ -1548,15 +1562,9 @@ const RightRail: React.FC<{
 
   const HASHTAGS = `#miniapps #minipay #playblokaz #celo`
 
-  const handleShareWarpcast = () => {
-    const text = `just scored ${shareScore.toLocaleString()} on BLOKAZ 🎮\nrank #${rankData} on the weekly ladder\n\ncan you beat it? blokaz.xyz\n\n${HASHTAGS}`
-    const url = `https://warpcast.com/~/compose?text=${encodeURIComponent(text)}&embeds[]=${encodeURIComponent('@playblokaz')}`
-    window.open(url, '_blank', 'noopener,noreferrer')
-  }
-
   const handleShareTwitter = () => {
-    const text = `just scored ${shareScore.toLocaleString()} on BLOKAZ 🎮\nrank #${rankData} on the weekly ladder\n\n${HASHTAGS}`
-    const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent('@playblokaz')}`
+    const text = `my best score on @playblokaz is ${shareScore.toLocaleString()} 🎮\nrank #${rankData} on the weekly ladder\n\ncan you beat it? blokaz.xyz\n\n${HASHTAGS}`
+    const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`
     window.open(url, '_blank', 'noopener,noreferrer')
   }
 
@@ -1598,28 +1606,6 @@ const RightRail: React.FC<{
             >
               {shareScore.toLocaleString()}
             </div>
-            <button
-              onClick={handleShareWarpcast}
-              className="brutal-btn flex w-full items-center justify-between border-4 border-ink px-4 py-3 font-display text-[11px] uppercase tracking-wider shadow-[4px_4px_0_var(--shadow)]"
-              style={{
-                background: 'var(--accent-pink)',
-                color: 'var(--ink-fixed)',
-              }}
-            >
-              <span className="flex items-center gap-2">
-                <span
-                  className="flex h-5 w-5 items-center justify-center border-2 border-ink text-[9px] font-bold"
-                  style={{
-                    background: 'var(--ink-fixed)',
-                    color: 'var(--accent-pink)',
-                  }}
-                >
-                  W
-                </span>
-                CAST ON WARPCAST
-              </span>
-              <span>→</span>
-            </button>
             <button
               onClick={handleShareTwitter}
               className="brutal-btn flex w-full items-center justify-between border-4 border-ink px-4 py-3 font-display text-[11px] uppercase tracking-wider shadow-[4px_4px_0_var(--shadow)]"
