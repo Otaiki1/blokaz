@@ -1,6 +1,6 @@
 # BLOKAZ — Stack. Smash. Stake.
 
-Blokaz is an on-chain block-stacking puzzle game built on the [Celo](https://celo.org) blockchain. Players stack blocks in a classic Tetris-style grid, compete on weekly leaderboards, enter paid tournaments for USDC prize pools, and earn [GoodDollar](https://www.gooddollar.org) UBI rewards — all from a mobile-first interface that runs natively inside [MiniPay](https://minipay.opera.com).
+Blokaz is an on-chain block-stacking puzzle game built on the [Celo](https://celo.org) blockchain. Players stack blocks in a classic Tetris-style grid, compete on weekly leaderboards, and enter paid tournaments for USDT prize pools — all from a mobile-first interface that runs natively inside [MiniPay](https://minipay.opera.com).
 
 **Live:** [blokaz.xyz](https://www.blokaz.xyz)  
 **Studio:** [Cracked Studios](https://crackedstudios.xyz)
@@ -16,7 +16,6 @@ Blokaz is an on-chain block-stacking puzzle game built on the [Celo](https://cel
 - [Environment Variables](#environment-variables)
 - [Game Mechanics](#game-mechanics)
 - [Tournament System](#tournament-system)
-- [GoodDollar Integration](#gooddollar-integration)
 - [Wallet Support](#wallet-support)
 - [App Structure](#app-structure)
 - [Scripts](#scripts)
@@ -33,7 +32,7 @@ Blokaz is an on-chain block-stacking puzzle game built on the [Celo](https://cel
 - Epoch-based seasons — weekly leaderboards with full historical navigation
 
 ### Tournament Mode
-- Paid-entry tournaments with USDC prize pools
+- Paid-entry tournaments with USDT prize pools
 - Configurable entry fees, reward distributions (top N finishers), and duration
 - Signature-based game submission (EIP-712) to prevent replay attacks
 - Automatic settlement and prize distribution on finalization
@@ -71,7 +70,7 @@ All contracts are deployed on **Celo Mainnet** (chain ID `42220`).
 |----------|---------|
 | Game | [`0x16C3A18FDcb6905f58311C5b8a6e91e447Fefe43`](https://explorer.celo.org/mainnet/address/0x16C3A18FDcb6905f58311C5b8a6e91e447Fefe43) |
 | Tournament | [`0xaf3cb90f8002b4f08ba7f7c4fb5d9bde698236a7`](https://explorer.celo.org/mainnet/address/0xaf3cb90f8002b4f08ba7f7c4fb5d9bde698236a7) |
-| USDC (prize token) | `0xcebA9300f2b948710d2653dD7B07f33A8B32118C` |
+| USDT (prize token) | `0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e` |
 
 ### Key Contract Functions
 
@@ -89,7 +88,7 @@ All contracts are deployed on **Celo Mainnet** (chain ID `42220`).
 
 | Function | Description |
 |----------|-------------|
-| `joinTournament(tournamentId)` | Pay entry fee (USDC) and register |
+| `joinTournament(tournamentId)` | Pay entry fee (USDT) and register |
 | `startTournamentGame(id, seedHash, nonce, deadline, sig)` | Begin a tournament game with backend signature |
 | `submitTournamentScore(id, gameId, score, deadline, sig)` | Submit score with EIP-712 proof |
 | `finalizeTournament(tournamentId)` | Settle rewards after end time |
@@ -194,7 +193,7 @@ VITE_WEB3AUTH_NETWORK=sapphire_devnet
 ### Entering a Tournament
 
 1. Browse open tournaments in the **Tournament Hall** (`#/tournaments`)
-2. Approve USDC spending allowance for the tournament contract
+2. Approve USDT spending allowance for the tournament contract
 3. Call `joinTournament` — the entry fee is transferred immediately
 4. The backend signer issues an EIP-712 `startGame` signature valid for this player and tournament
 5. Use the signature to call `startTournamentGame` and begin playing
@@ -271,7 +270,7 @@ blokaz/
 │   │   └── themeStore.ts           Per-view theme mode (lobby / classic / tournaments)
 │   ├── constants/
 │   │   ├── abi.ts                  BLOKZ_GAME_ABI + BLOKZ_TOURNAMENT_ABI
-│   │   └── contracts.ts            GoodDollar contract addresses and ABIs
+│   │   └── contracts.ts            Stablecoin token addresses (USDC, USDT, USDm) and revival costs
 │   ├── utils/
 │   │   └── miniPay.ts              IS_MINIPAY constant + isMiniPay() live check
 │   ├── contract.json               Game + tournament addresses, chain ID, explorer URL
