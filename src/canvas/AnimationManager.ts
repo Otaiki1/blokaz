@@ -25,7 +25,10 @@ export class AnimationManager {
   private animations: Animation[] = []
 
   trigger(type: AnimationType, params: any): void {
-    const duration = type === 'COMBO' ? 800 : type === 'LINE_CLEAR' ? 500 : type === 'DROP_FLASH' ? 220 : 300
+    const comboDuration = type === 'COMBO'
+      ? (params.streak >= 10 ? 1500 : params.streak >= 5 ? 1200 : params.streak >= 3 ? 1000 : 800)
+      : 0
+    const duration = comboDuration || (type === 'LINE_CLEAR' ? 500 : type === 'DROP_FLASH' ? 220 : 300)
     this.animations.push({ type, progress: 0, duration, params })
   }
 
