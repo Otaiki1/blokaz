@@ -110,22 +110,24 @@ export function useStablecoinRevive() {
         })
 
         if (isMiniPay()) {
-          // MiniPay requires CIP-64 transactions (not legacy or EIP-1559).
-          // Create a fresh viem walletClient directly on window.ethereum so gas
-          // estimation and fee abstraction go through MiniPay's injected provider
-          // rather than wagmi's fallback transport.
-          // feeCurrency tells MiniPay which token covers the network fee —
-          // USDC/USDT must use their adapter addresses, not the token address.
-          const client = createWalletClient({
+          // MiniPay CIP-64: send via raw window.ethereum.request so viem never
+          // calls eth_estimateGas or eth_gasPrice(feeCurrency) — those RPC
+          // variants are not supported by MiniPay's injected provider in production.
+          // We pass feeCurrency so MiniPay deducts gas from the chosen stablecoin.
+          // USDC/USDT must use their adapter addresses; USDm uses the token address.
+          const [sender] = await createWalletClient({
             chain: celo,
             transport: custom(window.ethereum!),
-          })
-          const [sender] = await client.getAddresses()
-          await client.sendTransaction({
-            account: sender,
-            to: token.address,
-            data,
-            feeCurrency: MINIPAY_FEE_CURRENCY[sym],
+          }).getAddresses()
+          await (window.ethereum as any).request({
+            method: 'eth_sendTransaction',
+            params: [{
+              from: sender,
+              to: token.address,
+              data,
+              gas: '0x493E0', // 300 000 — covers ERC-20 transfer + feeCurrency overhead
+              feeCurrency: MINIPAY_FEE_CURRENCY[sym],
+            }],
           })
         } else {
           if (!walletRef.current) throw new Error('Wallet not connected')
