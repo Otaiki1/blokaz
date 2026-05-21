@@ -1,28 +1,81 @@
 import React, { useEffect, useState } from 'react'
+import { getComboMultiplier } from '../engine/scoring'
 
 interface ComboOverlayProps {
   streak: number
   trigger: number
 }
 
-const FLOAT_PIECES = [
-  { cells: [[0,0],[1,0],[2,0],[2,1]], color: 'var(--piece-red)', rot: '-20deg', top: '55%', left: '8%' },
-  { cells: [[0,0],[0,1],[1,0],[1,1]], color: 'var(--piece-pink)', rot: '25deg', top: '62%', right: '10%' },
-  { cells: [[0,0],[0,1],[0,2]], color: 'var(--piece-cyan)', rot: '15deg', top: '72%', left: '18%' },
-  { cells: [[0,0],[0,1],[0,2]], color: 'var(--piece-purple)', rot: '-12deg', top: '68%', right: '20%' },
+type TierConfig = {
+  label: string
+  labelColor: string
+  stickerBg: string
+  duration: number
+  pieceCount: number
+}
+
+function getTierConfig(streak: number): TierConfig {
+  if (streak >= 10) return {
+    label: 'LEGENDARY!',
+    labelColor: 'var(--accent-yellow)',
+    stickerBg: 'var(--accent-yellow)',
+    duration: 1800,
+    pieceCount: 8,
+  }
+  if (streak >= 5) return {
+    label: 'UNSTOPPABLE!',
+    labelColor: 'var(--accent-cyan)',
+    stickerBg: 'var(--accent-cyan)',
+    duration: 1600,
+    pieceCount: 6,
+  }
+  if (streak >= 3) return {
+    label: 'ON FIRE!',
+    labelColor: 'var(--accent-lime)',
+    stickerBg: 'var(--accent-lime)',
+    duration: 1400,
+    pieceCount: 5,
+  }
+  return {
+    label: 'COMBO!',
+    labelColor: 'var(--danger)',
+    stickerBg: 'var(--accent-pink)',
+    duration: 1300,
+    pieceCount: 4,
+  }
+}
+
+const ALL_FLOAT_PIECES = [
+  { cells: [[0,0],[1,0],[2,0],[2,1]], color: 'var(--piece-red)',    rot: '-20deg', top: '55%', left: '8%'   },
+  { cells: [[0,0],[0,1],[1,0],[1,1]], color: 'var(--piece-pink)',   rot: '25deg',  top: '62%', right: '10%' },
+  { cells: [[0,0],[0,1],[0,2]],       color: 'var(--piece-cyan)',   rot: '15deg',  top: '72%', left: '18%'  },
+  { cells: [[0,0],[0,1],[0,2]],       color: 'var(--piece-purple)', rot: '-12deg', top: '68%', right: '20%' },
+  { cells: [[0,0],[1,0],[1,1]],       color: 'var(--piece-yellow)', rot: '30deg',  top: '45%', left: '5%'   },
+  { cells: [[0,0],[0,1],[0,2],[0,3]], color: 'var(--piece-cyan)',   rot: '-8deg',  top: '78%', right: '8%'  },
+  { cells: [[0,0],[1,0],[2,0]],       color: 'var(--piece-pink)',   rot: '18deg',  top: '40%', right: '5%'  },
+  { cells: [[0,0],[0,1]],             color: 'var(--piece-red)',    rot: '-25deg', top: '82%', left: '12%'  },
 ]
 
 export const ComboOverlay: React.FC<ComboOverlayProps> = ({ streak, trigger }) => {
   const [visible, setVisible] = useState(false)
+  const [config, setConfig] = useState<TierConfig>(() => getTierConfig(streak))
+  const [capturedStreak, setCapturedStreak] = useState(streak)
 
   useEffect(() => {
     if (trigger === 0) return
+    const c = getTierConfig(streak)
+    setConfig(c)
+    setCapturedStreak(streak)
     setVisible(true)
-    const t = setTimeout(() => setVisible(false), 1300)
+    const t = setTimeout(() => setVisible(false), c.duration)
     return () => clearTimeout(t)
-  }, [trigger])
+  }, [trigger]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (!visible || streak === 0) return null
+  if (!visible || capturedStreak === 0) return null
+
+  const multiplier = getComboMultiplier(capturedStreak)
+  const multLabel = multiplier % 1 === 0 ? `×${multiplier}` : `×${multiplier}`
+  const floatPieces = ALL_FLOAT_PIECES.slice(0, config.pieceCount)
 
   return (
     <div className="absolute inset-0 z-40 pointer-events-none overflow-hidden">
@@ -47,27 +100,30 @@ export const ComboOverlay: React.FC<ComboOverlayProps> = ({ streak, trigger }) =
         }}
       />
 
-      {/* COMBO! text */}
+      {/* Tier label */}
       <div
-        className="absolute left-1/2 font-display text-danger text-center leading-none"
+        className="absolute left-1/2 font-display text-center leading-none"
         style={{
           top: '28%',
+          color: config.labelColor,
           transform: 'translateX(-50%) rotate(-4deg)',
-          fontSize: 80,
+          fontSize: capturedStreak >= 5 ? 64 : 80,
           WebkitTextStroke: '3px var(--ink)',
           textShadow: '6px 6px 0 var(--ink)',
           letterSpacing: '-0.04em',
           animation: 'comboText 1.2s cubic-bezier(0.34,1.56,0.64,1) forwards',
+          whiteSpace: 'nowrap',
         }}
       >
-        COMBO!
+        {config.label}
       </div>
 
-      {/* ×N sticker */}
+      {/* Multiplier sticker */}
       <div
-        className="absolute left-1/2 bg-accent-pink text-ink border-4 border-ink font-display text-center"
+        className="absolute left-1/2 text-ink border-4 border-ink font-display text-center"
         style={{
           top: '50%',
+          background: config.stickerBg,
           transform: 'translateX(-50%) rotate(3deg)',
           fontSize: 40,
           padding: '6px 20px',
@@ -77,11 +133,11 @@ export const ComboOverlay: React.FC<ComboOverlayProps> = ({ streak, trigger }) =
           opacity: 0,
         }}
       >
-        ×{streak}
+        {multLabel}
       </div>
 
       {/* Floating piece confetti */}
-      {FLOAT_PIECES.map((p, i) => {
+      {floatPieces.map((p, i) => {
         const rows = Math.max(...p.cells.map(c => c[0])) + 1
         const cols = Math.max(...p.cells.map(c => c[1])) + 1
         const sz = 12
@@ -94,7 +150,7 @@ export const ComboOverlay: React.FC<ComboOverlayProps> = ({ streak, trigger }) =
             style={{
               top: p.top, left: (p as any).left, right: (p as any).right,
               transform: `rotate(${p.rot})`,
-              animation: `floatUp 1s ease-out ${0.2 + i * 0.1}s forwards`,
+              animation: `floatUp 1s ease-out ${0.15 + i * 0.08}s forwards`,
               '--rot': p.rot,
             } as React.CSSProperties}
           >

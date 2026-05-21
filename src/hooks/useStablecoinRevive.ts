@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useAccount, useBalance, useWriteContract } from 'wagmi'
+import { useAccount, useBalance, useWalletClient } from 'wagmi'
+import { encodeFunctionData } from 'viem'
 import {
   GAME_TREASURY,
   STABLECOIN_TOKENS,
@@ -32,9 +33,9 @@ export function isMiniPayBrowser(): boolean {
 export function useStablecoinRevive() {
   const { address } = useAccount()
   const { reviveGame, reviveCount } = useGameStore()
-  const { writeContractAsync } = useWriteContract()
-  const writeRef = useRef(writeContractAsync)
-  useEffect(() => { writeRef.current = writeContractAsync }, [writeContractAsync])
+  const { data: walletClient } = useWalletClient()
+  const walletRef = useRef(walletClient)
+  useEffect(() => { walletRef.current = walletClient }, [walletClient])
 
   const [isPaying, setIsPaying] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -92,20 +93,43 @@ export function useStablecoinRevive() {
       setError(null)
       try {
         const token = STABLECOIN_TOKENS[sym]
-        const txOverrides = isMiniPay()
-          ? { type: 'legacy' as const }
-          : {}
-        await writeRef.current({
-          address: token.address,
+        const data = encodeFunctionData({
           abi: ERC20_TRANSFER_ABI,
           functionName: 'transfer',
           args: [GAME_TREASURY, getReviveCost(sym)],
-          ...txOverrides,
         })
+
+        if (isMiniPay()) {
+          // Bypass viem entirely — viem's prepareTransactionRequest on the Celo
+          // chain tries CIP-42 (maxFeePerGas) or calls eth_estimateGas with Celo
+          // specific params that MiniPay's injected provider rejects with RpcError.
+          // Raw eth_accounts + eth_sendTransaction with explicit gas skips all of
+          // that. MiniPay handles nonce, gas price, and signing internally.
+          const accounts: string[] = await (window.ethereum as any).request({
+            method: 'eth_accounts',
+          })
+          await (window.ethereum as any).request({
+            method: 'eth_sendTransaction',
+            params: [{
+              from: accounts[0],
+              to: token.address,
+              data,
+              gas: '0x493E0', // 300 000 — sufficient for ERC-20 transfer
+            }],
+          })
+        } else {
+          if (!walletRef.current) throw new Error('Wallet not connected')
+          await walletRef.current.sendTransaction({ to: token.address, data })
+        }
+
         reviveGame()
         return true
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Transaction failed'
+      } catch (err: any) {
+        console.error('Revive tx error:', err)
+        const msg =
+          err?.message ||
+          err?.data?.message ||
+          (typeof err === 'string' ? err : 'Transaction failed')
         setError(msg.length > 80 ? msg.slice(0, 80) + '…' : msg)
         return false
       } finally {
@@ -113,7 +137,7 @@ export function useStablecoinRevive() {
         setIsPaying(false)
       }
     },
-    [address, reviveGame]
+    [address, reviveGame, getReviveCost]
   )
 
   return {
