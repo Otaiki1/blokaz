@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAccount, useBalance, useWalletClient } from 'wagmi'
-import { createWalletClient, custom, encodeFunctionData } from 'viem'
-import { celo } from 'viem/chains'
+import { encodeFunctionData } from 'viem'
 import {
   GAME_TREASURY,
   STABLECOIN_TOKENS,
@@ -101,20 +100,22 @@ export function useStablecoinRevive() {
         })
 
         if (isMiniPay()) {
-          // Create a fresh walletClient on window.ethereum directly — wagmi's
-          // useWalletClient falls back to forno.celo.org for gas estimation which
-          // causes UnknownRpcError in MiniPay production. A fresh client with
-          // custom(window.ethereum) lets MiniPay's own provider handle gas natively.
-          // No feeCurrency needed: MiniPay manages gas abstraction automatically.
-          const client = createWalletClient({
-            chain: celo,
-            transport: custom(window.ethereum!),
+          // Bypass viem entirely — viem's prepareTransactionRequest on the Celo
+          // chain tries CIP-42 (maxFeePerGas) or calls eth_estimateGas with Celo
+          // specific params that MiniPay's injected provider rejects with RpcError.
+          // Raw eth_accounts + eth_sendTransaction with explicit gas skips all of
+          // that. MiniPay handles nonce, gas price, and signing internally.
+          const accounts: string[] = await (window.ethereum as any).request({
+            method: 'eth_accounts',
           })
-          const [sender] = await client.getAddresses()
-          await client.sendTransaction({
-            account: sender,
-            to: token.address,
-            data,
+          await (window.ethereum as any).request({
+            method: 'eth_sendTransaction',
+            params: [{
+              from: accounts[0],
+              to: token.address,
+              data,
+              gas: '0x493E0', // 300 000 — sufficient for ERC-20 transfer
+            }],
           })
         } else {
           if (!walletRef.current) throw new Error('Wallet not connected')
