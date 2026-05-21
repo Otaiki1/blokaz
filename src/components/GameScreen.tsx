@@ -37,7 +37,10 @@ import {
   writeStoredGameSession,
   clearStoredGameSession,
 } from '../utils/gameSessionStorage'
-import { IS_MINIPAY } from '../utils/miniPay'
+import { IS_MINIPAY, isWebBrowser, markTrialUsed, isWebTrialGated } from '../utils/miniPay'
+import { MiniPayGateModal } from './MiniPayGateModal'
+import { getScoreTier } from '../engine/scoring'
+import type { TierInfo } from '../engine/scoring'
 
 const GAME_ADDRESS = contractInfo.game as `0x${string}`
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
@@ -417,6 +420,7 @@ const GameScreen: React.FC<GameScreenProps> = ({
   const lastTimeRef = useRef<number>(0)
   const trayHoverIndexRef = useRef<number | null>(null)
   const cellSizeRef = useRef<number>(0)
+  const currentTierRef = useRef<TierInfo>(getScoreTier(0))
 
   const {
     gameSession,
@@ -566,6 +570,8 @@ const GameScreen: React.FC<GameScreenProps> = ({
   // 1. Handle Start
   const handleStartGame = () => {
     if (isPending || isConfirming) return // already has a tx in flight
+    // Mark free web trial as consumed (no-op inside MiniPay)
+    if (isWebBrowser()) markTrialUsed()
     const freshState = useGameStore.getState()
     const { onChainSeed: latestSeed, onChainGameId: latestGameId } = freshState
     if (
@@ -643,8 +649,9 @@ const GameScreen: React.FC<GameScreenProps> = ({
   // Skip in MiniPay: isConnected is always false on first render because
   // MiniPayAutoConnect hasn't resolved yet. Without this guard the game
   // silently starts in practice mode and contractStartGame is never called.
+  // Also skip if the web trial is already gated — don't auto-start a second game.
   useEffect(() => {
-    if (!isConnected && !gameSession && !IS_MINIPAY) handleStartGame()
+    if (!isConnected && !gameSession && !IS_MINIPAY && !isWebTrialGated()) handleStartGame()
   }, [isConnected, gameSession])
 
   // 4. Start tx rejection → abandon session and go back to lobby
@@ -711,6 +718,13 @@ const GameScreen: React.FC<GameScreenProps> = ({
     const gridRenderer = new GridRenderer(canvas, init.gridSize)
     const pieceRenderer = new PieceRenderer(canvas, init.trayY, init.cellSize)
     const animManager = animManagerRef.current
+
+    // Sync initial tier into renderers and CSS
+    const initTier = getScoreTier(useGameStore.getState().score ?? 0)
+    currentTierRef.current = initTier
+    gridRenderer.setTier(initTier)
+    pieceRenderer.setTier(initTier)
+    document.documentElement.setAttribute('data-tier', String(initTier.id))
 
     // ResizeObserver keeps canvas sized to container
     let ro: ResizeObserver | null = null
@@ -812,11 +826,31 @@ const GameScreen: React.FC<GameScreenProps> = ({
       lastTimeRef.current = timestamp
       animManager.update(delta)
 
+      // Feed current time (ms) into renderers for animated tier effects
+      gridRenderer.setTime(timestamp)
+      pieceRenderer.setTime(timestamp)
+
       const ctx = canvas.getContext('2d')!
       ctx.clearRect(0, 0, canvas.width, canvas.height)
 
       const currentSession = useGameStore.getState().gameSession
       if (!currentSession) return
+
+      // Tier detection: use session.score (not store.score which lags on reset)
+      if (!currentSession.isGameOver) {
+        const newTier = getScoreTier(currentSession.score)
+        if (newTier.id !== currentTierRef.current.id) {
+          const prevTier = currentTierRef.current
+          currentTierRef.current = newTier
+          document.documentElement.setAttribute('data-tier', String(newTier.id))
+          if (newTier.id > prevTier.id) {
+            animManager.trigger('TIER_UP', { tierName: newTier.name, accent: newTier.accent })
+          }
+        }
+      }
+      // Always push tier into renderers so resets apply immediately
+      gridRenderer.setTier(currentTierRef.current)
+      pieceRenderer.setTier(currentTierRef.current)
 
       const ghost = (window as any).activeGhost as {
         row: number
@@ -942,6 +976,12 @@ const GameScreen: React.FC<GameScreenProps> = ({
       {...commonCanvasProps}
     />
   )
+
+  // Show lobby gate immediately for web visitors who have used their trial
+  // (and aren't currently in a game-over state, which has its own gate via CanvasArea)
+  if (isWebBrowser() && isWebTrialGated() && !gameSession) {
+    return <MiniPayGateModal />
+  }
 
   if (isMobile) {
     return (
@@ -1390,12 +1430,16 @@ const CanvasArea: React.FC<CanvasAreaProps> = ({
           <ComboOverlay streak={comboStreak} trigger={comboTrigger} />
 
           {isGameOver && (
-            <GameOverModal
-              score={score}
-              onPlayAgain={handleStartGame}
-              onOpenLeaderboard={onOpenLeaderboard}
-              mode="classic"
-            />
+            isWebBrowser()
+              ? <MiniPayGateModal score={score} />
+              : (
+                <GameOverModal
+                  score={score}
+                  onPlayAgain={handleStartGame}
+                  onOpenLeaderboard={onOpenLeaderboard}
+                  mode="classic"
+                />
+              )
           )}
         </div>
       </div>
