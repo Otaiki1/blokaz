@@ -483,11 +483,6 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
                     CONTINUE YOUR RUN
                   </div>
                   <div className="flex items-center gap-1.5">
-                    {reviveCount > 0 && (
-                      <div className="border-[2px] border-ink px-2 py-0.5 font-display text-[8px] uppercase tracking-wider" style={{ background: 'var(--danger)', color: '#fff' }}>
-                        ×{reviveCount + 1}
-                      </div>
-                    )}
                     <div className="border-[2px] border-ink px-2 py-0.5 font-display text-[8px] uppercase tracking-wider" style={{ background: 'var(--accent-cyan)', color: 'var(--ink-fixed)' }}>
                       {formatReviveCost(selectedToken)}
                     </div>

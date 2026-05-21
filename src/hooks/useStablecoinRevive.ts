@@ -40,11 +40,10 @@ export function useStablecoinRevive() {
   const [error, setError] = useState<string | null>(null)
   const isPayingRef = useRef(false)
 
-  // Cost doubles with each revive: $0.001 → $0.002 → $0.004 → …
+  // Fixed fee of $0.10 regardless of how many times the player has revived
   const getReviveCost = useCallback(
-    (sym: StablecoinSymbol): bigint =>
-      STABLECOIN_TOKENS[sym].reviveCost * (2n ** BigInt(reviveCount)),
-    [reviveCount]
+    (sym: StablecoinSymbol): bigint => STABLECOIN_TOKENS[sym].reviveCost,
+    []
   )
 
   const { data: usdcBal } = useBalance({
