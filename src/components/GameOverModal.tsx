@@ -1,7 +1,10 @@
 import React, { useMemo } from 'react'
 import { useGameStore } from '../stores/gameStore'
 import { useStablecoinRevive } from '../hooks/useStablecoinRevive'
-import { STABLECOIN_TOKENS, type StablecoinSymbol } from '../constants/contracts'
+import {
+  STABLECOIN_TOKENS,
+  type StablecoinSymbol,
+} from '../constants/contracts'
 import { packMoves } from '../engine/replay'
 import {
   useSubmitScore,
@@ -49,10 +52,14 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
   // Each contract tracks its own activeGame mapping — use the right one per mode
   const { gameId: classicActiveGameId, isLoading: isLoadingClassicGameId } =
     useActiveGame(mode === 'classic' ? address : undefined)
-  const { gameId: tournamentActiveGameId, isLoading: isLoadingTournamentGameId } =
-    useActiveTournamentGame(mode === 'tournament' ? address : undefined)
-  const activeGameId = mode === 'tournament' ? tournamentActiveGameId : classicActiveGameId
-  const isLoadingGameId = mode === 'tournament' ? isLoadingTournamentGameId : isLoadingClassicGameId
+  const {
+    gameId: tournamentActiveGameId,
+    isLoading: isLoadingTournamentGameId,
+  } = useActiveTournamentGame(mode === 'tournament' ? address : undefined)
+  const activeGameId =
+    mode === 'tournament' ? tournamentActiveGameId : classicActiveGameId
+  const isLoadingGameId =
+    mode === 'tournament' ? isLoadingTournamentGameId : isLoadingClassicGameId
   const { leaderboard } = useLeaderboard()
   const {
     gameSession,
@@ -78,7 +85,8 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
     reviveCount,
   } = useStablecoinRevive()
 
-  const [selectedToken, setSelectedToken] = React.useState<StablecoinSymbol>(defaultToken)
+  const [selectedToken, setSelectedToken] =
+    React.useState<StablecoinSymbol>(defaultToken)
 
   const handleStableRevive = async () => {
     setCountdown(null)
@@ -110,27 +118,33 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
 
   // Classic games live in GAME_ADDRESS; tournament games in TOURNAMENT_ADDRESS.
   // Both hooks are always called (Rules of Hooks), but only the relevant one is enabled.
-  const { data: classicGameData, isLoading: isLoadingClassicContract } = useReadContract({
-    address: GAME_ADDRESS,
-    abi: BLOKZ_GAME_ABI,
-    functionName: 'games',
-    args: effectiveGameId ? [effectiveGameId] : undefined,
-    query: { enabled: mode === 'classic' && !!effectiveGameId },
-  })
-  const { data: tournamentGameData, isLoading: isLoadingTournamentContract } = useReadContract({
-    address: TOURNAMENT_ADDRESS,
-    abi: BLOKZ_TOURNAMENT_ABI,
-    functionName: 'games',
-    args: effectiveGameId ? [effectiveGameId] : undefined,
-    query: { enabled: mode === 'tournament' && !!effectiveGameId },
-  })
+  const { data: classicGameData, isLoading: isLoadingClassicContract } =
+    useReadContract({
+      address: GAME_ADDRESS,
+      abi: BLOKZ_GAME_ABI,
+      functionName: 'games',
+      args: effectiveGameId ? [effectiveGameId] : undefined,
+      query: { enabled: mode === 'classic' && !!effectiveGameId },
+    })
+  const { data: tournamentGameData, isLoading: isLoadingTournamentContract } =
+    useReadContract({
+      address: TOURNAMENT_ADDRESS,
+      abi: BLOKZ_TOURNAMENT_ABI,
+      functionName: 'games',
+      args: effectiveGameId ? [effectiveGameId] : undefined,
+      query: { enabled: mode === 'tournament' && !!effectiveGameId },
+    })
   const gameData = mode === 'tournament' ? tournamentGameData : classicGameData
-  const isLoadingContract = mode === 'tournament' ? isLoadingTournamentContract : isLoadingClassicContract
+  const isLoadingContract =
+    mode === 'tournament'
+      ? isLoadingTournamentContract
+      : isLoadingClassicContract
 
   const recoveredSeed = useMemo(() => {
     if (onChainSeed) return onChainSeed
     if (!address) return null
-    const contractAddr = mode === 'tournament' ? TOURNAMENT_ADDRESS : GAME_ADDRESS
+    const contractAddr =
+      mode === 'tournament' ? TOURNAMENT_ADDRESS : GAME_ADDRESS
     return (
       readStoredGameSession(storageKey, address, contractAddr)?.seed ?? null
     )
@@ -197,7 +211,9 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
         )
       } catch (err) {
         console.error('Failed to get submission signature:', err)
-        setSignerError('Could not reach signing server — tap retry to try again.')
+        setSignerError(
+          'Could not reach signing server — tap retry to try again.'
+        )
       }
     } else {
       submitScore(
@@ -241,13 +257,22 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
   // Tick the countdown down each second
   React.useEffect(() => {
     if (countdown === null || countdown <= 0) return
-    const t = setTimeout(() => setCountdown(c => (c !== null && c > 0 ? c - 1 : c)), 1000)
+    const t = setTimeout(
+      () => setCountdown((c) => (c !== null && c > 0 ? c - 1 : c)),
+      1000
+    )
     return () => clearTimeout(t)
   }, [countdown])
 
   // Auto-submit when countdown reaches 0
   React.useEffect(() => {
-    if (countdown === 0 && canSubmit && !isRegistering && !isAllSuccess && !autoSubmitTriggeredRef.current) {
+    if (
+      countdown === 0 &&
+      canSubmit &&
+      !isRegistering &&
+      !isAllSuccess &&
+      !autoSubmitTriggeredRef.current
+    ) {
       autoSubmitTriggeredRef.current = true
       handleSubmit()
     }
@@ -326,12 +351,16 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
     return rows.join('\n')
   }
 
-  const HASHTAGS = `#miniapps #minipay #playblokaz #celo`
+  const HASHTAGS = `#miniapps #minipay #playblokaz #celo @playblokaz`
 
   const buildShareText = (withUrl: boolean) => {
-    const parts = [`just scored ${score.toLocaleString()} on BLOKAZ 🎮`]
-    if (stats.bestCombo > 1) parts.push(`×${stats.bestCombo} combo 🔥 · ${stats.linesCleared} lines`)
-    else parts.push(`${stats.linesCleared} lines cleared · rank #${rankData.currentRank}`)
+    const parts = [` ${score.toLocaleString()} on BLOKAZ 🎮`]
+    if (stats.bestCombo > 1)
+      parts.push(`×${stats.bestCombo} combo 🔥 · ${stats.linesCleared} lines`)
+    else
+      parts.push(
+        `${stats.linesCleared} lines cleared · rank #${rankData.currentRank}`
+      )
     parts.push(``)
     if (gameSession?.grid) parts.push(buildBoardEmoji(gameSession.grid))
     parts.push(``)
@@ -364,9 +393,7 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
     const cost = getReviveCost(sym)
     const decimals = STABLECOIN_TOKENS[sym].decimals
     const dollars = Number(cost) / 10 ** decimals
-    return dollars < 0.01
-      ? `$${dollars.toFixed(3)}`
-      : `$${dollars.toFixed(2)}`
+    return dollars < 0.01 ? `$${dollars.toFixed(3)}` : `$${dollars.toFixed(2)}`
   }
 
   return (
@@ -377,7 +404,7 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
         style={{ background: 'var(--overlay)', backdropFilter: 'blur(8px)' }}
       />
       <div
-        className="fixed inset-0 opacity-[0.10] pointer-events-none"
+        className="pointer-events-none fixed inset-0 opacity-[0.10]"
         style={{
           backgroundImage:
             'linear-gradient(135deg, transparent 0%, transparent 42%, var(--ink) 42%, var(--ink) 45%, transparent 45%, transparent 100%)',
@@ -405,278 +432,437 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
             <button
               onClick={handleAbandon}
               className="brutal-btn flex h-9 w-9 items-center justify-center border-[3px] border-white text-white"
-              style={{ background: 'rgba(0,0,0,0.25)', boxShadow: '3px 3px 0 rgba(0,0,0,0.3)' }}
+              style={{
+                background: 'rgba(0,0,0,0.25)',
+                boxShadow: '3px 3px 0 rgba(0,0,0,0.3)',
+              }}
             >
               <BrutalIcon name="back" size={16} strokeWidth={3} />
             </button>
           </div>
 
-        {/* ── Main card ── */}
-        <div
-          className="border-4 border-ink"
-          style={{
-            background: 'var(--paper)',
-            boxShadow: `8px 8px 0 ${shadowColor}`,
-          }}
-        >
-          {/* Score + chips row */}
-          <div className="flex items-center justify-between border-b-4 border-ink px-4 py-3">
-            <div>
-              <div className="font-display text-[9px] uppercase tracking-[0.18em] opacity-60">
-                FINAL SCORE
-              </div>
-              <div
-                className="font-display tabular-nums leading-none"
-                style={{ fontSize: 'clamp(2.5rem, 11vw, 3.5rem)', letterSpacing: '-0.04em' }}
-              >
-                {score.toLocaleString()}
-              </div>
-            </div>
-            <div className="flex flex-col items-end gap-1.5">
-              <div
-                className="border-[3px] border-ink px-2.5 py-0.5 font-display text-[9px] uppercase tracking-widest shadow-[2px_2px_0_var(--shadow)]"
-                style={{ background: 'var(--accent-lime)', color: accentTextColor }}
-              >
-                NEW HIGH
-              </div>
-              <div
-                className="border-[3px] border-ink px-2.5 py-0.5 font-display text-[9px] uppercase tracking-widest shadow-[2px_2px_0_var(--shadow)]"
-                style={{ background: 'var(--accent-pink)', color: accentTextColor }}
-              >
-                {achievementChips[1]}
-              </div>
-            </div>
-          </div>
-
-          {/* Stats — 4 in a single row */}
-          <div className="grid grid-cols-4 border-b-4 border-ink">
-            {[
-              { label: 'COMBO', value: `×${stats.bestCombo}`, icon: 'zap' as const },
-              { label: 'LINES', value: stats.linesCleared, icon: 'star' as const },
-              { label: 'PIECES', value: stats.piecesPlaced, icon: 'history' as const },
-              { label: 'TIME', value: stats.time, icon: 'timer' as const },
-            ].map((stat, i) => (
-              <div
-                key={stat.label}
-                className={`p-2 text-center${i < 3 ? ' border-r-4 border-ink' : ''}`}
-                style={{ background: 'var(--paper-2)' }}
-              >
-                <div className="mb-0.5 flex items-center justify-center gap-0.5 font-display text-[7px] uppercase tracking-[0.1em] opacity-60">
-                  <BrutalIcon name={stat.icon} size={8} strokeWidth={2} />
-                  {stat.label}
+          {/* ── Main card ── */}
+          <div
+            className="border-4 border-ink"
+            style={{
+              background: 'var(--paper)',
+              boxShadow: `8px 8px 0 ${shadowColor}`,
+            }}
+          >
+            {/* Score + chips row */}
+            <div className="flex items-center justify-between border-b-4 border-ink px-4 py-3">
+              <div>
+                <div className="font-display text-[9px] uppercase tracking-[0.18em] opacity-60">
+                  FINAL SCORE
                 </div>
-                <div className="font-display text-base leading-none" style={{ letterSpacing: '-0.02em' }}>
-                  {stat.value}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* ── Actions ── */}
-          <div className="flex flex-col gap-2.5 p-3">
-            {/* Stablecoin revival — shown in both classic and tournament modes */}
-            {(mode === 'classic' || (mode === 'tournament' && !isAllSuccess)) && (
-              <div className="border-[3px] border-ink" style={{ background: 'var(--paper-2)' }}>
-                <div className="flex items-center justify-between border-b-[3px] border-ink px-3 py-2" style={{ background: 'var(--paper)' }}>
-                  <div className="flex items-center gap-2 font-display text-[10px] uppercase tracking-[0.15em]">
-                    <div className="flex h-5 w-5 items-center justify-center border-[2px] border-ink text-[10px]" style={{ background: 'var(--accent-cyan)', color: 'var(--ink-fixed)' }}>⚡</div>
-                    CONTINUE YOUR RUN
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <div className="border-[2px] border-ink px-2 py-0.5 font-display text-[8px] uppercase tracking-wider" style={{ background: 'var(--accent-cyan)', color: 'var(--ink-fixed)' }}>
-                      {formatReviveCost(selectedToken)}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="p-3 space-y-2.5">
-                  {/* Token cards — always show all 3 so player can pick their balance */}
-                  <div className="grid grid-cols-3 gap-2">
-                    {visibleTokens.map((sym) => {
-                      const isSelected = selectedToken === sym
-                      const decimals = STABLECOIN_TOKENS[sym].decimals
-                      const raw = stableBalances[sym]
-                      const balance = (Number(raw) / 10 ** decimals).toFixed(2)
-                      const affordable = canAfford(sym)
-                      return (
-                        <button
-                          key={sym}
-                          onClick={() => setSelectedToken(sym)}
-                          className="flex flex-col items-center gap-1 border-[3px] border-ink py-2.5 px-1 font-display"
-                          style={{
-                            background: isSelected ? 'var(--accent-cyan)' : 'var(--paper)',
-                            color: isSelected ? 'var(--ink-fixed)' : 'var(--ink)',
-                            boxShadow: isSelected ? '3px 3px 0 var(--shadow)' : '2px 2px 0 var(--shadow)',
-                          }}
-                        >
-                          <span className="text-[11px] uppercase tracking-wider font-bold">{sym}</span>
-                          <span
-                            className="text-[9px] tabular-nums"
-                            style={{ color: isSelected ? 'var(--ink-fixed)' : affordable ? 'var(--ink)' : 'var(--ink-soft)', opacity: isSelected ? 0.75 : 1 }}
-                          >
-                            {balance}
-                          </span>
-                        </button>
-                      )
-                    })}
-                  </div>
-
-                  {/* Revive button */}
-                  <button
-                    onClick={canAfford(selectedToken)
-                      ? handleStableRevive
-                      : IS_MINIPAY
-                        ? () => window.open(MINIPAY_DEPOSIT_URL, '_blank')
-                        : undefined}
-                    disabled={isStablePaying || (!canAfford(selectedToken) && !IS_MINIPAY)}
-                    className="brutal-btn flex w-full items-center justify-center gap-2 border-[3px] border-ink py-3 font-display text-[11px] uppercase tracking-wider shadow-[3px_3px_0_var(--shadow)] disabled:opacity-50"
-                    style={{ background: 'var(--accent-cyan)', color: 'var(--ink-fixed)' }}
-                  >
-                    {isStablePaying
-                      ? <div className="brutal-loader" />
-                      : canAfford(selectedToken)
-                        ? <><BrutalIcon name="zap" size={13} strokeWidth={2.5} />REVIVE — {formatReviveCost(selectedToken)} {selectedToken}</>
-                        : IS_MINIPAY
-                          ? <span>NOT ENOUGH {selectedToken} — DEPOSIT</span>
-                          : <span>NOT ENOUGH {selectedToken}</span>
-                    }
-                  </button>
-
-                  {stableError && (
-                    <div className="text-center font-display text-[8px] uppercase tracking-[0.12em] text-danger">
-                      {stableError}
-                    </div>
-                  )}
-
-                </div>
-              </div>
-            )}
-
-            {/* Fallback when game was never registered (start approval was skipped) */}
-            {!effectiveGameId && !isLoading && (
-              <div className="border-[3px] border-ink bg-paper-2 p-4" style={{ boxShadow: '3px 3px 0 var(--shadow)' }}>
-                <div className="mb-1 flex items-center gap-2 font-display text-[10px] uppercase tracking-[0.12em]" style={{ color: 'var(--ink)' }}>
-                  <BrutalIcon name="alert" size={11} strokeWidth={2.5} />
-                  SCORE NOT SAVED
-                </div>
-                <p className="font-body text-[11px] leading-relaxed" style={{ color: 'var(--ink-soft)' }}>
-                  Your game wasn't registered — the approval at the start was cancelled. Your score won't appear on the leaderboard, but you can play again.
-                </p>
-              </div>
-            )}
-
-            {/* Submit score CTA */}
-            {signerError && (
-              <div className="border-[3px] border-danger px-3 py-2 font-display text-[9px] uppercase tracking-[0.12em] text-danger" style={{ background: 'var(--paper-2)' }}>
-                <BrutalIcon name="alert" size={10} strokeWidth={2.5} /> {signerError}
-              </div>
-            )}
-            {hasError ? (
-              <div className="flex flex-col gap-2">
                 <div
-                  className="border-[3px] border-danger p-4"
-                  style={{ background: 'var(--paper-2)', boxShadow: '4px 4px 0 var(--danger)' }}
+                  className="font-display tabular-nums leading-none"
+                  style={{
+                    fontSize: 'clamp(2.5rem, 11vw, 3.5rem)',
+                    letterSpacing: '-0.04em',
+                  }}
                 >
-                  <div className="mb-1.5 flex items-center gap-2 font-display text-[11px] uppercase tracking-[0.12em] text-danger">
-                    <BrutalIcon name="alert" size={12} strokeWidth={2.5} />
+                  {score.toLocaleString()}
+                </div>
+              </div>
+              <div className="flex flex-col items-end gap-1.5">
+                <div
+                  className="border-[3px] border-ink px-2.5 py-0.5 font-display text-[9px] uppercase tracking-widest shadow-[2px_2px_0_var(--shadow)]"
+                  style={{
+                    background: 'var(--accent-lime)',
+                    color: accentTextColor,
+                  }}
+                >
+                  NEW HIGH
+                </div>
+                <div
+                  className="border-[3px] border-ink px-2.5 py-0.5 font-display text-[9px] uppercase tracking-widest shadow-[2px_2px_0_var(--shadow)]"
+                  style={{
+                    background: 'var(--accent-pink)',
+                    color: accentTextColor,
+                  }}
+                >
+                  {achievementChips[1]}
+                </div>
+              </div>
+            </div>
+
+            {/* Stats — 4 in a single row */}
+            <div className="grid grid-cols-4 border-b-4 border-ink">
+              {[
+                {
+                  label: 'COMBO',
+                  value: `×${stats.bestCombo}`,
+                  icon: 'zap' as const,
+                },
+                {
+                  label: 'LINES',
+                  value: stats.linesCleared,
+                  icon: 'star' as const,
+                },
+                {
+                  label: 'PIECES',
+                  value: stats.piecesPlaced,
+                  icon: 'history' as const,
+                },
+                { label: 'TIME', value: stats.time, icon: 'timer' as const },
+              ].map((stat, i) => (
+                <div
+                  key={stat.label}
+                  className={`p-2 text-center${i < 3 ? ' border-r-4 border-ink' : ''}`}
+                  style={{ background: 'var(--paper-2)' }}
+                >
+                  <div className="mb-0.5 flex items-center justify-center gap-0.5 font-display text-[7px] uppercase tracking-[0.1em] opacity-60">
+                    <BrutalIcon name={stat.icon} size={8} strokeWidth={2} />
+                    {stat.label}
+                  </div>
+                  <div
+                    className="font-display text-base leading-none"
+                    style={{ letterSpacing: '-0.02em' }}
+                  >
+                    {stat.value}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* ── Actions ── */}
+            <div className="flex flex-col gap-2.5 p-3">
+              {/* Stablecoin revival — shown in both classic and tournament modes */}
+              {(mode === 'classic' ||
+                (mode === 'tournament' && !isAllSuccess)) && (
+                <div
+                  className="border-[3px] border-ink"
+                  style={{ background: 'var(--paper-2)' }}
+                >
+                  <div
+                    className="flex items-center justify-between border-b-[3px] border-ink px-3 py-2"
+                    style={{ background: 'var(--paper)' }}
+                  >
+                    <div className="flex items-center gap-2 font-display text-[10px] uppercase tracking-[0.15em]">
+                      <div
+                        className="flex h-5 w-5 items-center justify-center border-[2px] border-ink text-[10px]"
+                        style={{
+                          background: 'var(--accent-cyan)',
+                          color: 'var(--ink-fixed)',
+                        }}
+                      >
+                        ⚡
+                      </div>
+                      CONTINUE YOUR RUN
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <div
+                        className="border-[2px] border-ink px-2 py-0.5 font-display text-[8px] uppercase tracking-wider"
+                        style={{
+                          background: 'var(--accent-cyan)',
+                          color: 'var(--ink-fixed)',
+                        }}
+                      >
+                        {formatReviveCost(selectedToken)}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2.5 p-3">
+                    {/* Token cards — always show all 3 so player can pick their balance */}
+                    <div className="grid grid-cols-3 gap-2">
+                      {visibleTokens.map((sym) => {
+                        const isSelected = selectedToken === sym
+                        const decimals = STABLECOIN_TOKENS[sym].decimals
+                        const raw = stableBalances[sym]
+                        const balance = (Number(raw) / 10 ** decimals).toFixed(
+                          2
+                        )
+                        const affordable = canAfford(sym)
+                        return (
+                          <button
+                            key={sym}
+                            onClick={() => setSelectedToken(sym)}
+                            className="flex flex-col items-center gap-1 border-[3px] border-ink px-1 py-2.5 font-display"
+                            style={{
+                              background: isSelected
+                                ? 'var(--accent-cyan)'
+                                : 'var(--paper)',
+                              color: isSelected
+                                ? 'var(--ink-fixed)'
+                                : 'var(--ink)',
+                              boxShadow: isSelected
+                                ? '3px 3px 0 var(--shadow)'
+                                : '2px 2px 0 var(--shadow)',
+                            }}
+                          >
+                            <span className="text-[11px] font-bold uppercase tracking-wider">
+                              {sym}
+                            </span>
+                            <span
+                              className="text-[9px] tabular-nums"
+                              style={{
+                                color: isSelected
+                                  ? 'var(--ink-fixed)'
+                                  : affordable
+                                    ? 'var(--ink)'
+                                    : 'var(--ink-soft)',
+                                opacity: isSelected ? 0.75 : 1,
+                              }}
+                            >
+                              {balance}
+                            </span>
+                          </button>
+                        )
+                      })}
+                    </div>
+
+                    {/* Revive button */}
+                    <button
+                      onClick={
+                        canAfford(selectedToken)
+                          ? handleStableRevive
+                          : IS_MINIPAY
+                            ? () => window.open(MINIPAY_DEPOSIT_URL, '_blank')
+                            : undefined
+                      }
+                      disabled={
+                        isStablePaying ||
+                        (!canAfford(selectedToken) && !IS_MINIPAY)
+                      }
+                      className="brutal-btn flex w-full items-center justify-center gap-2 border-[3px] border-ink py-3 font-display text-[11px] uppercase tracking-wider shadow-[3px_3px_0_var(--shadow)] disabled:opacity-50"
+                      style={{
+                        background: 'var(--accent-cyan)',
+                        color: 'var(--ink-fixed)',
+                      }}
+                    >
+                      {isStablePaying ? (
+                        <div className="brutal-loader" />
+                      ) : canAfford(selectedToken) ? (
+                        <>
+                          <BrutalIcon name="zap" size={13} strokeWidth={2.5} />
+                          REVIVE — {formatReviveCost(selectedToken)}{' '}
+                          {selectedToken}
+                        </>
+                      ) : IS_MINIPAY ? (
+                        <span>NOT ENOUGH {selectedToken} — DEPOSIT</span>
+                      ) : (
+                        <span>NOT ENOUGH {selectedToken}</span>
+                      )}
+                    </button>
+
+                    {stableError && (
+                      <div className="text-center font-display text-[8px] uppercase tracking-[0.12em] text-danger">
+                        {stableError}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Fallback when game was never registered (start approval was skipped) */}
+              {!effectiveGameId && !isLoading && (
+                <div
+                  className="border-[3px] border-ink bg-paper-2 p-4"
+                  style={{ boxShadow: '3px 3px 0 var(--shadow)' }}
+                >
+                  <div
+                    className="mb-1 flex items-center gap-2 font-display text-[10px] uppercase tracking-[0.12em]"
+                    style={{ color: 'var(--ink)' }}
+                  >
+                    <BrutalIcon name="alert" size={11} strokeWidth={2.5} />
                     SCORE NOT SAVED
                   </div>
-                  <p className="mb-3 font-body text-[11px] leading-relaxed" style={{ color: 'var(--ink-soft)' }}>
-                    Something went wrong while saving your score. Tap below to try again — your score is still here.
-                  </p>
-                  <button
-                    onClick={handleSubmit}
-                    disabled={!canSubmit || isRegistering}
-                    className="brutal-btn flex w-full items-center justify-center gap-2 border-[3px] border-ink py-3 font-display text-[11px] uppercase tracking-widest disabled:opacity-50"
-                    style={{ background: 'var(--danger)', color: '#fff', boxShadow: '3px 3px 0 rgba(0,0,0,0.25)' }}
+                  <p
+                    className="font-body text-[11px] leading-relaxed"
+                    style={{ color: 'var(--ink-soft)' }}
                   >
-                    {isRegistering ? <div className="brutal-loader" /> : <BrutalIcon name="play" size={13} strokeWidth={2.5} />}
-                    RETRY SAVING SCORE
-                  </button>
+                    Your game wasn't registered — the approval at the start was
+                    cancelled. Your score won't appear on the leaderboard, but
+                    you can play again.
+                  </p>
                 </div>
-                <button
-                  onClick={() => { resetForNextGame(); onPlayAgain() }}
-                  className="brutal-btn flex w-full items-center justify-center gap-2 border-[3px] border-ink bg-paper-2 py-2.5 font-display text-[10px] uppercase tracking-widest"
-                  style={{ boxShadow: '3px 3px 0 var(--shadow)', color: 'var(--ink)' }}
-                >
-                  SKIP &amp; PLAY AGAIN
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={isAllSuccess ? () => { resetForNextGame(); onPlayAgain() } : handleSubmit}
-                disabled={isRegistering || (!isAllSuccess && !canSubmit)}
-                className="brutal-btn flex w-full flex-col items-center justify-center border-4 border-ink font-display uppercase disabled:opacity-50"
-                style={{
-                  background: isAllSuccess ? 'var(--accent-lime)' : 'var(--ink)',
-                  color: isAllSuccess ? accentTextColor : 'var(--paper)',
-                  boxShadow: '5px 5px 0 var(--shadow)',
-                }}
-              >
-                <div className="flex items-center justify-center gap-2 py-3.5 text-sm tracking-[0.15em]">
-                  {isRegistering
-                    ? <div className="brutal-loader" />
-                    : <BrutalIcon name="play" size={18} strokeWidth={2.5} />}
-                  {isRegistering
-                    ? 'SUBMITTING...'
-                    : isAllSuccess
-                      ? 'PLAY AGAIN'
-                      : isTournamentMode
-                        ? `SUBMIT SCORE${countdown !== null && countdown > 0 ? ` (${countdown}s)` : ''}`
-                        : `PLAY AGAIN${countdown !== null && countdown > 0 ? ` (${countdown}s)` : ''}`}
-                </div>
-                {countdown !== null && countdown > 0 && !isRegistering && !isAllSuccess && (
-                  <div className="w-full border-t-[3px] border-ink/30">
-                    <div
-                      className="h-1.5"
-                      style={{
-                        width: `${(countdown / (isTournamentMode ? 5 : 10)) * 100}%`,
-                        background: 'var(--paper)',
-                        transition: 'width 1s linear',
-                      }}
-                    />
-                  </div>
-                )}
-              </button>
-            )}
+              )}
 
-            {/* Share / Leaderboard */}
-            {showShareSheet ? (
-              <div className="border-[3px] border-ink" style={{ background: 'var(--paper-2)' }}>
-                <div className="flex items-center justify-between border-b-[3px] border-ink px-3 py-2" style={{ background: 'var(--paper)' }}>
-                  <span className="font-display text-[9px] uppercase tracking-[0.18em]">SHARE YOUR RUN</span>
-                  <button onClick={() => setShowShareSheet(false)}
-                    className="brutal-btn flex h-7 w-7 items-center justify-center border-2 border-ink text-ink"
-                    style={{ background: 'var(--paper-2)', boxShadow: '2px 2px 0 var(--shadow)' }}>
-                    <BrutalIcon name="back" size={12} strokeWidth={3} />
+              {/* Submit score CTA */}
+              {signerError && (
+                <div
+                  className="border-[3px] border-danger px-3 py-2 font-display text-[9px] uppercase tracking-[0.12em] text-danger"
+                  style={{ background: 'var(--paper-2)' }}
+                >
+                  <BrutalIcon name="alert" size={10} strokeWidth={2.5} />{' '}
+                  {signerError}
+                </div>
+              )}
+              {hasError ? (
+                <div className="flex flex-col gap-2">
+                  <div
+                    className="border-[3px] border-danger p-4"
+                    style={{
+                      background: 'var(--paper-2)',
+                      boxShadow: '4px 4px 0 var(--danger)',
+                    }}
+                  >
+                    <div className="mb-1.5 flex items-center gap-2 font-display text-[11px] uppercase tracking-[0.12em] text-danger">
+                      <BrutalIcon name="alert" size={12} strokeWidth={2.5} />
+                      SCORE NOT SAVED
+                    </div>
+                    <p
+                      className="mb-3 font-body text-[11px] leading-relaxed"
+                      style={{ color: 'var(--ink-soft)' }}
+                    >
+                      Something went wrong while saving your score. Tap below to
+                      try again — your score is still here.
+                    </p>
+                    <button
+                      onClick={handleSubmit}
+                      disabled={!canSubmit || isRegistering}
+                      className="brutal-btn flex w-full items-center justify-center gap-2 border-[3px] border-ink py-3 font-display text-[11px] uppercase tracking-widest disabled:opacity-50"
+                      style={{
+                        background: 'var(--danger)',
+                        color: '#fff',
+                        boxShadow: '3px 3px 0 rgba(0,0,0,0.25)',
+                      }}
+                    >
+                      {isRegistering ? (
+                        <div className="brutal-loader" />
+                      ) : (
+                        <BrutalIcon name="play" size={13} strokeWidth={2.5} />
+                      )}
+                      RETRY SAVING SCORE
+                    </button>
+                  </div>
+                  <button
+                    onClick={() => {
+                      resetForNextGame()
+                      onPlayAgain()
+                    }}
+                    className="brutal-btn flex w-full items-center justify-center gap-2 border-[3px] border-ink bg-paper-2 py-2.5 font-display text-[10px] uppercase tracking-widest"
+                    style={{
+                      boxShadow: '3px 3px 0 var(--shadow)',
+                      color: 'var(--ink)',
+                    }}
+                  >
+                    SKIP &amp; PLAY AGAIN
                   </button>
                 </div>
-                <div className="flex gap-2 p-2.5">
-                  <button onClick={handleShareTwitter}
-                    className="brutal-btn flex w-full items-center justify-center gap-1.5 border-[3px] border-ink py-2.5 font-display text-[10px] uppercase tracking-wider shadow-[3px_3px_0_var(--shadow)]"
-                    style={{ background: 'var(--ink)', color: 'var(--paper)' }}>
-                    <span className="flex h-4 w-4 items-center justify-center border-[2px] border-paper text-[8px] font-bold" style={{ background: 'var(--paper)', color: 'var(--ink)' }}>X</span>
-                    SHARE ON X
+              ) : (
+                <button
+                  onClick={
+                    isAllSuccess
+                      ? () => {
+                          resetForNextGame()
+                          onPlayAgain()
+                        }
+                      : handleSubmit
+                  }
+                  disabled={isRegistering || (!isAllSuccess && !canSubmit)}
+                  className="brutal-btn flex w-full flex-col items-center justify-center border-4 border-ink font-display uppercase disabled:opacity-50"
+                  style={{
+                    background: isAllSuccess
+                      ? 'var(--accent-lime)'
+                      : 'var(--ink)',
+                    color: isAllSuccess ? accentTextColor : 'var(--paper)',
+                    boxShadow: '5px 5px 0 var(--shadow)',
+                  }}
+                >
+                  <div className="flex items-center justify-center gap-2 py-3.5 text-sm tracking-[0.15em]">
+                    {isRegistering ? (
+                      <div className="brutal-loader" />
+                    ) : (
+                      <BrutalIcon name="play" size={18} strokeWidth={2.5} />
+                    )}
+                    {isRegistering
+                      ? 'SUBMITTING...'
+                      : isAllSuccess
+                        ? 'PLAY AGAIN'
+                        : isTournamentMode
+                          ? `SUBMIT SCORE${countdown !== null && countdown > 0 ? ` (${countdown}s)` : ''}`
+                          : `PLAY AGAIN${countdown !== null && countdown > 0 ? ` (${countdown}s)` : ''}`}
+                  </div>
+                  {countdown !== null &&
+                    countdown > 0 &&
+                    !isRegistering &&
+                    !isAllSuccess && (
+                      <div className="w-full border-t-[3px] border-ink/30">
+                        <div
+                          className="h-1.5"
+                          style={{
+                            width: `${(countdown / (isTournamentMode ? 5 : 10)) * 100}%`,
+                            background: 'var(--paper)',
+                            transition: 'width 1s linear',
+                          }}
+                        />
+                      </div>
+                    )}
+                </button>
+              )}
+
+              {/* Share / Leaderboard */}
+              {showShareSheet ? (
+                <div
+                  className="border-[3px] border-ink"
+                  style={{ background: 'var(--paper-2)' }}
+                >
+                  <div
+                    className="flex items-center justify-between border-b-[3px] border-ink px-3 py-2"
+                    style={{ background: 'var(--paper)' }}
+                  >
+                    <span className="font-display text-[9px] uppercase tracking-[0.18em]">
+                      SHARE YOUR RUN
+                    </span>
+                    <button
+                      onClick={() => setShowShareSheet(false)}
+                      className="brutal-btn flex h-7 w-7 items-center justify-center border-2 border-ink text-ink"
+                      style={{
+                        background: 'var(--paper-2)',
+                        boxShadow: '2px 2px 0 var(--shadow)',
+                      }}
+                    >
+                      <BrutalIcon name="back" size={12} strokeWidth={3} />
+                    </button>
+                  </div>
+                  <div className="flex gap-2 p-2.5">
+                    <button
+                      onClick={handleShareTwitter}
+                      className="brutal-btn flex w-full items-center justify-center gap-1.5 border-[3px] border-ink py-2.5 font-display text-[10px] uppercase tracking-wider shadow-[3px_3px_0_var(--shadow)]"
+                      style={{
+                        background: 'var(--ink)',
+                        color: 'var(--paper)',
+                      }}
+                    >
+                      <span
+                        className="flex h-4 w-4 items-center justify-center border-[2px] border-paper text-[8px] font-bold"
+                        style={{
+                          background: 'var(--paper)',
+                          color: 'var(--ink)',
+                        }}
+                      >
+                        X
+                      </span>
+                      SHARE ON X
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => setShowShareSheet(true)}
+                    className="brutal-btn flex items-center justify-center gap-1.5 border-[3px] border-ink bg-paper-2 py-3 font-display text-[10px] uppercase tracking-wider text-ink shadow-[3px_3px_0_var(--shadow)]"
+                  >
+                    <BrutalIcon name="rocket" size={12} strokeWidth={2} /> SHARE
+                  </button>
+                  <button
+                    onClick={onOpenLeaderboard}
+                    className="brutal-btn border-[3px] border-ink bg-accent-cyan py-3 font-display text-[10px] uppercase tracking-wider shadow-[3px_3px_0_var(--shadow)]"
+                    style={{ color: accentTextColor }}
+                  >
+                    LEADERBOARD
                   </button>
                 </div>
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 gap-2">
-                <button onClick={() => setShowShareSheet(true)}
-                  className="brutal-btn flex items-center justify-center gap-1.5 border-[3px] border-ink bg-paper-2 py-3 font-display text-[10px] uppercase tracking-wider text-ink shadow-[3px_3px_0_var(--shadow)]">
-                  <BrutalIcon name="rocket" size={12} strokeWidth={2} /> SHARE
-                </button>
-                <button onClick={onOpenLeaderboard}
-                  className="brutal-btn border-[3px] border-ink bg-accent-cyan py-3 font-display text-[10px] uppercase tracking-wider shadow-[3px_3px_0_var(--shadow)]"
-                  style={{ color: accentTextColor }}>
-                  LEADERBOARD
-                </button>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </div>
-        </div>{/* /w-full max-w-sm */}
-      </div>{/* /scroll container */}
+        {/* /w-full max-w-sm */}
+      </div>
+      {/* /scroll container */}
     </div>
   )
 }

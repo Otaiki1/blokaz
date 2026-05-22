@@ -40,6 +40,7 @@ import {
 import { IS_MINIPAY } from '../utils/miniPay'
 import { getScoreTier } from '../engine/scoring'
 import type { TierInfo } from '../engine/scoring'
+import { SocialNudgeModal, incrementGameCount, shouldShowNudge } from './SocialNudgeModal'
 
 const GAME_ADDRESS = contractInfo.game as `0x${string}`
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
@@ -454,6 +455,20 @@ const GameScreen: React.FC<GameScreenProps> = ({
   }, [hasNoGas])
 
   const showNoGasModal = hasNoGas && !noGasDismissed
+
+  // ─── Social nudge ───────────────────────────────────────────────────────
+  const [showSocialNudge, setShowSocialNudge] = useState(false)
+
+  // Count each completed game and show nudge on game-over when threshold is met
+  useEffect(() => {
+    if (!isGameOver) return
+    incrementGameCount()
+    if (shouldShowNudge()) {
+      // Small delay so game-over modal renders first
+      const t = setTimeout(() => setShowSocialNudge(true), 1800)
+      return () => clearTimeout(t)
+    }
+  }, [isGameOver])
   // ─────────────────────────────────────────────────────────────────────────
 
   const { leaderboard: lbData } = useLeaderboard()
@@ -1010,6 +1025,7 @@ const GameScreen: React.FC<GameScreenProps> = ({
           canvasArea={canvasArea}
         />
         {showNoGasModal && <NoGasModal address={address} onDismiss={() => setNoGasDismissed(true)} />}
+        {showSocialNudge && <SocialNudgeModal onDismiss={() => setShowSocialNudge(false)} />}
       </>
     )
   }
@@ -1025,6 +1041,7 @@ const GameScreen: React.FC<GameScreenProps> = ({
         canvasArea={canvasArea}
       />
       {showNoGasModal && <NoGasModal address={address} onDismiss={() => setNoGasDismissed(true)} />}
+      {showSocialNudge && <SocialNudgeModal onDismiss={() => setShowSocialNudge(false)} />}
     </>
   )
 }
