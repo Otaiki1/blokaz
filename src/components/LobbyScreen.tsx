@@ -7,6 +7,7 @@ import { useLeaderboard, useTournamentCount, USDC_DECIMALS, useUsername } from '
 import { useTheme } from '../hooks/useTheme'
 import { BLOKZ_TOURNAMENT_ABI } from '../constants/abi'
 import contractInfo from '../contract.json'
+import UsernameSetupModal, { hasDismissedUsernamePrompt } from './UsernameSetupModal'
 
 const TOURNAMENT_ADDRESS = contractInfo.tournament as `0x${string}`
 
@@ -289,6 +290,20 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({ onPlayClassic, onPlayTourname
       return s ? parseInt(s, 10) : 0
     } catch { return 0 }
   })
+
+  // ─── Username setup prompt ───────────────────────────────────────────────
+  const { username, isLoading: isLoadingUsername } = useUsername(address as `0x${string}` | undefined)
+  const [showUsernameModal, setShowUsernameModal] = useState(false)
+
+  useEffect(() => {
+    // Wait until username fetch resolves, then show prompt if needed
+    if (!address || isLoadingUsername) return
+    if (username) return                          // already has one
+    if (hasDismissedUsernamePrompt()) return      // dismissed before
+    // Small delay so the lobby finishes rendering first
+    const t = setTimeout(() => setShowUsernameModal(true), 800)
+    return () => clearTimeout(t)
+  }, [address, username, isLoadingUsername])
 
   // Count-up animated stats
   const animatedScore = useCountUp(playerStats?.bestScore ?? 0, 900, 300)
@@ -741,6 +756,10 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({ onPlayClassic, onPlayTourname
         {/* ── Mobile stack ── */}
         <div className="mx-auto flex max-w-lg flex-col gap-3 pb-4 lg:hidden">{heroStack}</div>
       </div>
+
+      {showUsernameModal && (
+        <UsernameSetupModal onDismiss={() => setShowUsernameModal(false)} />
+      )}
     </>
   )
 }
