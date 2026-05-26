@@ -17,6 +17,7 @@ import UsernameSetupModal, {
 } from './UsernameSetupModal'
 import { NewsNudge } from './GameNotification'
 import CampaignReminderModal from './CampaignReminderModal'
+import WinnerClaimModal from './WinnerClaimModal'
 
 const TOURNAMENT_ADDRESS = contractInfo.tournament as `0x${string}`
 
@@ -1255,6 +1256,7 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({
 
       <NewsNudge newsItems={NEWS_ITEMS} />
       <CampaignReminderModal />
+      <WinnerClaimModal />
     </>
   )
 }
