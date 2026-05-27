@@ -3,11 +3,15 @@ import { useAccount } from 'wagmi'
 
 const TELEGRAM_URL = 'https://t.me/tweetlegg'
 
-// Only these addresses see the claim modal
-const WINNER_ADDRESSES = [
-  '0x58F6a6313a6e15edFfeC43476e656c1dD72D97De',
-  '0x3cF57423474f10292F43Ea937D6bc53dEBA03741',
-  '0xE2900Fdc2F717eAA7E24b5B6AD277C1217e3562F',
+// ─── MONTHLY WINNER ADDRESSES ────────────────────────────────────────────────
+// Update this list at the end of each monthly campaign with the top 10 wallets.
+// Remove all addresses once winners have claimed their prizes.
+// Maximum 10 addresses (one per prize rank).
+const WINNER_ADDRESSES: string[] = [
+  // Paste top 10 wallet addresses here after each monthly campaign ends
+  // Example:
+  // '0xABC...123',  // Rank 1
+  // '0xDEF...456',  // Rank 2
 ].map(a => a.toLowerCase())
 
 // sessionStorage so it reappears on every new app open but not on every navigation
