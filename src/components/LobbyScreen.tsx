@@ -82,11 +82,11 @@ export interface NewsItem {
 // ✏️  Edit this array to publish new news items — newest first
 export const NEWS_ITEMS: NewsItem[] = [
   {
-    id: 'campaign-01',
+    id: 'campaign-02',
     tag: 'CAMPAIGN',
-    date: '26 MAY 2026',
-    headline: 'Monthly social campaign starts when the leaderboard resets on Thursday — now is the time to win real prizes!',
-    body: 'The Blokaz monthly social campaign is kicking off with the Thursday leaderboard reset. Stack your score, climb the ranks, and claim real stablecoin prizes. The grind starts now.',
+    date: '28 MAY 2026',
+    headline: 'The Monthly Campaign is LIVE — Top 10 win real USDT prizes. Get the details in our community and on X!',
+    body: 'The Blokaz monthly campaign has officially started. Stack your best score every week — top 10 players at the end of the month win real USDT prizes. Follow @playblokaz on X and join our Telegram for full details and weekly leaderboard updates.',
     link: 'https://x.com/playblokaz',
   },
   {
