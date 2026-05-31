@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react'
 import { useGameStore } from '../stores/gameStore'
+import { usePowerUpStore } from '../stores/powerUpStore'
 import { useStablecoinRevive } from '../hooks/useStablecoinRevive'
 import {
   STABLECOIN_TOKENS,
@@ -87,6 +88,15 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
 
   const [selectedToken, setSelectedToken] =
     React.useState<StablecoinSymbol>(defaultToken)
+
+  const { inventory, consumeCharge } = usePowerUpStore()
+  const bundleCredits = inventory.revivalBundle
+
+  const handleBundleRevive = () => {
+    setCountdown(null)
+    autoSubmitTriggeredRef.current = true
+    if (consumeCharge('revivalBundle')) reviveGame()
+  }
 
   const handleStableRevive = async () => {
     setCountdown(null)
@@ -528,6 +538,23 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
 
             {/* ── Actions ── */}
             <div className="flex flex-col gap-2.5 p-3">
+              {/* Revival Bundle credits — shown first when player has pre-purchased credits */}
+              {bundleCredits > 0 && (mode === 'classic' || (mode === 'tournament' && !isAllSuccess)) && (
+                <button
+                  onClick={handleBundleRevive}
+                  className="brutal-btn flex w-full items-center justify-center gap-2 border-[3px] border-ink py-3 font-display text-[11px] uppercase tracking-wider shadow-[3px_3px_0_var(--shadow)]"
+                  style={{ background: 'var(--accent-lime)', color: 'var(--ink-fixed)' }}
+                >
+                  ❤️ USE REVIVAL CREDIT
+                  <span
+                    className="border-[2px] border-ink px-2 py-0.5 font-display text-[8px] uppercase tracking-wider"
+                    style={{ background: 'var(--ink)', color: 'var(--paper)' }}
+                  >
+                    {bundleCredits} LEFT
+                  </span>
+                </button>
+              )}
+
               {/* Stablecoin revival — shown in both classic and tournament modes */}
               {(mode === 'classic' ||
                 (mode === 'tournament' && !isAllSuccess)) && (

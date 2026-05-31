@@ -163,9 +163,10 @@ export function getComboTierInfo(streak: number): { pct: number; label: string; 
 export function calculateScore(
   piece: ShapeDefinition,
   linesCleared: number,
-  currentComboStreak: number
+  currentComboStreak: number,
+  scoreBoostActive = false
 ): ScoreEvent {
-  const basePoints = piece.cellCount * piece.cellCount  // quadratic: rewards larger pieces
+  const basePoints = Math.round(piece.cellCount * piece.cellCount * (scoreBoostActive ? 1.5 : 1.0))
 
   const multiLineFactor = linesCleared >= 3 ? 2.5 : linesCleared === 2 ? 1.5 : 1.0
   const linePoints = Math.round(linesCleared * 100 * multiLineFactor)
