@@ -29,7 +29,7 @@ import {
 import { useAccount, useBalance } from 'wagmi'
 import { keccak256, encodePacked } from 'viem'
 import contractInfo from '../contract.json'
-import { GameSession } from '../engine/game'
+import { GameSession, rotatePieceShape } from '../engine/game'
 import type { MoveRecord } from '../engine/game'
 import {
   CLASSIC_SESSION_STORAGE_KEY,
@@ -41,13 +41,24 @@ import { IS_MINIPAY } from '../utils/miniPay'
 import { getScoreTier } from '../engine/scoring'
 import type { TierInfo } from '../engine/scoring'
 import { SocialNudgeModal, incrementGameCount, shouldShowNudge } from './SocialNudgeModal'
+import { PowerUpBar } from './PowerUpBar'
+import { ShopModal } from './ShopModal'
+import { usePowerUpStore } from '../stores/powerUpStore'
 
 const GAME_ADDRESS = contractInfo.game as `0x${string}`
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
 
-function replayMoveHistory(seed: bigint, history: MoveRecord[]): GameSession {
+function replayMoveHistory(
+  seed: bigint,
+  history: MoveRecord[],
+  scoreBoostActive = false
+): GameSession {
   const session = new GameSession(seed)
+  session.scoreBoostActive = scoreBoostActive
   for (const move of history) {
+    if (move.rotations) {
+      for (let i = 0; i < move.rotations; i++) session.rotatePiece(move.pieceIndex)
+    }
     session.placePiece(move.pieceIndex, move.row, move.col)
   }
   return session
@@ -430,10 +441,22 @@ const GameScreen: React.FC<GameScreenProps> = ({
     startGame,
     setOnChainData,
     forceReset,
+    reviveGame,
     onChainStatus,
     onChainSeed,
     onChainGameId,
   } = useGameStore()
+
+  const {
+    loadForAddress,
+    resetActive: resetActivePowerUps,
+    active: activePowerUps,
+    bombModeActive,
+    triggerShield,
+    consumeBomb,
+  } = usePowerUpStore()
+
+  const [showShop, setShowShop] = useState(false)
 
   const { address, isConnected } = useAccount()
 
@@ -458,6 +481,24 @@ const GameScreen: React.FC<GameScreenProps> = ({
 
   // ─── Social nudge ───────────────────────────────────────────────────────
   const [showSocialNudge, setShowSocialNudge] = useState(false)
+
+  // Load power-up inventory whenever the wallet changes
+  useEffect(() => {
+    if (address) loadForAddress(address)
+  }, [address, loadForAddress])
+
+  // Sync score-boost flag directly onto the mutable GameSession
+  useEffect(() => {
+    const session = useGameStore.getState().gameSession
+    if (session) session.scoreBoostActive = activePowerUps.scoreBoost
+  }, [activePowerUps.scoreBoost])
+
+  // Auto-trigger shield on game-over before showing game-over screen
+  useEffect(() => {
+    if (!isGameOver) return
+    const shielded = triggerShield()
+    if (shielded) reviveGame()
+  }, [isGameOver])
 
   // Count each completed game and show nudge on game-over when threshold is met
   useEffect(() => {
@@ -613,7 +654,8 @@ const GameScreen: React.FC<GameScreenProps> = ({
       )
       const stored = readStoredGameSession(CLASSIC_SESSION_STORAGE_KEY, address, GAME_ADDRESS)
       if (stored?.snapshot?.moveHistory?.length) {
-        const restoredSession = replayMoveHistory(localSeed, stored.snapshot.moveHistory)
+        const boost = !!(stored.snapshot as any).scoreBoostActive
+        const restoredSession = replayMoveHistory(localSeed, stored.snapshot.moveHistory, boost)
         ;(window as any).currentPieces = restoredSession.currentPieces
         useGameStore.setState({
           gameSession: restoredSession,
@@ -623,6 +665,7 @@ const GameScreen: React.FC<GameScreenProps> = ({
           isGameOver: restoredSession.isGameOver,
         })
       } else {
+        resetActivePowerUps()
         startGame(localSeed, true)
       }
       return
@@ -713,7 +756,7 @@ const GameScreen: React.FC<GameScreenProps> = ({
       if (!raw) return
       try {
         const entry = JSON.parse(raw)
-        entry.snapshot = { moveHistory: session.moveHistory }
+        entry.snapshot = { moveHistory: session.moveHistory, scoreBoostActive: session.scoreBoostActive }
         localStorage.setItem(CLASSIC_SESSION_STORAGE_KEY, JSON.stringify(entry))
       } catch {}
     }
@@ -855,7 +898,10 @@ const GameScreen: React.FC<GameScreenProps> = ({
           if (raw) {
             try {
               const entry = JSON.parse(raw)
-              entry.snapshot = { moveHistory: updatedSession.moveHistory }
+              entry.snapshot = {
+                moveHistory: updatedSession.moveHistory,
+                scoreBoostActive: updatedSession.scoreBoostActive,
+              }
               localStorage.setItem(CLASSIC_SESSION_STORAGE_KEY, JSON.stringify(entry))
             } catch {}
           }
@@ -988,7 +1034,8 @@ const GameScreen: React.FC<GameScreenProps> = ({
     const stored = readStoredGameSession(CLASSIC_SESSION_STORAGE_KEY, address, GAME_ADDRESS)
     if (!stored?.snapshot?.moveHistory?.length || !stored.hash) return
     const localSeed = BigInt(stored.hash.slice(0, 18))
-    const restoredSession = replayMoveHistory(localSeed, stored.snapshot.moveHistory)
+    const boost = !!(stored.snapshot as any).scoreBoostActive
+    const restoredSession = replayMoveHistory(localSeed, stored.snapshot.moveHistory, boost)
     ;(window as any).currentPieces = restoredSession.currentPieces
     useGameStore.setState({
       gameSession: restoredSession,
@@ -1001,8 +1048,46 @@ const GameScreen: React.FC<GameScreenProps> = ({
 
   const startNewGame = () => {
     clearStoredGameSession(CLASSIC_SESSION_STORAGE_KEY)
+    resetActivePowerUps()
     forceReset()
     handleStartGame()
+  }
+
+  // Bomb: fire bombZone on the session, update score, consume the charge
+  const handleBombTap = (row: number, col: number) => {
+    const session = useGameStore.getState().gameSession
+    if (!session) return
+    const pts = session.bombZone(row, col)
+    consumeBomb()
+    useGameStore.setState({ score: session.score })
+    if (pts > 0) {
+      animManagerRef.current.trigger('SCORE', {
+        x: (canvasDims?.gridSize ?? 200) * 0.5,
+        y: (canvasDims?.gridSize ?? 200) * 0.45,
+        score: pts,
+      })
+      hapticNotification()
+    } else {
+      hapticError()
+    }
+  }
+
+  // Rotate: consume 1 charge, rotate the piece, close picker when charges run out
+  const handleRotatePiece = (pieceIndex: number) => {
+    const session = useGameStore.getState().gameSession
+    if (!session) return
+    const { consumeCharge, getCharges, exitRotateMode } = usePowerUpStore.getState()
+    if (!consumeCharge('rotatePass')) {
+      exitRotateMode()
+      return
+    }
+    const ok = session.rotatePiece(pieceIndex)
+    if (ok) {
+      useGameStore.setState({ currentPieces: [...session.currentPieces] })
+      ;(window as any).currentPieces = session.currentPieces
+      hapticImpact()
+    }
+    if (getCharges('rotatePass') <= 0) exitRotateMode()
   }
 
   const isMiniPayConnecting = IS_MINIPAY && !isConnected
@@ -1032,6 +1117,8 @@ const GameScreen: React.FC<GameScreenProps> = ({
     hasStoredGame,
     continueGame,
     startNewGame,
+    bombModeActive,
+    onBombTap: handleBombTap,
   }
 
   const canvasArea = (
@@ -1051,9 +1138,13 @@ const GameScreen: React.FC<GameScreenProps> = ({
           onOpenLeaderboard={onOpenLeaderboard}
           onBack={onBack}
           canvasArea={canvasArea}
+          onOpenShop={() => setShowShop(true)}
+          onRotatePiece={handleRotatePiece}
+          activePieceIndex={trayHoverIndexRef.current}
         />
         {showNoGasModal && <NoGasModal address={address} onDismiss={() => setNoGasDismissed(true)} />}
         {showSocialNudge && <SocialNudgeModal onDismiss={() => setShowSocialNudge(false)} />}
+        <ShopModal isOpen={showShop} onClose={() => setShowShop(false)} />
       </>
     )
   }
@@ -1070,6 +1161,7 @@ const GameScreen: React.FC<GameScreenProps> = ({
       />
       {showNoGasModal && <NoGasModal address={address} onDismiss={() => setNoGasDismissed(true)} />}
       {showSocialNudge && <SocialNudgeModal onDismiss={() => setShowSocialNudge(false)} />}
+      <ShopModal isOpen={showShop} onClose={() => setShowShop(false)} />
     </>
   )
 }
@@ -1164,6 +1256,8 @@ interface CanvasAreaProps {
   hasStoredGame: boolean
   continueGame: () => void
   startNewGame: () => void
+  bombModeActive?: boolean
+  onBombTap?: (row: number, col: number) => void
 }
 
 const ClassicStartCard: React.FC<{
@@ -1411,6 +1505,8 @@ const CanvasArea: React.FC<CanvasAreaProps> = ({
   hasStoredGame,
   continueGame,
   startNewGame,
+  bombModeActive,
+  onBombTap,
 }) => {
   if (!gameSession) {
     return (
@@ -1474,6 +1570,42 @@ const CanvasArea: React.FC<CanvasAreaProps> = ({
             style={{ touchAction: 'none', display: 'block' }}
           />
 
+          {/* Bomb targeting overlay — intercepts grid taps when bomb mode active */}
+          {bombModeActive && canvasDims && (
+            <div
+              onClick={e => {
+                const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+                const x = e.clientX - rect.left
+                const y = e.clientY - rect.top
+                const cellSize = canvasDims.gridSize / 9
+                const col = Math.floor(x / cellSize)
+                const row = Math.floor(y / cellSize)
+                if (row >= 0 && row < 9 && col >= 0 && col < 9) {
+                  onBombTap?.(row, col)
+                }
+              }}
+              style={{
+                position: 'absolute', top: 0, left: 0, zIndex: 40,
+                width: canvasDims.gridSize, height: canvasDims.gridSize,
+                cursor: 'crosshair',
+                background: 'rgba(229,62,62,0.08)',
+                border: '3px solid rgba(229,62,62,0.6)',
+                boxSizing: 'border-box',
+              }}
+            >
+              <div style={{
+                position: 'absolute', top: '50%', left: '50%',
+                transform: 'translate(-50%,-50%)',
+                fontFamily: '"Archivo Black", sans-serif',
+                fontSize: 11, letterSpacing: '0.16em',
+                color: 'rgba(229,62,62,0.8)',
+                textAlign: 'center', pointerEvents: 'none',
+              }}>
+                💣 TAP A ZONE
+              </div>
+            </div>
+          )}
+
           {/* Sync chip */}
           <div className="pointer-events-none absolute right-2 top-2 z-30">
             <SyncStatusChip
@@ -1510,6 +1642,9 @@ interface MobileLayoutProps {
   onOpenLeaderboard?: () => void
   onBack?: () => void
   canvasArea: React.ReactNode
+  onOpenShop?: () => void
+  onRotatePiece?: (index: number) => void
+  activePieceIndex?: number | null
 }
 
 const ClassicTabStrip: React.FC<{
@@ -1757,6 +1892,9 @@ const MobileLayout: React.FC<MobileLayoutProps> = ({
   onOpenLeaderboard,
   onBack,
   canvasArea,
+  onOpenShop,
+  onRotatePiece,
+  activePieceIndex,
 }) => {
   const [isPaused, setIsPaused] = useState(false)
   const [showFAQ, setShowFAQ] = useState(false)
@@ -1803,6 +1941,16 @@ const MobileLayout: React.FC<MobileLayoutProps> = ({
               comboStreak={comboStreak}
               bestScore={bestScore}
               compact
+            />
+          </div>
+
+          {/* ── Power-up bar ──────────────────────────────────────────── */}
+          <div className="shrink-0">
+            <PowerUpBar
+              onOpenShop={onOpenShop ?? (() => {})}
+              rotatePassEnabled={true}
+              onRotatePiece={onRotatePiece ?? (() => {})}
+              activePieceIndex={activePieceIndex ?? null}
             />
           </div>
         </>
@@ -1883,6 +2031,18 @@ const MobileLayout: React.FC<MobileLayoutProps> = ({
                   HELP & FAQ
                 </span>
                 <span style={{ color: 'var(--ink-soft)' }}>→</span>
+              </button>
+
+              {/* Shop */}
+              <button
+                onClick={() => { setIsPaused(false); onOpenShop?.() }}
+                className="brutal-btn flex items-center justify-between border-b-4 border-ink px-6 py-4 font-display text-[12px] uppercase tracking-[0.14em]"
+                style={{ background: 'var(--accent-yellow)', color: 'var(--ink-fixed)' }}
+              >
+                <span className="flex items-center gap-3">
+                  🛒 BLOKAZ SHOP
+                </span>
+                <span>→</span>
               </button>
 
               {/* Quit */}

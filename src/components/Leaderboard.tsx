@@ -141,11 +141,12 @@ const UsernameRegistration: React.FC = () => {
   )
 }
 
-const RANK_ACCENT: Record<number, string> = { 
-  1: 'var(--accent-yellow)', 
-  2: 'var(--accent-lime)', 
-  3: 'var(--accent-cyan)' 
+const RANK_ACCENT: Record<number, string> = {
+  1: 'var(--accent-yellow)',
+  2: 'var(--accent-lime)',
+  3: 'var(--accent-cyan)'
 }
+
 
 const Leaderboard: React.FC<LeaderboardProps> = ({ isOpen, onClose }) => {
   const { address } = useAccount()
@@ -162,6 +163,8 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ isOpen, onClose }) => {
   const isCurrentEpoch = viewEpoch === undefined || viewEpoch === currentEpoch
   const canGoBack = viewEpoch !== undefined && viewEpoch > 0n
   const canGoForward = !isCurrentEpoch
+
+  const sorted = leaderboard ? [...leaderboard].sort((a, b) => b.score - a.score) : []
 
   return (
     <>
@@ -252,87 +255,74 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ isOpen, onClose }) => {
                   style={{ background: 'var(--paper-2)' }}
                 />
               ))
-            ) : leaderboard && leaderboard.length > 0 ? (
-              leaderboard
-                .sort((a, b) => b.score - a.score)
-                .map((entry, index) => {
-                  const isCurrentUser =
-                    address?.toLowerCase() === entry.player.toLowerCase()
-                  const rank = index + 1
-                  const rowBg = isCurrentUser
-                    ? 'var(--ink)'
-                    : (RANK_ACCENT[rank] ?? 'var(--paper-2)')
-                  const textColor = isCurrentUser 
-                    ? 'var(--paper)' 
-                    : (RANK_ACCENT[rank] ? 'var(--ink-fixed)' : 'var(--ink)')
+            ) : sorted.length > 0 ? (
+              sorted.map((entry, index) => {
+                const isCurrentUser =
+                  address?.toLowerCase() === entry.player.toLowerCase()
+                const rank = index + 1
+                const rowBg = isCurrentUser
+                  ? 'var(--ink)'
+                  : (RANK_ACCENT[rank] ?? 'var(--paper-2)')
+                const textColor = isCurrentUser
+                  ? 'var(--paper)'
+                  : (RANK_ACCENT[rank] ? 'var(--ink-fixed)' : 'var(--ink)')
 
-                  return (
+                return (
+                  <div
+                    key={entry.player}
+                    className="flex items-center gap-3 border-4 border-ink px-3 py-3"
+                    style={{
+                      background: rowBg,
+                      transform: isCurrentUser ? 'scale(1.03)' : 'none',
+                      boxShadow: isCurrentUser
+                        ? '0 0 0 3px var(--accent-yellow), 6px 6px 0 var(--shadow)'
+                        : '4px 4px 0 var(--shadow)',
+                      color: textColor,
+                    }}
+                  >
                     <div
-                      key={entry.player}
-                      className="flex items-center gap-3 border-4 border-ink px-3 py-3"
-                      style={{
-                        background: rowBg,
-                        transform: isCurrentUser ? 'scale(1.03)' : 'none',
-                        boxShadow: isCurrentUser
-                          ? '0 0 0 3px var(--accent-yellow), 6px 6px 0 var(--shadow)'
-                          : '4px 4px 0 var(--shadow)',
-                        color: textColor,
-                      }}
+                      className="w-8 shrink-0 text-center font-display"
+                      style={{ fontSize: 18, letterSpacing: '-0.02em' }}
                     >
-                      {/* Rank */}
-                      <div
-                        className="w-8 shrink-0 text-center font-display"
-                        style={{ fontSize: 18, letterSpacing: '-0.02em' }}
+                      {rank}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <PlayerName address={entry.player} isCurrentUser={isCurrentUser} />
+                        {isCurrentUser && (
+                          <span
+                            className="px-1.5 py-0.5 font-display text-[9px] tracking-[0.1em]"
+                            style={{
+                              background: 'var(--accent-yellow)',
+                              color: 'var(--ink)',
+                              border: '2px solid var(--ink)',
+                            }}
+                          >
+                            YOU
+                          </span>
+                        )}
+                      </div>
+                      <a
+                        href={`${contractInfo.explorer}/${entry.player}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="mt-0.5 inline-flex items-center gap-1 font-body text-[10px] opacity-70 transition-opacity hover:opacity-100"
+                        style={{ color: textColor }}
                       >
-                        {rank}
+                        Details →
+                      </a>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <div className="font-display tabular-nums" style={{ fontSize: 20 }}>
+                        {entry.score.toLocaleString()}
                       </div>
-
-                      {/* Name */}
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <PlayerName
-                            address={entry.player}
-                            isCurrentUser={isCurrentUser}
-                          />
-                          {isCurrentUser && (
-                            <span
-                              className="px-1.5 py-0.5 font-display text-[9px] tracking-[0.1em]"
-                              style={{
-                                background: 'var(--accent-yellow)',
-                                color: 'var(--ink)',
-                                border: '2px solid var(--ink)',
-                              }}
-                            >
-                              YOU
-                            </span>
-                          )}
-                        </div>
-                        <a
-                          href={`${contractInfo.explorer}/${entry.player}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="mt-0.5 inline-flex items-center gap-1 font-body text-[10px] opacity-70 transition-opacity hover:opacity-100"
-                          style={{ color: textColor }}
-                        >
-                          Details →
-                        </a>
-                      </div>
-
-                      {/* Score */}
-                      <div className="shrink-0 text-right">
-                        <div
-                          className="font-display tabular-nums"
-                          style={{ fontSize: 20 }}
-                        >
-                          {entry.score.toLocaleString()}
-                        </div>
-                        <div className="font-display text-[9px] tracking-[0.12em] opacity-70">
-                          PTS
-                        </div>
+                      <div className="font-display text-[9px] tracking-[0.12em] opacity-70">
+                        PTS
                       </div>
                     </div>
-                  )
-                })
+                  </div>
+                )
+              })
             ) : (
               <div
                 className="border-4 border-ink p-8 text-center"

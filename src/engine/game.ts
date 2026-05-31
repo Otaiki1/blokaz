@@ -11,6 +11,7 @@ export interface MoveRecord {
   row: number
   col: number
   scoreEvent: ScoreEvent
+  rotations?: number  // 0-3 CW quarter-turns applied before placement
 }
 
 export interface PlaceResult {
@@ -19,6 +20,24 @@ export interface PlaceResult {
   scoreEvent?: ScoreEvent
   linesCleared?: { rows: number[]; cols: number[] }
   isGameOver: boolean
+}
+
+// Rotate a ShapeDefinition 90° clockwise
+export function rotatePieceShape(piece: ShapeDefinition): ShapeDefinition {
+  const cells = piece.cells as [number, number][]
+  const maxR = Math.max(...cells.map(([r]) => r))
+  const rotated: [number, number][] = cells.map(([r, c]) => [c, maxR - r])
+  const minR = Math.min(...rotated.map(([r]) => r))
+  const minC = Math.min(...rotated.map(([, c]) => c))
+  const normalized = rotated.map(([r, c]) => [r - minR, c - minC] as [number, number])
+  const newWidth = Math.max(...normalized.map(([, c]) => c)) + 1
+  const newHeight = Math.max(...normalized.map(([r]) => r)) + 1
+  return {
+    ...piece,
+    cells: normalized,
+    width: newWidth,
+    height: newHeight,
+  }
 }
 
 export class GameSession {
@@ -31,6 +50,7 @@ export class GameSession {
   isGameOver: boolean = false
   dealCount: number = 0
   seed: bigint
+  scoreBoostActive: boolean = false
 
   private rng: DeterministicRNG
 
@@ -44,6 +64,34 @@ export class GameSession {
   revive(): void {
     this.isGameOver = false
     this.deal()
+  }
+
+  // Rotate piece at index 90° CW. Returns false if slot is empty.
+  rotatePiece(pieceIndex: number): boolean {
+    const piece = this.currentPieces[pieceIndex]
+    if (!piece) return false
+    this.currentPieces[pieceIndex] = rotatePieceShape(piece)
+    return true
+  }
+
+  // Clear a 3×3 zone centred on (centerRow, centerCol). Returns score awarded.
+  bombZone(centerRow: number, centerCol: number): number {
+    let cellsCleared = 0
+    for (let dr = -1; dr <= 1; dr++) {
+      for (let dc = -1; dc <= 1; dc++) {
+        const r = centerRow + dr
+        const c = centerCol + dc
+        if (r >= 0 && r < Grid.SIZE && c >= 0 && c < Grid.SIZE) {
+          if (this.grid[r * Grid.SIZE + c] !== 0) {
+            this.grid[r * Grid.SIZE + c] = 0
+            cellsCleared++
+          }
+        }
+      }
+    }
+    const pts = cellsCleared * 5
+    this.score += pts
+    return pts
   }
 
   deal(): void {
@@ -94,7 +142,8 @@ export class GameSession {
     const scoreEvent = calculateScore(
       piece,
       fullLines.rows.length + fullLines.cols.length,
-      this.comboStreak
+      this.comboStreak,
+      this.scoreBoostActive
     )
 
     this.score += scoreEvent.totalPoints
