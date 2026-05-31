@@ -56,6 +56,8 @@ import { usePowerUpStore } from '../stores/powerUpStore'
 const GAME_ADDRESS = contractInfo.game as `0x${string}`
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
 
+import { isShopLotteryEnabled } from '../utils/featureFlags'
+
 function replayMoveHistory(
   seed: bigint,
   history: MoveRecord[],
@@ -467,6 +469,7 @@ const GameScreen: React.FC<GameScreenProps> = ({
   const [showShop, setShowShop] = useState(false)
 
   const { address, isConnected } = useAccount()
+  const isWhitelisted = isShopLotteryEnabled(address)
 
   // ── No-gas detection ──────────────────────────────────────────────────────
   // Threshold: 0.005 CELO — enough for ~3-5 typical contract writes.
@@ -972,18 +975,20 @@ const GameScreen: React.FC<GameScreenProps> = ({
           }
         }
 
-        // ── Lottery threshold check ──────────────────────────────────────
-        const currentScore = currentSession.score
-        const prevScore    = prevScoreRef.current
-        if (currentScore !== prevScore) {
-          const threshold = checkLotteryTrigger(currentScore, prevScore)
-          if (threshold !== null) {
-            markLotteryThreshold(threshold)
-            const prize = getRandomPrize()
-            setLotteryThreshold(threshold)
-            setLotteryPrize(prize)
+        // ── Lottery threshold check (whitelisted addresses only) ────────
+        if (isWhitelisted) {
+          const currentScore = currentSession.score
+          const prevScore    = prevScoreRef.current
+          if (currentScore !== prevScore) {
+            const threshold = checkLotteryTrigger(currentScore, prevScore)
+            if (threshold !== null) {
+              markLotteryThreshold(threshold)
+              const prize = getRandomPrize()
+              setLotteryThreshold(threshold)
+              setLotteryPrize(prize)
+            }
+            prevScoreRef.current = currentScore
           }
-          prevScoreRef.current = currentScore
         }
       }
       // Always push the current tier into renderers every frame so a reset
@@ -1166,23 +1171,24 @@ const GameScreen: React.FC<GameScreenProps> = ({
           comboStreak={comboStreak}
           bestScore={bestScore}
           gameSession={gameSession}
+          isGameOver={isGameOver}
           onOpenLeaderboard={onOpenLeaderboard}
           onBack={onBack}
           canvasArea={canvasArea}
-          onOpenShop={() => setShowShop(true)}
+          onOpenShop={isWhitelisted ? () => setShowShop(true) : undefined}
           onRotatePiece={handleRotatePiece}
           activePieceIndex={trayHoverIndexRef.current}
         />
         {showNoGasModal && <NoGasModal address={address} onDismiss={() => setNoGasDismissed(true)} />}
         {showSocialNudge && <SocialNudgeModal onDismiss={() => setShowSocialNudge(false)} />}
-        {lotteryPrize && !isGameOver && (
+        {isWhitelisted && lotteryPrize && !isGameOver && (
           <LotteryModal
             prize={lotteryPrize}
             threshold={lotteryThreshold}
             onContinue={() => setLotteryPrize(null)}
           />
         )}
-        <ShopModal isOpen={showShop} onClose={() => setShowShop(false)} />
+        {isWhitelisted && <ShopModal isOpen={showShop} onClose={() => setShowShop(false)} />}
       </>
     )
   }
@@ -1199,14 +1205,14 @@ const GameScreen: React.FC<GameScreenProps> = ({
       />
       {showNoGasModal && <NoGasModal address={address} onDismiss={() => setNoGasDismissed(true)} />}
       {showSocialNudge && <SocialNudgeModal onDismiss={() => setShowSocialNudge(false)} />}
-      {lotteryPrize && !isGameOver && (
+      {isWhitelisted && lotteryPrize && !isGameOver && (
         <LotteryModal
           prize={lotteryPrize}
           threshold={lotteryThreshold}
           onContinue={() => setLotteryPrize(null)}
         />
       )}
-      <ShopModal isOpen={showShop} onClose={() => setShowShop(false)} />
+      {isWhitelisted && <ShopModal isOpen={showShop} onClose={() => setShowShop(false)} />}
     </>
   )
 }
@@ -1684,6 +1690,7 @@ interface MobileLayoutProps {
   comboStreak: number
   bestScore?: number
   gameSession: any
+  isGameOver?: boolean
   onOpenLeaderboard?: () => void
   onBack?: () => void
   canvasArea: React.ReactNode
@@ -1934,6 +1941,7 @@ const MobileLayout: React.FC<MobileLayoutProps> = ({
   comboStreak,
   bestScore,
   gameSession,
+  isGameOver = false,
   onOpenLeaderboard,
   onBack,
   canvasArea,
@@ -1990,14 +1998,16 @@ const MobileLayout: React.FC<MobileLayoutProps> = ({
           </div>
 
           {/* ── Power-up bar ──────────────────────────────────────────── */}
-          <div className="shrink-0">
-            <PowerUpBar
-              onOpenShop={onOpenShop ?? (() => {})}
-              rotatePassEnabled={true}
-              onRotatePiece={onRotatePiece ?? (() => {})}
-              activePieceIndex={activePieceIndex ?? null}
-            />
-          </div>
+          {!isGameOver && (
+            <div className="shrink-0">
+              <PowerUpBar
+                onOpenShop={onOpenShop ?? (() => {})}
+                rotatePassEnabled={true}
+                onRotatePiece={onRotatePiece ?? (() => {})}
+                activePieceIndex={activePieceIndex ?? null}
+              />
+            </div>
+          )}
         </>
       )}
 
