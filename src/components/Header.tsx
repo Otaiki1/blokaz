@@ -215,35 +215,45 @@ const SettingsSheet: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         >
           <div className="px-6 py-6 space-y-8" style={{ paddingBottom: 'max(32px, env(safe-area-inset-bottom))' }}>
 
-            {/* ── Theme ── */}
+            {/* ── Appearance ── */}
             <section>
               <div
-                className="mb-4 border-l-4 border-ink pl-3 font-display text-[11px] uppercase tracking-[0.2em]"
-                style={{ color: 'var(--ink-soft)' }}
+                className="mb-3 flex items-center justify-between"
               >
-                APPEARANCE
+                <div
+                  className="border-l-4 border-ink pl-3 font-display text-[11px] uppercase tracking-[0.2em]"
+                  style={{ color: 'var(--ink-soft)' }}
+                >
+                  APPEARANCE
+                </div>
+                <span
+                  className="font-display text-[9px] uppercase tracking-widest"
+                  style={{ color: 'var(--ink-soft)' }}
+                >
+                  {THEME_OPTIONS.find(o => o.value === userTheme)?.label}
+                </span>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                {THEME_OPTIONS.map((opt) => {
+              {/* Segmented control — single row, compact */}
+              <div
+                className="flex border-[3px] border-ink overflow-hidden"
+                style={{ boxShadow: '4px 4px 0 var(--shadow)' }}
+              >
+                {THEME_OPTIONS.map((opt, i) => {
                   const isActive = userTheme === opt.value
                   return (
                     <button
                       key={opt.value}
                       onClick={() => setUserTheme(opt.value)}
-                      className="brutal-btn flex items-center gap-4 border-[3px] border-ink px-5 py-4 font-display"
+                      className="flex flex-1 flex-col items-center justify-center gap-1 py-3 font-display text-[9px] uppercase tracking-[0.1em] transition-colors"
                       style={{
                         background: isActive ? 'var(--accent-yellow)' : 'var(--paper-2)',
                         color: isActive ? 'var(--ink-fixed)' : 'var(--ink)',
-                        boxShadow: isActive ? '4px 4px 0 var(--shadow)' : '3px 3px 0 var(--shadow)',
+                        borderRight: i < THEME_OPTIONS.length - 1 ? '2px solid var(--ink)' : 'none',
+                        opacity: isActive ? 1 : 0.7,
                       }}
                     >
-                      <span className="text-2xl leading-none">{opt.icon}</span>
-                      <div className="text-left">
-                        <div className="text-[12px] uppercase tracking-[0.14em]">{opt.label}</div>
-                        {isActive && (
-                          <div className="mt-0.5 text-[9px] tracking-widest opacity-60">ACTIVE</div>
-                        )}
-                      </div>
+                      <span className="text-base leading-none">{opt.icon}</span>
+                      <span>{opt.label}</span>
                     </button>
                   )
                 })}
