@@ -509,12 +509,9 @@ const GameScreen: React.FC<GameScreenProps> = ({
     if (session) session.scoreBoostActive = activePowerUps.scoreBoost
   }, [activePowerUps.scoreBoost])
 
-  // Auto-trigger shield on game-over before showing game-over screen
-  useEffect(() => {
-    if (!isGameOver) return
-    const shielded = triggerShield()
-    if (shielded) reviveGame()
-  }, [isGameOver])
+  // Shield is now intercepted synchronously in gameStore.placePiece —
+  // no useEffect needed here. Kept as dead code guard (no-op since
+  // triggerShield returns false once the synchronous path consumed it).
 
   // Count each completed game and show nudge on game-over when threshold is met
   useEffect(() => {

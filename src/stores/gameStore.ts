@@ -1,6 +1,8 @@
 import { create } from 'zustand'
 import { GameSession } from '../engine/game'
 import type { ShapeDefinition } from '../engine/shapes'
+// Imported lazily to avoid circular deps — accessed via getState() at call time
+import { usePowerUpStore } from './powerUpStore'
 
 interface GameState {
   gameSession: GameSession | null
@@ -69,20 +71,40 @@ export const useGameStore = create<GameState>((set, get) => ({
   setTournamentId: (id) => set({ tournamentId: id }),
 
   placePiece: (index, r, c) => {
-    const { gameSession } = get()
+    const { gameSession, reviveCount } = get()
     if (!gameSession) return null
-    
+
     const result = gameSession.placePiece(index, r, c)
-    if (result.success) {
-      set({
-        score: gameSession.score,
-        comboStreak: gameSession.comboStreak,
-        currentPieces: [...gameSession.currentPieces],
-        isGameOver: result.isGameOver
-      })
-      // @ts-ignore
-      window.currentPieces = gameSession.currentPieces
+    if (!result.success) return result
+
+    // Shield intercept: if this move triggers game-over, try to auto-save
+    // synchronously BEFORE committing isGameOver to the store so the
+    // game-over modal never flashes and timing/effect issues are eliminated.
+    if (result.isGameOver) {
+      const shielded = usePowerUpStore.getState().triggerShield()
+      if (shielded) {
+        gameSession.revive()
+        // @ts-ignore
+        window.currentPieces = gameSession.currentPieces
+        set({
+          score:        gameSession.score,
+          comboStreak:  gameSession.comboStreak,
+          currentPieces: [...gameSession.currentPieces],
+          isGameOver:   gameSession.isGameOver,   // accurate post-revive state
+          reviveCount:  reviveCount + 1,
+        })
+        return { ...result, isGameOver: gameSession.isGameOver }
+      }
     }
+
+    set({
+      score:        gameSession.score,
+      comboStreak:  gameSession.comboStreak,
+      currentPieces: [...gameSession.currentPieces],
+      isGameOver:   result.isGameOver,
+    })
+    // @ts-ignore
+    window.currentPieces = gameSession.currentPieces
     return result
   },
 

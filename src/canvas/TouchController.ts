@@ -46,34 +46,67 @@ export class TouchController {
     this.initEvents()
   }
 
+  // Bound handler references — kept so we can removeEventListener later
+  private _onMouseDown  = (e: MouseEvent) => this.handleStart(e)
+  private _onMouseMove  = (e: MouseEvent) => this.handleMove(e)
+  private _onMouseLeave = () => {
+    if (!this.isDragging && this.hoverIndex !== null) {
+      this.hoverIndex = null
+      this.onHoverChange?.(null)
+    }
+  }
+  private _onMouseUp   = (e: MouseEvent) => this.handleEnd(e)
+
+  private _onTouchStart = (e: TouchEvent) => {
+    e.preventDefault()
+    this.handleStart(e.touches[0] as any)
+  }
+  private _onTouchMove = (e: TouchEvent) => {
+    e.preventDefault()
+    this.handleMove(e.touches[0] as any)
+  }
+  private _onTouchEnd = (e: TouchEvent) => {
+    this.handleEnd(e.changedTouches[0] as any)
+  }
+  // Reset all drag/select state when OS cancels the touch
+  private _onTouchCancel = () => {
+    this.isDragging      = false
+    this.dragIndex       = null
+    this.selectedIndex   = null
+    this.placingViaTap   = false
+    this.ghostPos        = null
+    this.lastGhostValid  = null
+    this.hoverIndex      = null
+    this.onHoverChange?.(null)
+    ;(window as any).activeGhost = null
+  }
+
   private initEvents() {
-    this.canvas.addEventListener('mousedown', this.handleStart.bind(this))
-    this.canvas.addEventListener('mousemove', this.handleMove.bind(this))
-    this.canvas.addEventListener('mouseleave', () => {
-      if (!this.isDragging && this.hoverIndex !== null) {
-        this.hoverIndex = null
-        this.onHoverChange?.(null)
-      }
-    })
-    window.addEventListener('mouseup', this.handleEnd.bind(this))
+    this.canvas.addEventListener('mousedown',  this._onMouseDown)
+    this.canvas.addEventListener('mousemove',  this._onMouseMove)
+    this.canvas.addEventListener('mouseleave', this._onMouseLeave)
+    window.addEventListener('mouseup', this._onMouseUp)
 
-    this.canvas.addEventListener('touchstart', (e) => {
-      e.preventDefault()
-      this.handleStart(e.touches[0] as any)
-    }, { passive: false })
-
-    this.canvas.addEventListener('touchmove', (e) => {
-      e.preventDefault()
-      this.handleMove(e.touches[0] as any)
-    }, { passive: false })
-
-    window.addEventListener('touchend', (e) => {
-      this.handleEnd(e.changedTouches[0] as any)
-    })
+    this.canvas.addEventListener('touchstart',  this._onTouchStart,  { passive: false })
+    this.canvas.addEventListener('touchmove',   this._onTouchMove,   { passive: false })
+    this.canvas.addEventListener('touchcancel', this._onTouchCancel)
+    window.addEventListener('touchend', this._onTouchEnd)
   }
 
   destroy(): void {
     this.destroyed = true
+
+    // Remove all listeners so they don't accumulate across game sessions
+    this.canvas.removeEventListener('mousedown',  this._onMouseDown)
+    this.canvas.removeEventListener('mousemove',  this._onMouseMove)
+    this.canvas.removeEventListener('mouseleave', this._onMouseLeave)
+    window.removeEventListener('mouseup', this._onMouseUp)
+
+    this.canvas.removeEventListener('touchstart',  this._onTouchStart)
+    this.canvas.removeEventListener('touchmove',   this._onTouchMove)
+    this.canvas.removeEventListener('touchcancel', this._onTouchCancel)
+    window.removeEventListener('touchend', this._onTouchEnd)
+
     this.isDragging = false
     this.dragIndex = null
     this.hoverIndex = null
