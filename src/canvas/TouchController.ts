@@ -229,14 +229,14 @@ export class TouchController {
         ;(window as any).activeGhost = null
         return
       }
-      this.updateGhost(shape, e.clientX, e.clientY, true)
+      this.updateGhost(shape, e.clientX, e.clientY, false)
       return
     }
 
     // Idle with selection — ghost tracks cursor/finger (desktop hover + mobile prep)
     if (this.selectedIndex !== null) {
       const shape = pieces[this.selectedIndex]
-      if (shape) this.updateGhost(shape, e.clientX, e.clientY, true)
+      if (shape) this.updateGhost(shape, e.clientX, e.clientY, false)
       return
     }
 

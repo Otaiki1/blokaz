@@ -799,24 +799,21 @@ const GameScreen: React.FC<GameScreenProps> = ({
       Math.round(window.innerHeight * 0.58)
     )
 
-    // Simple: board fills full width, tray gets the remaining height.
-    // If remaining < minTray, shrink gridSize so tray is always usable.
-    const MIN_TRAY = 100  // px — minimum tray height
     const computeDims = (containerW: number, containerH: number) => {
       const w = containerW > 0 ? containerW : vpFallback
+
+      // PieceRenderer draws each tray slot as (canvasWidth/3) × (canvasWidth/3).
+      // So trayHeight must equal gridSize/3. With no trayGap:
+      //   totalH = gridSize + gridSize/3 = gridSize * 4/3
+      //   → gridSize = containerH * 3/4  (to fit exactly)
       let gridSize = w
-      let trayHeight: number
       if (containerH > 0) {
-        trayHeight = containerH - gridSize
-        if (trayHeight < MIN_TRAY) {
-          gridSize = containerH - MIN_TRAY
-          trayHeight = MIN_TRAY
-        }
-      } else {
-        trayHeight = Math.round(w * 0.25)
+        const maxByHeight = Math.floor(containerH * 3 / 4)
+        if (maxByHeight < gridSize) gridSize = maxByHeight
       }
-      const cellSize = gridSize / 9
-      return { gridSize, cellSize, trayGap: 0, trayHeight, trayY: gridSize }
+
+      const trayHeight = Math.round(gridSize / 3)
+      return { gridSize, cellSize: gridSize / 9, trayGap: 0, trayHeight, trayY: gridSize }
     }
 
     const initialW = boardContainerRef.current?.clientWidth  || 0
@@ -1042,14 +1039,19 @@ const GameScreen: React.FC<GameScreenProps> = ({
 
       if (dragState.isDragging && dragState.dragIndex !== null) {
         const shape = currentSession.currentPieces[dragState.dragIndex]
-        if (shape)
-          pieceRenderer.drawDragging(
-            shape,
-            dragState.dragPos.x,
-            dragState.dragPos.y,
-            cellSizeRef.current,
-            false
-          )
+        if (shape) {
+          const cs = cellSizeRef.current
+          // If there's a valid ghost position, draw the piece aligned with the
+          // guide cells so visual and placement indicator always match.
+          // Otherwise fall back to the raw finger position.
+          const drawX = ghost
+            ? ghost.col * cs + (shape.width  * cs) / 2
+            : dragState.dragPos.x
+          const drawY = ghost
+            ? ghost.row * cs + (shape.height * cs) / 2
+            : dragState.dragPos.y
+          pieceRenderer.drawDragging(shape, drawX, drawY, cs, false)
+        }
       }
 
       animManager.draw(ctx, cellSizeRef.current, false)
@@ -1620,7 +1622,7 @@ const CanvasArea: React.FC<CanvasAreaProps> = ({
         <div className="relative z-[2] w-full">
           <canvas
             ref={canvasRef}
-            style={{ touchAction: 'none', display: 'block', width: '100%' }}
+            style={{ touchAction: 'none', display: 'block' }}
           />
 
           {/* Bomb targeting overlay — intercepts grid taps when bomb mode active */}
