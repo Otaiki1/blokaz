@@ -21,7 +21,6 @@ const LIME = '#B7FF3B'
 const RED = '#FF3B3B'
 const BLUE = '#3B82F6'
 const ORANGE = '#FB923C'
-const PINK = '#FF3BBD'
 
 const SB = '3px solid #0C0C10'
 const SBT = '4px solid #0C0C10'
@@ -221,80 +220,6 @@ function ItemCard({
   )
 }
 
-// ── Season Pass Card ────────────────────────────────────────
-function SeasonPassCard({ onBuy, isBuying, isSuccess, affordable }: {
-  onBuy: () => void
-  isBuying: boolean
-  isSuccess: boolean
-  affordable: boolean
-}) {
-  const sunburst = [
-    `conic-gradient(from 0deg at 80% 30%,`,
-    `${YELLOW} 0 20deg, transparent 20deg 40deg,`,
-    `${YELLOW} 40deg 60deg, transparent 60deg 80deg,`,
-    `${YELLOW} 80deg 100deg, transparent 100deg 120deg,`,
-    `${YELLOW} 120deg 140deg, transparent 140deg 160deg,`,
-    `${YELLOW} 160deg 180deg, transparent 180deg 200deg,`,
-    `${YELLOW} 200deg 220deg, transparent 220deg 240deg,`,
-    `${YELLOW} 240deg 260deg, transparent 260deg 280deg,`,
-    `${YELLOW} 280deg 300deg, transparent 300deg 320deg,`,
-    `${YELLOW} 320deg 340deg, transparent 340deg 360deg)`,
-  ].join(' ')
-
-  return (
-    <div style={{
-      background: INK, color: PAPER, border: SBT, boxShadow: SSH(8, 8, PINK),
-      padding: 18, position: 'relative', overflow: 'hidden',
-      fontFamily: '"Archivo Black", system-ui',
-    }}>
-      {/* Sunburst overlay */}
-      <div style={{
-        position: 'absolute', inset: 0, opacity: 0.14, pointerEvents: 'none',
-        background: sunburst,
-      }} />
-      <div style={{ position: 'relative', zIndex: 1 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-          <div style={{
-            display: 'inline-block', background: YELLOW, color: INK,
-            padding: '4px 10px', fontSize: 11, letterSpacing: '0.16em',
-            transform: 'rotate(-2deg)', border: '2px solid #0C0C10',
-          }}>
-            SEASON PASS
-          </div>
-          <PriceChip amount="0.10" bg={YELLOW} />
-        </div>
-        <div style={{ fontSize: 28, letterSpacing: '-0.02em', marginTop: 12, lineHeight: 1.05 }}>
-          2× LEADERBOARD POINTS
-        </div>
-        <div style={{
-          fontFamily: 'Space Grotesk, system-ui', fontSize: 13, fontWeight: 600,
-          opacity: 0.8, marginTop: 8, lineHeight: 1.4,
-        }}>
-          Double every point you earn this epoch, plus exclusive piece skins. Auto-renews weekly.
-        </div>
-        <button
-          onClick={onBuy}
-          disabled={!affordable || isBuying}
-          style={{
-            marginTop: 14, width: '100%',
-            background: isSuccess ? LIME : LIME,
-            color: INK,
-            border: `3px solid ${PAPER}`,
-            boxShadow: SSH(4, 4, PAPER),
-            padding: '12px',
-            fontFamily: '"Archivo Black", system-ui',
-            fontSize: 14, letterSpacing: '0.12em',
-            cursor: affordable && !isBuying ? 'pointer' : 'not-allowed',
-            opacity: !affordable ? 0.4 : 1,
-          }}
-        >
-          {isSuccess ? '✓ PURCHASED!' : isBuying ? '…' : 'UNLOCK SEASON PASS →'}
-        </button>
-      </div>
-    </div>
-  )
-}
-
 // ── Purchase Confirm / Success Sheet ────────────────────────
 function PurchaseSheet({ item, balance, selectedToken, onConfirm, onCancel, state }: {
   item: ItemDesign | null
@@ -405,7 +330,7 @@ function PurchaseSheet({ item, balance, selectedToken, onConfirm, onCancel, stat
               fontFamily: 'Space Grotesk, system-ui', fontSize: 14, fontWeight: 600,
               opacity: 0.85, marginTop: 8,
             }}>
-              {item.name} is ready. Find it in your next game.
+              {item.name} is ready. Tap it in the bar to use it now.
             </div>
             <button onClick={onCancel} style={{
               marginTop: 16, width: '100%', background: LIME, color: INK,
@@ -658,20 +583,15 @@ export const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose }) => {
             )}
 
             {tab === 'season' && (
-              <SeasonPassCard
-                onBuy={() => {
-                  const design: ItemDesign = {
-                    glyph: '★', bg: YELLOW,
-                    name: 'Season Pass',
-                    desc: '2× leaderboard points for the full epoch, plus exclusive skins.',
-                    price: '0.10',
-                  }
-                  handleBuyClick('scoreBoost' as ShopItemId, design)
-                }}
-                isBuying={buyingId === 'scoreBoost'}
-                isSuccess={successId === 'scoreBoost'}
-                affordable={canAfford(selectedToken)}
-              />
+              <div style={{
+                padding: '40px 0 20px', textAlign: 'center',
+                fontFamily: '"Archivo Black", system-ui', fontSize: 13,
+                letterSpacing: '0.1em', color: INK, opacity: 0.4,
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10,
+              }}>
+                <div style={{ fontSize: 36 }}>★</div>
+                SEASON PASS COMING SOON
+              </div>
             )}
           </div>
 

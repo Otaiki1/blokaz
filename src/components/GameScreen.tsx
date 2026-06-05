@@ -1186,6 +1186,7 @@ const GameScreen: React.FC<GameScreenProps> = ({
     })
     consumeBomb()
     useGameStore.setState({ score: session.score })
+    prevScoreRef.current = session.score
     if (pts > 0) {
       animManagerRef.current.trigger('SCORE', {
         x: (canvasDims?.gridSize ?? 200) * 0.5,
@@ -1264,6 +1265,7 @@ const GameScreen: React.FC<GameScreenProps> = ({
           const pts = 500
           session.score += pts
           useGameStore.setState({ score: session.score })
+          prevScoreRef.current = session.score
           session.moveHistory.push({
             pieceIndex: -1, shapeId: '', row: 0, col: 0,
             lotteryBonus: pts,
@@ -1283,22 +1285,6 @@ const GameScreen: React.FC<GameScreenProps> = ({
           title: '+500 PTS ADDED',
           body: 'Score boosted right now.',
           autoDismissMs: 3500,
-        })
-        break
-      }
-      case 'cosmetic': {
-        // Write an unlock flag for when the cosmetics system ships.
-        try {
-          const current: string[] = JSON.parse(localStorage.getItem('blokaz:cosmetics_unlocked') ?? '[]')
-          if (!current.includes('lottery')) {
-            localStorage.setItem('blokaz:cosmetics_unlocked', JSON.stringify([...current, 'lottery']))
-          }
-        } catch {}
-        showToast({
-          variant: 'toast', tone: 'info', icon: '◆',
-          title: 'REWARD UNLOCKED',
-          body: 'New colour pack — check the Shop when cosmetics launch.',
-          autoDismissMs: 5000,
         })
         break
       }
@@ -2243,7 +2229,6 @@ const MobileLayout: React.FC<MobileLayoutProps> = ({
             <div className="shrink-0">
               <PowerUpBar
                 onOpenShop={onOpenShop}
-                rotatePassEnabled={true}
                 onRotatePiece={onRotatePiece ?? (() => {})}
                 activePieceIndex={activePieceIndex ?? null}
               />

@@ -4,7 +4,6 @@ import { useGameStore } from '../stores/gameStore'
 
 interface PowerUpBarProps {
   onOpenShop: () => void
-  rotatePassEnabled: boolean
   onRotatePiece: (pieceIndex: number) => void
   activePieceIndex: number | null
 }
@@ -269,6 +268,7 @@ export const PowerUpBar: React.FC<PowerUpBarProps> = ({
     activateShield,
     activateBomb,
     activateRotatePass,
+    enterBombMode,
     exitBombMode,
     exitRotateMode,
   } = usePowerUpStore()
@@ -278,8 +278,7 @@ export const PowerUpBar: React.FC<PowerUpBarProps> = ({
   const bombCharges       = getCharges('bomb')
   const rotatePassCharges = getCharges('rotatePass')
 
-  // Displayed charge counts
-  const bombDisplayCharges = active.bombCount > 0 ? active.bombCount : bombCharges
+  // Always show pool charges — the armed bomb already deducted its charge on activation
 
   const handleTileClick = (id: PowerUpId) => {
     const charges = getCharges(id)
@@ -293,6 +292,7 @@ export const PowerUpBar: React.FC<PowerUpBarProps> = ({
         break
       case 'bomb':
         if (bombModeActive) exitBombMode()
+        else if (active.bombCount > 0) enterBombMode() // already armed — re-enter targeting without consuming another charge
         else activateBomb()
         break
       case 'rotatePass':
@@ -329,8 +329,8 @@ export const PowerUpBar: React.FC<PowerUpBarProps> = ({
         {/* Bomb */}
         <PowerTile
           id="bomb"
-          charges={bombDisplayCharges}
-          isActive={bombModeActive}
+          charges={bombCharges}
+          isActive={bombModeActive || active.bombCount > 0}
           onClick={() => handleTileClick('bomb')}
         />
 

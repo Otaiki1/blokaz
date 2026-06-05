@@ -8,7 +8,7 @@
  */
 
 export interface Prize {
-  id: 'multi' | 'revival' | 'bonus' | 'cosmetic' | 'nothing'
+  id: 'multi' | 'revival' | 'bonus' | 'nothing'
   name: string
   sub: string
   bg: string
@@ -43,7 +43,7 @@ export const PRIZES: Prize[] = [
     glyph: '↻',
     hype: 'SAVED!',
     rarity: 'uncommon',
-    body: 'Use in this session — skip a $0.001 revive fee.',
+    body: 'Use in this session — skip the $0.10 revive fee.',
   },
   {
     id: 'bonus',
@@ -56,18 +56,6 @@ export const PRIZES: Prize[] = [
     hype: 'BONUS!',
     rarity: 'common',
     body: 'Flat bonus dropped onto your score right now.',
-  },
-  {
-    id: 'cosmetic',
-    name: 'COSMETIC',
-    sub: 'BOARD SKIN',
-    bg: '#FF3BBD',
-    fg: '#0C0C10',
-    accent: '#8A3DFF',
-    glyph: '◆',
-    hype: 'UNLOCKED!',
-    rarity: 'rare',
-    body: 'New piece-colour pack unlocked in your Shop.',
   },
   {
     id: 'nothing',
@@ -88,7 +76,6 @@ const WEIGHTS: Record<Prize['id'], number> = {
   multi: 1,
   revival: 2,
   bonus: 4,
-  cosmetic: 1,
   nothing: 4,
 }
 
