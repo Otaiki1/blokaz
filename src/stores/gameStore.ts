@@ -15,6 +15,7 @@ interface GameState {
   onChainStatus: 'none' | 'pending' | 'syncing' | 'registered' | 'failed'
   tournamentId: bigint | null
   reviveCount: number
+  lotteryMultiplierMovesLeft: number
 
   startGame: (seed: bigint, preserveOnChain?: boolean) => void
   setOnChainData: (gameId: bigint, seed: `0x${string}`, status?: 'registered' | 'pending' | 'syncing' | 'failed') => void
@@ -38,6 +39,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   onChainStatus: 'none',
   tournamentId: null,
   reviveCount: 0,
+  lotteryMultiplierMovesLeft: 0,
 
   startGame: (seed, preserveOnChain = false) => {
     const session = new GameSession(seed)
@@ -51,6 +53,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       currentPieces: session.currentPieces,
       isGameOver: false,
       reviveCount: 0,
+      lotteryMultiplierMovesLeft: 0,
     }
 
     if (!preserveOnChain) {
@@ -100,21 +103,23 @@ export const useGameStore = create<GameState>((set, get) => ({
         // @ts-ignore
         window.currentPieces = gameSession.currentPieces
         set({
-          score:         gameSession.score,
-          comboStreak:   gameSession.comboStreak,
-          currentPieces: [...gameSession.currentPieces],
-          isGameOver:    gameSession.isGameOver,
-          reviveCount:   reviveCount + 1,
+          score:                      gameSession.score,
+          comboStreak:                gameSession.comboStreak,
+          currentPieces:              [...gameSession.currentPieces],
+          isGameOver:                 gameSession.isGameOver,
+          reviveCount:                reviveCount + 1,
+          lotteryMultiplierMovesLeft: gameSession.lotteryMultiplierMovesLeft,
         })
         return { ...result, isGameOver: gameSession.isGameOver }
       }
     }
 
     set({
-      score:        gameSession.score,
-      comboStreak:  gameSession.comboStreak,
-      currentPieces: [...gameSession.currentPieces],
-      isGameOver:   result.isGameOver,
+      score:                      gameSession.score,
+      comboStreak:                gameSession.comboStreak,
+      currentPieces:              [...gameSession.currentPieces],
+      isGameOver:                 result.isGameOver,
+      lotteryMultiplierMovesLeft: gameSession.lotteryMultiplierMovesLeft,
     })
     // @ts-ignore
     window.currentPieces = gameSession.currentPieces
@@ -148,13 +153,11 @@ export const useGameStore = create<GameState>((set, get) => ({
     window.currentPieces = gameSession.currentPieces
 
     set({
-      // Bug fix: use the session's actual isGameOver rather than hardcoding false.
-      // If the board is so full that deal() immediately sets isGameOver=true again
-      // the store reflects that immediately instead of freezing until the RAF catches up.
-      isGameOver:    gameSession.isGameOver,
-      score:         gameSession.score,
-      currentPieces: [...gameSession.currentPieces],
-      reviveCount:   reviveCount + 1,
+      isGameOver:                 gameSession.isGameOver,
+      score:                      gameSession.score,
+      currentPieces:              [...gameSession.currentPieces],
+      reviveCount:                reviveCount + 1,
+      lotteryMultiplierMovesLeft: gameSession.lotteryMultiplierMovesLeft,
     })
   },
 
@@ -170,6 +173,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       onChainStatus: 'none',
       tournamentId: keepTournamentId ? get().tournamentId : null,
       reviveCount: 0,
+      lotteryMultiplierMovesLeft: 0,
     })
   },
 

@@ -52,6 +52,7 @@ import type { Prize } from '../utils/lottery'
 import { PowerUpBar } from './PowerUpBar'
 import { ShopModal } from './ShopModal'
 import { usePowerUpStore } from '../stores/powerUpStore'
+import { useNotifications, ToastContainer } from './GameNotification'
 
 const GAME_ADDRESS = contractInfo.game as `0x${string}`
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
@@ -475,7 +476,10 @@ const GameScreen: React.FC<GameScreenProps> = ({
     onChainSeed,
     onChainGameId,
     reviveCount,
+    lotteryMultiplierMovesLeft,
   } = useGameStore()
+
+  const { toasts, dismissToast, showToast } = useNotifications()
 
   // Derive the authoritative game-over flag from BOTH the store field AND the
   // mutable session object. The store field can lag by one React commit cycle
@@ -1230,13 +1234,27 @@ const GameScreen: React.FC<GameScreenProps> = ({
         if (session) {
           session.moveHistory.push({ pieceIndex: -1, shapeId: '', row: 0, col: 0, lotteryMultiplierStart: true, scoreEvent: minimalEvent })
           session.lotteryMultiplierMovesLeft = 3
+          // Mirror into the store so the in-game badge renders immediately
+          useGameStore.setState({ lotteryMultiplierMovesLeft: 3 })
           persistNow(session)
         }
+        showToast({
+          variant: 'toast', tone: 'reward', icon: '×2',
+          title: '×2 MULTIPLIER ON!',
+          body: 'Next 3 placements score double.',
+          autoDismissMs: 5000,
+        })
         break
       }
       case 'revival': {
         // Credit one free revival to the player's inventory.
         if (address) addInventory('revivalBundle', 1)
+        showToast({
+          variant: 'toast', tone: 'success', icon: '↻',
+          title: 'FREE SPIN ADDED',
+          body: '+1 extra life stored in your inventory.',
+          autoDismissMs: 4000,
+        })
         break
       }
       case 'bonus': {
@@ -1260,6 +1278,12 @@ const GameScreen: React.FC<GameScreenProps> = ({
           })
           hapticNotification()
         }
+        showToast({
+          variant: 'toast', tone: 'reward', icon: '+',
+          title: '+500 PTS ADDED',
+          body: 'Score boosted right now.',
+          autoDismissMs: 3500,
+        })
         break
       }
       case 'cosmetic': {
@@ -1270,6 +1294,12 @@ const GameScreen: React.FC<GameScreenProps> = ({
             localStorage.setItem('blokaz:cosmetics_unlocked', JSON.stringify([...current, 'lottery']))
           }
         } catch {}
+        showToast({
+          variant: 'toast', tone: 'info', icon: '◆',
+          title: 'REWARD UNLOCKED',
+          body: 'New colour pack — check the Shop when cosmetics launch.',
+          autoDismissMs: 5000,
+        })
         break
       }
       case 'nothing':
@@ -1328,9 +1358,53 @@ const GameScreen: React.FC<GameScreenProps> = ({
   }
 
   const canvasArea = (
-    <CanvasArea
-      {...commonCanvasProps}
-    />
+    // Wrapper must forward flex-1 / min-h-0 so CanvasArea's ResizeObserver
+    // measures a non-zero height. position:relative is needed for the badge.
+    <div
+      style={{
+        position: 'relative',
+        display: 'flex',
+        flexDirection: 'column',
+        flex: 1,
+        minHeight: 0,
+        width: '100%',
+      }}
+    >
+      <CanvasArea {...commonCanvasProps} />
+      {lotteryMultiplierMovesLeft > 0 && (
+        <div
+          style={{
+            position: 'absolute',
+            top: 8,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 50,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            background: '#FFD51F',
+            color: '#0C0C10',
+            border: '3px solid #0C0C10',
+            boxShadow: '4px 4px 0 #0C0C10',
+            padding: '5px 14px',
+            fontFamily: '"Archivo Black", sans-serif',
+            fontSize: 13,
+            letterSpacing: '0.06em',
+            pointerEvents: 'none',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          <span>×2</span>
+          <span style={{
+            background: '#0C0C10', color: '#FFD51F',
+            padding: '1px 6px', fontSize: 10, letterSpacing: '0.16em',
+          }}>
+            ACTIVE
+          </span>
+          <span>{lotteryMultiplierMovesLeft} LEFT</span>
+        </div>
+      )}
+    </div>
   )
 
   if (isMobile) {
@@ -1358,6 +1432,7 @@ const GameScreen: React.FC<GameScreenProps> = ({
             onContinue={() => handleLotteryPrize(lotteryPrize)}
           />
         )}
+        <ToastContainer toasts={toasts} onDismiss={dismissToast} position="bottom-center" />
         {isWhitelisted && <ShopModal isOpen={showShop} onClose={() => setShowShop(false)} />}
       </>
     )
@@ -1379,10 +1454,11 @@ const GameScreen: React.FC<GameScreenProps> = ({
         <LotteryModal
           prize={lotteryPrize}
           threshold={lotteryThreshold}
-          onContinue={() => setLotteryPrize(null)}
+          onContinue={() => handleLotteryPrize(lotteryPrize)}
         />
       )}
       {isWhitelisted && <ShopModal isOpen={showShop} onClose={() => setShowShop(false)} />}
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} position="bottom-center" />
     </>
   )
 }
