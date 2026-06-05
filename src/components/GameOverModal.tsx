@@ -251,6 +251,41 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
     !!recoveredSeed &&
     !!effectiveGameId
 
+  // Human-readable reason when the submit button is blocked
+  const submitBlockReason: string | null = (() => {
+    if (isAllSuccess || isRegistering) return null
+    if (!gameSession) return 'Game session not found — start a new game'
+    if (!effectiveGameId) return 'Game not registered on-chain — start a new game'
+    if (!recoveredSeed) return 'Game seed unavailable — start a new game'
+    return null
+  })()
+
+  // Total stablecoin balance across all tokens (USD value)
+  const totalStableUsd = (Object.keys(STABLECOIN_TOKENS) as StablecoinSymbol[]).reduce((sum, sym) => {
+    return sum + Number(stableBalances[sym]) / 10 ** STABLECOIN_TOKENS[sym].decimals
+  }, 0)
+
+  // Detect insufficient-funds errors from wagmi/MiniPay
+  const rawErrorMsg = (hasError as any)?.message ?? (typeof hasError === 'string' ? hasError : '')
+  const isInsufficientFunds =
+    /insufficient funds/i.test(rawErrorMsg) ||
+    /not enough/i.test(rawErrorMsg) ||
+    /exceeds.*(balance|allowance)/i.test(rawErrorMsg) ||
+    (!!hasError && totalStableUsd < 0.09)
+
+  // Parse raw wagmi/viem errors into a player-friendly message
+  const friendlyError = (() => {
+    if (!hasError) return null
+    if (isInsufficientFunds) return null  // handled by its own UI block below
+    if (/user rejected/i.test(rawErrorMsg) || /denied/i.test(rawErrorMsg))
+      return 'Transaction cancelled — tap retry to try again.'
+    if (/nonce/i.test(rawErrorMsg))
+      return 'Transaction conflict — please retry.'
+    if (/network|timeout|fetch/i.test(rawErrorMsg))
+      return 'Network issue — check your connection and retry.'
+    return 'Something went wrong — tap retry to try again.'
+  })()
+
   React.useEffect(() => {
     if (isAllSuccess) {
       clearStoredGameSession(storageKey)
@@ -707,30 +742,47 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
                       <BrutalIcon name="alert" size={12} strokeWidth={2.5} />
                       SCORE NOT SAVED
                     </div>
-                    <p
-                      className="mb-3 font-body text-[11px] leading-relaxed"
-                      style={{ color: 'var(--ink-soft)' }}
-                    >
-                      Something went wrong while saving your score. Tap below to
-                      try again — your score is still here.
-                    </p>
-                    <button
-                      onClick={handleSubmit}
-                      disabled={!canSubmit || isRegistering}
-                      className="brutal-btn flex w-full items-center justify-center gap-2 border-[3px] border-ink py-3 font-display text-[11px] uppercase tracking-widest disabled:opacity-50"
-                      style={{
-                        background: 'var(--danger)',
-                        color: '#fff',
-                        boxShadow: '3px 3px 0 rgba(0,0,0,0.25)',
-                      }}
-                    >
-                      {isRegistering ? (
-                        <div className="brutal-loader" />
-                      ) : (
-                        <BrutalIcon name="play" size={13} strokeWidth={2.5} />
-                      )}
-                      RETRY SAVING SCORE
-                    </button>
+
+                    {isInsufficientFunds ? (
+                      /* ── Insufficient balance — show balance + deposit CTA ── */
+                      <>
+                        <p className="mb-1 font-body text-[11px] leading-relaxed" style={{ color: 'var(--ink-soft)' }}>
+                          Your wallet balance is{' '}
+                          <span className="font-display text-danger">${totalStableUsd.toFixed(2)}</span>
+                          {' '}— you need at least{' '}
+                          <span className="font-display">$0.10</span>{' '}
+                          to cover the network fee and submit your score.
+                        </p>
+                        <p className="mb-3 font-body text-[10px]" style={{ color: 'var(--ink-soft)', opacity: 0.75 }}>
+                          Your score is saved locally and will be here when you return.
+                        </p>
+                        {IS_MINIPAY && (
+                          <button
+                            onClick={() => window.open(MINIPAY_DEPOSIT_URL, '_blank')}
+                            className="brutal-btn flex w-full items-center justify-center gap-2 border-[3px] border-ink py-3 font-display text-[11px] uppercase tracking-widest"
+                            style={{ background: 'var(--accent-cyan)', color: 'var(--ink-fixed)', boxShadow: '3px 3px 0 var(--shadow)' }}
+                          >
+                            TOP UP WALLET IN MINIPAY
+                          </button>
+                        )}
+                      </>
+                    ) : (
+                      /* ── Generic error — show message + retry ── */
+                      <>
+                        <p className="mb-3 font-body text-[11px] leading-relaxed" style={{ color: 'var(--ink-soft)' }}>
+                          {friendlyError ?? 'Something went wrong — tap retry to try again.'}
+                        </p>
+                        <button
+                          onClick={handleSubmit}
+                          disabled={!canSubmit || isRegistering}
+                          className="brutal-btn flex w-full items-center justify-center gap-2 border-[3px] border-ink py-3 font-display text-[11px] uppercase tracking-widest disabled:opacity-50"
+                          style={{ background: 'var(--danger)', color: '#fff', boxShadow: '3px 3px 0 rgba(0,0,0,0.25)' }}
+                        >
+                          {isRegistering ? <div className="brutal-loader" /> : <BrutalIcon name="play" size={13} strokeWidth={2.5} />}
+                          RETRY SAVING SCORE
+                        </button>
+                      </>
+                    )}
                   </div>
                   <button
                     onClick={() => {
@@ -796,6 +848,12 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
                       </div>
                     )}
                 </button>
+              )}
+              {/* Explain why submit is blocked */}
+              {submitBlockReason && !hasError && (
+                <div className="text-center font-display text-[9px] uppercase tracking-[0.12em]" style={{ color: 'var(--ink-soft)' }}>
+                  {submitBlockReason}
+                </div>
               )}
 
               {/* Share / Leaderboard */}
