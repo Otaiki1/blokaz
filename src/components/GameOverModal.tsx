@@ -200,7 +200,11 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
   const handleSubmit = async () => {
     if (!gameSession || !recoveredSeed || !effectiveGameId) return
     if (isRegistering || isAllSuccess) return
-    const packed = packMoves(gameSession.moveHistory)
+    // Filter out marker records (revive, bomb, lottery) — they have pieceIndex: -1.
+    // Packing a negative pieceIndex produces a negative BigInt which corrupts the
+    // packed word and causes the ABI encoder to throw before the tx is sent.
+    const realMoves = gameSession.moveHistory.filter(m => m.pieceIndex >= 0)
+    const packed = packMoves(realMoves)
     if (isTournamentMode) {
       setSignerError(null)
       try {
@@ -231,7 +235,7 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
         recoveredSeed,
         packed,
         gameSession.score,
-        gameSession.moveHistory.length
+        realMoves.length
       )
     }
   }
