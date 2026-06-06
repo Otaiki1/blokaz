@@ -499,7 +499,7 @@ const GameScreen: React.FC<GameScreenProps> = ({
 
   const [showShop, setShowShop] = useState(false)
 
-  const { address, isConnected } = useAccount()
+  const { address, isConnected, isReconnecting } = useAccount()
   const isWhitelisted = isShopLotteryEnabled(address)
 
   // ── No-gas detection ──────────────────────────────────────────────────────
@@ -709,6 +709,10 @@ const GameScreen: React.FC<GameScreenProps> = ({
       if (stored?.snapshot?.moveHistory?.length) {
         const boost = !!(stored.snapshot as any).scoreBoostActive
         const restoredSession = replayMoveHistory(localSeed, stored.snapshot.moveHistory, boost)
+        // Restore the original moveHistory so marker records (revive, bomb, lottery)
+        // are preserved. replayMoveHistory processes them without pushing them to
+        // the session's own moveHistory, which would corrupt future snapshots.
+        restoredSession.moveHistory = [...(stored.snapshot.moveHistory as MoveRecord[])]
         ;(window as any).currentPieces = restoredSession.currentPieces
         useGameStore.setState({
           gameSession: restoredSession,
@@ -780,9 +784,12 @@ const GameScreen: React.FC<GameScreenProps> = ({
   // Skip in MiniPay: isConnected is always false on first render because
   // MiniPayAutoConnect hasn't resolved yet. Without this guard the game
   // silently starts in practice mode and contractStartGame is never called.
+  // Also skip while isReconnecting — wagmi transiently sets isConnected=false
+  // during wallet reconnection (page reload, app resume). Without this guard
+  // a new practice-mode game would overwrite the player's stored session.
   useEffect(() => {
-    if (!isConnected && !gameSession && !IS_MINIPAY) handleStartGame()
-  }, [isConnected, gameSession])
+    if (!isConnected && !isReconnecting && !gameSession && !IS_MINIPAY) handleStartGame()
+  }, [isConnected, isReconnecting, gameSession])
 
   // 4. Start tx rejection → abandon session and go back to lobby
   useEffect(() => {
@@ -835,6 +842,21 @@ const GameScreen: React.FC<GameScreenProps> = ({
     document.addEventListener('visibilitychange', saveOnHide)
     return () => document.removeEventListener('visibilitychange', saveOnHide)
   }, [])
+
+  // Save snapshot on every score change so navigating away (theme switcher, etc.)
+  // never rolls back to a stale snapshot.
+  useEffect(() => {
+    if (!score) return
+    const session = useGameStore.getState().gameSession
+    if (!session || session.isGameOver || !session.moveHistory.length) return
+    const raw = localStorage.getItem(CLASSIC_SESSION_STORAGE_KEY)
+    if (!raw) return
+    try {
+      const entry = JSON.parse(raw)
+      entry.snapshot = { moveHistory: session.moveHistory, scoreBoostActive: session.scoreBoostActive }
+      localStorage.setItem(CLASSIC_SESSION_STORAGE_KEY, JSON.stringify(entry))
+    } catch {}
+  }, [score])
 
   // Canvas init
   useEffect(() => {
@@ -1144,6 +1166,13 @@ const GameScreen: React.FC<GameScreenProps> = ({
     const localSeed = BigInt(stored.hash.slice(0, 18))
     const boost = !!(stored.snapshot as any).scoreBoostActive
     const restoredSession = replayMoveHistory(localSeed, stored.snapshot.moveHistory, boost)
+    // Replace the replayed moveHistory with the original snapshot moveHistory.
+    // replayMoveHistory processes marker records (revive, bomb, lottery) without
+    // pushing them to the session's moveHistory, so the replayed history is
+    // missing those markers. If the restored session later saves its moveHistory
+    // to localStorage, those markers would be lost and the next restore would
+    // replay incorrectly (post-revival moves silently fail at game-over state).
+    restoredSession.moveHistory = [...(stored.snapshot.moveHistory as MoveRecord[])]
     ;(window as any).currentPieces = restoredSession.currentPieces
     useGameStore.setState({
       gameSession: restoredSession,
@@ -1151,6 +1180,11 @@ const GameScreen: React.FC<GameScreenProps> = ({
       comboStreak: restoredSession.comboStreak,
       currentPieces: [...restoredSession.currentPieces],
       isGameOver: restoredSession.isGameOver,
+      // Restore on-chain refs so the game-over modal can submit the score
+      // when the player continues into a finished-game state.
+      onChainSeed: stored.seed ?? null,
+      onChainGameId: stored.gameId ? BigInt(stored.gameId) : null,
+      onChainStatus: stored.gameId ? 'registered' as const : 'none' as const,
     })
   }
 
@@ -1341,6 +1375,7 @@ const GameScreen: React.FC<GameScreenProps> = ({
     startNewGame,
     bombModeActive,
     onBombTap: handleBombTap,
+    onGoBack: () => forceReset(),
   }
 
   const canvasArea = (
@@ -1541,6 +1576,7 @@ interface CanvasAreaProps {
   startNewGame: () => void
   bombModeActive?: boolean
   onBombTap?: (row: number, col: number) => void
+  onGoBack?: () => void
 }
 
 const ClassicStartCard: React.FC<{
@@ -1790,6 +1826,7 @@ const CanvasArea: React.FC<CanvasAreaProps> = ({
   startNewGame,
   bombModeActive,
   onBombTap,
+  onGoBack,
 }) => {
   if (!gameSession) {
     return (
@@ -1902,6 +1939,7 @@ const CanvasArea: React.FC<CanvasAreaProps> = ({
             <GameOverModal
               score={score}
               onPlayAgain={handleStartGame}
+              onBack={onGoBack}
               onOpenLeaderboard={onOpenLeaderboard}
               mode="classic"
             />
