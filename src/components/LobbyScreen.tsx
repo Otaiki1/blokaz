@@ -746,7 +746,7 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({
               >
                 <span
                   className="mb-1 font-display text-[9px] tracking-[0.16em]"
-                  style={{ color: 'var(--ink-fixed)' }}
+                  style={{ color: 'var(--ink)' }}
                 >
                   BEST
                 </span>
@@ -755,7 +755,7 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({
                   style={{
                     letterSpacing: '-0.03em',
                     fontSize: 'clamp(16px,5.5vw,28px)',
-                    color: 'var(--ink-fixed)',
+                    color: 'var(--ink)',
                   }}
                 >
                   {animatedScore > 0 ? animatedScore.toLocaleString() : shareScore.toLocaleString()}

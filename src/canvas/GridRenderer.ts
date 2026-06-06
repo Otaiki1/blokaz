@@ -48,6 +48,8 @@ export class GridRenderer {
   private tier: TierInfo | null = null
   /** Animation timestamp in seconds for time-based effects */
   private t: number = 0
+  /** Board background colour — refreshed each draw(), used by tier cell renderers */
+  private boardBg: string = '#000000'
 
   constructor(canvas: HTMLCanvasElement, gridSize: number) {
     this.canvas = canvas
@@ -85,6 +87,9 @@ export class GridRenderer {
     const rule = css.getPropertyValue('--rule').trim()
 
     const tierId = this.tier?.id ?? 0
+
+    // Cache board colour so tier cell renderers can use it without re-reading CSS
+    this.boardBg = bg
 
     // Board background — tinted for higher tiers
     this.ctx.fillStyle = bg
@@ -369,44 +374,43 @@ export class GridRenderer {
     const size = this.cellSize - pad * 2
     if (size <= 0) return
 
-    const pulse = 0.5 + 0.5 * Math.sin(this.t * 3 + row * 0.7 + col * 0.5)
+    const pulse = 0.5 + 0.5 * Math.sin(this.t * 1.4 + row * 0.7 + col * 0.5)
 
-    // Dark background
-    this.ctx.fillStyle = '#0c0c10'
+    const r = parseInt(color.slice(1, 3), 16)
+    const g = parseInt(color.slice(3, 5), 16)
+    const b = parseInt(color.slice(5, 7), 16)
+
+    // Near-black base — neon glow only reads cleanly against true dark
+    this.ctx.fillStyle = '#080c12'
     this.ctx.fillRect(x, y, size, size)
 
-    // Outer glow (simulated with box-shadow via ctx shadow)
+    // Faint inner fill — gives the ring an ambient interior colour
+    const ip = size * 0.18
+    this.ctx.fillStyle = `rgba(${r},${g},${b},0.08)`
+    this.ctx.fillRect(x + ip, y + ip, size - ip * 2, size - ip * 2)
+
+    // Glowing inner ring — the signature neon element, moderate glow
     this.ctx.save()
     this.ctx.shadowColor = color
-    this.ctx.shadowBlur = size * (0.18 + pulse * 0.18)
+    this.ctx.shadowBlur = size * (0.14 + pulse * 0.1)
     this.ctx.strokeStyle = color
-    this.ctx.lineWidth = Math.max(1.5, size * 0.06)
-    this.ctx.strokeRect(
-      x + size * 0.15,
-      y + size * 0.15,
-      size * 0.7,
-      size * 0.7
-    )
+    this.ctx.lineWidth = Math.max(1.5, size * 0.07)
+    this.ctx.strokeRect(x + size * 0.15, y + size * 0.15, size * 0.7, size * 0.7)
     this.ctx.restore()
 
-    // Inner glowing center dot
-    const dotSize = size * (0.2 + pulse * 0.12)
+    // Center dot — steady glow, gentle pulse
+    const dotSize = size * (0.17 + pulse * 0.09)
     this.ctx.save()
     this.ctx.shadowColor = color
-    this.ctx.shadowBlur = size * 0.25
+    this.ctx.shadowBlur = size * 0.14
     this.ctx.fillStyle = color
-    this.ctx.globalAlpha = 0.7 + pulse * 0.25
-    this.ctx.fillRect(
-      x + (size - dotSize) / 2,
-      y + (size - dotSize) / 2,
-      dotSize,
-      dotSize
-    )
+    this.ctx.globalAlpha = 0.58 + pulse * 0.2
+    this.ctx.fillRect(x + (size - dotSize) / 2, y + (size - dotSize) / 2, dotSize, dotSize)
     this.ctx.restore()
 
-    // Border
-    this.ctx.strokeStyle = 'rgba(0,0,0,0.45)'
-    this.ctx.lineWidth = 2.5
+    // Dark outer border — anchors the cell cleanly
+    this.ctx.strokeStyle = 'rgba(0,0,0,0.5)'
+    this.ctx.lineWidth = 2
     this.ctx.setLineDash([])
     this.ctx.strokeRect(x, y, size, size)
   }
@@ -419,26 +423,26 @@ export class GridRenderer {
     const size = this.cellSize - pad * 2
     if (size <= 0) return
 
-    const breath = 1 + 0.03 * Math.sin(this.t * 1.6 + cellIdx)
+    const breath = 1 + 0.025 * Math.sin(this.t * 1.2 + cellIdx)
 
-    // Deep dark background
-    this.ctx.fillStyle = '#04040a'
+    // Background from CSS (theme-synced) instead of hardcoded near-black
+    this.ctx.fillStyle = this.boardBg
     this.ctx.fillRect(x, y, size, size)
 
-    // Nebula glow — parse color for gradient
+    // Nebula glow — reduced centre opacity for light-sensitivity comfort
     const r = parseInt(color.slice(1, 3), 16)
     const g = parseInt(color.slice(3, 5), 16)
     const b = parseInt(color.slice(5, 7), 16)
     const cx2 = x + size * (0.4 + Math.sin(this.t * 0.5 + cellIdx) * 0.2)
     const cy2 = y + size * (0.5 + Math.cos(this.t * 0.4 + cellIdx) * 0.2)
     const grad = this.ctx.createRadialGradient(cx2, cy2, 0, cx2, cy2, size * 0.7)
-    grad.addColorStop(0, `rgba(${r},${g},${b},0.55)`)
-    grad.addColorStop(0.4, `rgba(${r},${g},${b},0.11)`)
+    grad.addColorStop(0, `rgba(${r},${g},${b},0.58)`)
+    grad.addColorStop(0.4, `rgba(${r},${g},${b},0.16)`)
     grad.addColorStop(1, 'transparent')
     this.ctx.fillStyle = grad
     this.ctx.fillRect(x, y, size, size)
 
-    // Pseudo-random star speckles seeded by cellIdx
+    // Star speckles — slower flicker, lower max alpha
     const seed = (cellIdx + 1) * 9301
     const rand = (n: number) => {
       const val = Math.sin(seed + n * 12.9898) * 43758.5453
@@ -447,29 +451,35 @@ export class GridRenderer {
     for (let i = 0; i < 6; i++) {
       const sx = x + rand(i * 2) * size
       const sy = y + rand(i * 2 + 1) * size
-      const tw = 0.4 + 0.6 * (Math.sin(this.t * 2.4 + rand(i * 5) * 6.28) * 0.5 + 0.5)
+      // Slower twinkle: was 2.4 rad/s, now 1.0 rad/s
+      const tw = 0.35 + 0.65 * (Math.sin(this.t * 1.0 + rand(i * 5) * 6.28) * 0.5 + 0.5)
       const isTinted = rand(i * 7) > 0.55
       const sp = Math.max(1, size * 0.04 * (0.5 + rand(i * 3) * 1.4))
       this.ctx.fillStyle = isTinted ? color : '#ffffff'
-      this.ctx.globalAlpha = tw * (isTinted ? 0.95 : 0.85)
+      // Halved alpha ceiling
+      this.ctx.globalAlpha = tw * (isTinted ? 0.5 : 0.42)
       this.ctx.fillRect(sx - sp / 2, sy - sp / 2, sp, sp)
     }
     this.ctx.globalAlpha = 1
 
-    // Anchor star
+    // Anchor star — reduced glow
     this.ctx.save()
     this.ctx.shadowColor = color
-    this.ctx.shadowBlur = size * 0.18
+    this.ctx.shadowBlur = size * 0.1
     this.ctx.fillStyle = '#ffffff'
-    const starSize = size * 0.08 * breath
+    const starSize = size * 0.07 * breath
     this.ctx.fillRect(x + (size - starSize) / 2, y + (size - starSize) / 2, starSize, starSize)
     this.ctx.restore()
 
-    // Border
-    this.ctx.strokeStyle = 'rgba(0,0,0,0.45)'
+    // Border — glowing colored outline, calmer than before
+    this.ctx.save()
+    this.ctx.shadowColor = `rgba(${r},${g},${b},0.6)`
+    this.ctx.shadowBlur = size * 0.16
+    this.ctx.strokeStyle = `rgba(${r},${g},${b},0.85)`
     this.ctx.lineWidth = 2.5
     this.ctx.setLineDash([])
     this.ctx.strokeRect(x, y, size, size)
+    this.ctx.restore()
   }
 
   // ─── T7: LIQUID — dark bg, animated sloshing liquid wave ───
@@ -490,7 +500,7 @@ export class GridRenderer {
     this.ctx.rect(x, y, size, size)
     this.ctx.clip()
 
-    const phase = this.t * 2.2 + row * 0.7 + col * 0.5
+    const phase = this.t * 1.1 + row * 0.7 + col * 0.5
     const waveH = size * (0.42 + Math.sin(phase) * 0.06)
     const waveTop = y + waveH
 
@@ -502,9 +512,9 @@ export class GridRenderer {
     fillGrad.addColorStop(0, `rgba(${r},${g2},${b},0.85)`)
     fillGrad.addColorStop(1, `rgba(${r},${g2},${b},1)`)
 
-    // Wave path
+    // Wave path — waveOff slowed from 3→1.6 rad/s (calmer surface chop)
     const waveX1 = size * 0.25
-    const waveOff = Math.sin(this.t * 3 + col * 0.8) * size * 0.05
+    const waveOff = Math.sin(this.t * 0.8 + col * 0.8) * size * 0.05
     this.ctx.beginPath()
     this.ctx.moveTo(x, waveTop)
     this.ctx.quadraticCurveTo(x + waveX1, waveTop - waveOff, x + size / 2, waveTop)
@@ -515,8 +525,8 @@ export class GridRenderer {
     this.ctx.fillStyle = fillGrad
     this.ctx.fill()
 
-    // Meniscus highlight line
-    this.ctx.strokeStyle = 'rgba(255,255,255,0.55)'
+    // Meniscus highlight — opacity reduced 0.55→0.32 for light sensitivity
+    this.ctx.strokeStyle = 'rgba(255,255,255,0.32)'
     this.ctx.lineWidth = Math.max(1, size * 0.04)
     this.ctx.setLineDash([])
     this.ctx.beginPath()
@@ -525,8 +535,8 @@ export class GridRenderer {
     this.ctx.quadraticCurveTo(x + size * 0.75, waveTop + 4 + waveOff * 0.8, x + size, waveTop + 4)
     this.ctx.stroke()
 
-    // Bubble highlight
-    this.ctx.fillStyle = 'rgba(255,255,255,0.6)'
+    // Bubble highlight — opacity reduced 0.6→0.38
+    this.ctx.fillStyle = 'rgba(255,255,255,0.38)'
     const bx = x + size * 0.65
     const by = y + size * 0.5
     const br = size * 0.06
@@ -551,7 +561,8 @@ export class GridRenderer {
     const size = this.cellSize - pad * 2
     if (size <= 0) return
 
-    const slip = Math.sin(this.t * 11 + cellIdx) > 0.85 ? size * 0.18 : 0
+    // Slip: 2.5→1.2 rad/s (~0.4→0.19 Hz)
+    const slip = Math.sin(this.t * 1.2 + cellIdx) > 0.88 ? size * 0.08 : 0
 
     // Dark background
     this.ctx.fillStyle = '#0c0c10'
@@ -566,14 +577,14 @@ export class GridRenderer {
     this.ctx.fillStyle = color
     this.ctx.fillRect(x + slip * 0.3, y, size, size)
 
-    // Pink channel (difference-like)
-    this.ctx.globalCompositeOperation = 'difference'
-    this.ctx.fillStyle = 'rgba(255,59,189,0.45)'
+    // Pink channel — switched to source-over, alpha halved (0.45→0.22)
+    this.ctx.globalCompositeOperation = 'source-over'
+    this.ctx.fillStyle = 'rgba(255,59,189,0.22)'
     this.ctx.fillRect(x - slip * 0.6, y, size, size)
 
-    // Cyan channel (screen-like)
+    // Cyan channel — alpha reduced (0.35→0.18)
     this.ctx.globalCompositeOperation = 'screen'
-    this.ctx.fillStyle = 'rgba(41,230,230,0.35)'
+    this.ctx.fillStyle = 'rgba(41,230,230,0.18)'
     this.ctx.fillRect(x + slip * 0.6, y, size, size)
 
     // Scanlines
@@ -585,10 +596,9 @@ export class GridRenderer {
       this.ctx.fillRect(x, ly, size, lineH)
     }
 
-    // Random data band
-    if (Math.sin(this.t * 9 + cellIdx * 2) > 0.7) {
-      this.ctx.globalCompositeOperation = 'difference'
-      this.ctx.fillStyle = 'rgba(255,255,255,1)'
+    // Data band — 2→1 rad/s (~0.16 Hz)
+    if (Math.sin(this.t * 1 + cellIdx * 2) > 0.9) {
+      this.ctx.fillStyle = 'rgba(255,255,255,0.10)'
       this.ctx.fillRect(x, y + size * 0.4, size, size * 0.08)
     }
 
@@ -650,44 +660,34 @@ export class GridRenderer {
       }
       this.ctx.globalAlpha = 1
       this.ctx.restore()
-    } else if (tierId === 4) {
-      // Neon: CRT scanlines slowly rolling
-      this.ctx.save()
-      this.ctx.globalAlpha = 0.08
-      const rollOffset = (t * 40) % 5
-      for (let ly = rollOffset; ly < s; ly += 5) {
-        this.ctx.fillStyle = '#29e6e6'
-        this.ctx.fillRect(0, ly, s, 2)
-      }
-      this.ctx.restore()
     } else if (tierId === 5) {
-      // Cosmic: drifting starfield
+      // Cosmic: drifting starfield — dimmed for light-sensitivity comfort
       this.ctx.save()
       for (let i = 0; i < 30; i++) {
-        const speed = 6 + (i % 4) * 4
+        const speed = 4 + (i % 4) * 3          // slower drift
         const drift = ((i * 23 + t * speed) % (s + 20)) - 10
         const px = ((i * 37) % 100) / 100 * s
-        const alpha = 0.4 + ((i * 13) % 6) / 10
+        const alpha = 0.18 + ((i * 13) % 6) / 14  // max ~0.6 → ~0.43
         this.ctx.globalAlpha = alpha
         this.ctx.fillStyle = '#ffffff'
         this.ctx.beginPath()
-        this.ctx.arc(px, drift, 1.5, 0, Math.PI * 2)
+        this.ctx.arc(px, drift, 1.2, 0, Math.PI * 2)   // slightly smaller
         this.ctx.fill()
       }
       this.ctx.globalAlpha = 1
       this.ctx.restore()
     } else if (tierId === 6) {
-      // Liquid: slow water ripple rings from center
+      // Liquid: subtle ripple rings — reduced from 3→2 rings, slower, lower alpha
       this.ctx.save()
       const cx = s / 2
       const cy = s / 2
-      for (let i = 0; i < 3; i++) {
-        const phase = (t * 0.5 + i * 0.33) % 1
-        const radius = phase * s * 0.7
-        const alpha = (1 - phase) * 0.4
+      for (let i = 0; i < 2; i++) {
+        const phase = (t * 0.14 + i * 0.5) % 1
+        const radius = phase * s * 0.65
+        const alpha = (1 - phase) * 0.18
         this.ctx.globalAlpha = alpha
         this.ctx.strokeStyle = '#29e6e6'
-        this.ctx.lineWidth = 2
+        this.ctx.lineWidth = 1.5
         this.ctx.beginPath()
         this.ctx.arc(cx, cy, radius, 0, Math.PI * 2)
         this.ctx.stroke()
@@ -695,23 +695,19 @@ export class GridRenderer {
       this.ctx.globalAlpha = 1
       this.ctx.restore()
     } else if (tierId === 7) {
-      // Glitch: flashing RGB scan band + occasional full-frame flash
+      // Glitch: slow RGB scan band — full-frame flash removed (seizure risk).
+      // Band speed halved (90→42), difference blend replaced with source-over,
+      // alpha halved on both lines.
       this.ctx.save()
-      const bandY = ((t * 90) % 100) / 100 * s
-      this.ctx.globalCompositeOperation = 'difference'
+      const bandY = ((t * 10) % 100) / 100 * s
+      this.ctx.globalCompositeOperation = 'source-over'
       this.ctx.fillStyle = '#ff3bbd'
-      this.ctx.globalAlpha = 0.5
+      this.ctx.globalAlpha = 0.22
       this.ctx.fillRect(0, bandY, s, 4)
       this.ctx.globalCompositeOperation = 'screen'
       this.ctx.fillStyle = '#29e6e6'
-      this.ctx.globalAlpha = 0.35
+      this.ctx.globalAlpha = 0.16
       this.ctx.fillRect(0, (bandY + s * 0.3) % s, s, 2)
-      if (Math.sin(t * 7) > 0.9) {
-        this.ctx.globalCompositeOperation = 'source-over'
-        this.ctx.fillStyle = '#ffffff'
-        this.ctx.globalAlpha = 0.05
-        this.ctx.fillRect(0, 0, s, s)
-      }
       this.ctx.globalCompositeOperation = 'source-over'
       this.ctx.globalAlpha = 1
       this.ctx.restore()
@@ -727,6 +723,13 @@ export class GridRenderer {
 
     this.ctx.fillStyle = fill
     this.ctx.fillRect(x, y, size, size)
+
+    if (this.tier?.id === 5) {
+      this.ctx.strokeStyle = 'rgba(138,61,255,0.28)'
+      this.ctx.lineWidth = 1
+      this.ctx.setLineDash([])
+      this.ctx.strokeRect(x, y, size, size)
+    }
   }
 
   private drawGhostCell(row: number, col: number, valid: boolean, color?: string): void {

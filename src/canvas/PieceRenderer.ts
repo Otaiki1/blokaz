@@ -17,6 +17,8 @@ export class PieceRenderer {
   private canvasWidth: number
   private tier: TierInfo | null = null
   private t: number = 0
+  /** Piece-tray background colour, refreshed each drawTray() for theme sync */
+  private trayBg: string = '#000000'
 
   constructor(canvas: HTMLCanvasElement, trayY: number, cellSize: number) {
     this.ctx = canvas.getContext('2d')!
@@ -43,6 +45,9 @@ export class PieceRenderer {
     const slotWidth = this.canvasWidth / 3
     const palette = isTournament ? TOURNAMENT_PALETTE : COLOR_PALETTE
     const tierId = this.tier?.id ?? 0
+    // Cache tray bg for tier cell renderers so they use the CSS-resolved colour
+    this.trayBg = getComputedStyle(document.documentElement)
+      .getPropertyValue('--piece-tray-bg').trim() || '#000000'
 
     pieces.forEach((shape, index) => {
       // Draw slot divider
@@ -281,34 +286,46 @@ export class PieceRenderer {
     x: number, y: number, size: number, color: string,
     idx: number, dr: number, dc: number
   ): void {
-    const pulse = 0.5 + 0.5 * Math.sin(this.t * 3 + dr * 0.7 + dc * 0.5)
-    this.ctx.fillStyle = '#0c0c10'
+    const pulse = 0.5 + 0.5 * Math.sin(this.t * 1.4 + dr * 0.7 + dc * 0.5)
+    const r = parseInt(color.slice(1, 3), 16)
+    const g = parseInt(color.slice(3, 5), 16)
+    const b = parseInt(color.slice(5, 7), 16)
+    // Near-black base so glow reads cleanly
+    this.ctx.fillStyle = '#080c12'
     this.ctx.fillRect(x, y, size, size)
+    // Faint inner fill
+    const ip = size * 0.18
+    this.ctx.fillStyle = `rgba(${r},${g},${b},0.08)`
+    this.ctx.fillRect(x + ip, y + ip, size - ip * 2, size - ip * 2)
+    // Glowing inner ring
     this.ctx.save()
     this.ctx.shadowColor = color
-    this.ctx.shadowBlur = size * (0.18 + pulse * 0.18)
+    this.ctx.shadowBlur = size * (0.14 + pulse * 0.1)
     this.ctx.strokeStyle = color
-    this.ctx.lineWidth = Math.max(1.5, size * 0.06)
+    this.ctx.lineWidth = Math.max(1.5, size * 0.07)
     this.ctx.setLineDash([])
     this.ctx.strokeRect(x + size * 0.15, y + size * 0.15, size * 0.7, size * 0.7)
     this.ctx.restore()
-    const dotSize = size * (0.2 + pulse * 0.12)
+    // Center dot
+    const dotSize = size * (0.17 + pulse * 0.09)
     this.ctx.save()
     this.ctx.shadowColor = color
-    this.ctx.shadowBlur = size * 0.25
+    this.ctx.shadowBlur = size * 0.14
     this.ctx.fillStyle = color
-    this.ctx.globalAlpha = 0.7 + pulse * 0.25
+    this.ctx.globalAlpha = 0.58 + pulse * 0.2
     this.ctx.fillRect(x + (size - dotSize) / 2, y + (size - dotSize) / 2, dotSize, dotSize)
     this.ctx.restore()
-    this.ctx.strokeStyle = 'rgba(0,0,0,0.4)'
+    // Dark outer border
+    this.ctx.strokeStyle = 'rgba(0,0,0,0.5)'
     this.ctx.lineWidth = 2
     this.ctx.setLineDash([])
     this.ctx.strokeRect(x, y, size, size)
   }
 
   private drawCellCosmic(x: number, y: number, size: number, color: string, idx: number): void {
-    const breath = 1 + 0.03 * Math.sin(this.t * 1.6 + idx)
-    this.ctx.fillStyle = '#04040a'
+    const breath = 1 + 0.025 * Math.sin(this.t * 1.2 + idx)
+    // Theme-synced background (--piece-tray-bg) instead of hardcoded near-black
+    this.ctx.fillStyle = this.trayBg
     this.ctx.fillRect(x, y, size, size)
     const r = parseInt(color.slice(1, 3), 16)
     const g = parseInt(color.slice(3, 5), 16)
@@ -316,8 +333,9 @@ export class PieceRenderer {
     const gx = x + size * (0.4 + Math.sin(this.t * 0.5 + idx) * 0.2)
     const gy = y + size * (0.5 + Math.cos(this.t * 0.4 + idx) * 0.2)
     const grad = this.ctx.createRadialGradient(gx, gy, 0, gx, gy, size * 0.7)
-    grad.addColorStop(0, `rgba(${r},${g},${b},0.55)`)
-    grad.addColorStop(0.4, `rgba(${r},${g},${b},0.11)`)
+    // Reduced nebula opacity
+    grad.addColorStop(0, `rgba(${r},${g},${b},0.58)`)
+    grad.addColorStop(0.4, `rgba(${r},${g},${b},0.16)`)
     grad.addColorStop(1, 'transparent')
     this.ctx.fillStyle = grad
     this.ctx.fillRect(x, y, size, size)
@@ -326,27 +344,35 @@ export class PieceRenderer {
       const v = Math.sin(seed + n * 12.9898) * 43758.5453
       return v - Math.floor(v)
     }
+    // Slower twinkle, halved alpha ceiling
     for (let i = 0; i < 5; i++) {
       const sx = x + rand(i * 2) * size
       const sy = y + rand(i * 2 + 1) * size
-      const tw = 0.4 + 0.6 * (Math.sin(this.t * 2.4 + rand(i * 5) * 6.28) * 0.5 + 0.5)
+      const tw = 0.35 + 0.65 * (Math.sin(this.t * 1.0 + rand(i * 5) * 6.28) * 0.5 + 0.5)
       const sp = Math.max(1, size * 0.04 * (0.5 + rand(i * 3) * 1.4))
-      this.ctx.fillStyle = rand(i * 7) > 0.55 ? color : '#ffffff'
-      this.ctx.globalAlpha = tw * 0.9
+      const isTinted = rand(i * 7) > 0.55
+      this.ctx.fillStyle = isTinted ? color : '#ffffff'
+      this.ctx.globalAlpha = tw * (isTinted ? 0.5 : 0.42)
       this.ctx.fillRect(sx - sp / 2, sy - sp / 2, sp, sp)
     }
     this.ctx.globalAlpha = 1
+    // Anchor star — reduced glow
     this.ctx.save()
     this.ctx.shadowColor = color
-    this.ctx.shadowBlur = size * 0.18
-    const starSz = size * 0.08 * breath
+    this.ctx.shadowBlur = size * 0.1
+    const starSz = size * 0.07 * breath
     this.ctx.fillStyle = '#ffffff'
     this.ctx.fillRect(x + (size - starSz) / 2, y + (size - starSz) / 2, starSz, starSz)
     this.ctx.restore()
-    this.ctx.strokeStyle = 'rgba(0,0,0,0.4)'
+    // Border — calmer glow
+    this.ctx.save()
+    this.ctx.shadowColor = `rgba(${r},${g},${b},0.6)`
+    this.ctx.shadowBlur = size * 0.16
+    this.ctx.strokeStyle = `rgba(${r},${g},${b},0.85)`
     this.ctx.lineWidth = 2
     this.ctx.setLineDash([])
     this.ctx.strokeRect(x, y, size, size)
+    this.ctx.restore()
   }
 
   private drawCellLiquid(
@@ -359,7 +385,7 @@ export class PieceRenderer {
     this.ctx.beginPath()
     this.ctx.rect(x, y, size, size)
     this.ctx.clip()
-    const phase = this.t * 2.2 + dr * 0.7 + dc * 0.5
+    const phase = this.t * 1.1 + dr * 0.7 + dc * 0.5
     const waveH = size * (0.42 + Math.sin(phase) * 0.06)
     const waveTop = y + waveH
     const r = parseInt(color.slice(1, 3), 16)
@@ -368,8 +394,9 @@ export class PieceRenderer {
     const fillGrad = this.ctx.createLinearGradient(x, waveTop, x, y + size)
     fillGrad.addColorStop(0, `rgba(${r},${g},${b},0.85)`)
     fillGrad.addColorStop(1, `rgba(${r},${g},${b},1)`)
+    // waveOff slowed from 3→1.6 rad/s; meniscus 0.55→0.32
     const waveX1 = size * 0.25
-    const waveOff = Math.sin(this.t * 3 + dc * 0.8) * size * 0.05
+    const waveOff = Math.sin(this.t * 0.8 + dc * 0.8) * size * 0.05
     this.ctx.beginPath()
     this.ctx.moveTo(x, waveTop)
     this.ctx.quadraticCurveTo(x + waveX1, waveTop - waveOff, x + size / 2, waveTop)
@@ -379,7 +406,7 @@ export class PieceRenderer {
     this.ctx.closePath()
     this.ctx.fillStyle = fillGrad
     this.ctx.fill()
-    this.ctx.strokeStyle = 'rgba(255,255,255,0.55)'
+    this.ctx.strokeStyle = 'rgba(255,255,255,0.32)'
     this.ctx.lineWidth = Math.max(1, size * 0.04)
     this.ctx.setLineDash([])
     this.ctx.beginPath()
@@ -395,7 +422,8 @@ export class PieceRenderer {
   }
 
   private drawCellGlitch(x: number, y: number, size: number, color: string, idx: number): void {
-    const slip = Math.sin(this.t * 11 + idx) > 0.85 ? size * 0.18 : 0
+    // Slip: 2.5→1.2 rad/s (~0.19 Hz)
+    const slip = Math.sin(this.t * 1.2 + idx) > 0.88 ? size * 0.08 : 0
     this.ctx.fillStyle = '#0c0c10'
     this.ctx.fillRect(x, y, size, size)
     this.ctx.save()
@@ -404,11 +432,13 @@ export class PieceRenderer {
     this.ctx.clip()
     this.ctx.fillStyle = color
     this.ctx.fillRect(x + slip * 0.3, y, size, size)
-    this.ctx.globalCompositeOperation = 'difference'
-    this.ctx.fillStyle = 'rgba(255,59,189,0.45)'
+    // Pink: difference→source-over, alpha 0.45→0.22
+    this.ctx.globalCompositeOperation = 'source-over'
+    this.ctx.fillStyle = 'rgba(255,59,189,0.22)'
     this.ctx.fillRect(x - slip * 0.6, y, size, size)
+    // Cyan: alpha 0.35→0.18
     this.ctx.globalCompositeOperation = 'screen'
-    this.ctx.fillStyle = 'rgba(41,230,230,0.35)'
+    this.ctx.fillStyle = 'rgba(41,230,230,0.18)'
     this.ctx.fillRect(x + slip * 0.6, y, size, size)
     this.ctx.globalCompositeOperation = 'source-over'
     const lineH = Math.max(1, size * 0.05)
@@ -417,9 +447,9 @@ export class PieceRenderer {
     for (let ly = y; ly < y + size; ly += stride) {
       this.ctx.fillRect(x, ly, size, lineH)
     }
-    if (Math.sin(this.t * 9 + idx * 2) > 0.7) {
-      this.ctx.globalCompositeOperation = 'difference'
-      this.ctx.fillStyle = 'rgba(255,255,255,1)'
+    // Data band: 2→1 rad/s (~0.16 Hz)
+    if (Math.sin(this.t * 1 + idx * 2) > 0.9) {
+      this.ctx.fillStyle = 'rgba(255,255,255,0.10)'
       this.ctx.fillRect(x, y + size * 0.4, size, size * 0.08)
     }
     this.ctx.globalCompositeOperation = 'source-over'

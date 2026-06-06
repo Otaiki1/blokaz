@@ -260,8 +260,8 @@
   --hero:            #6000cc;
   --piece-tray-bg:   #0c0010;
   --board:           #08020e;
-  --empty-cell:      #10061a;
-  --rule:            rgba(138,61,255,0.12);
+  --empty-cell:      #1e0938;
+  --rule:            rgba(138,61,255,0.30);
   --combo-burst-strong: rgba(138,61,255,0.3);
   --game-over-shadow: #8a3dff;
 }
@@ -294,4 +294,38 @@
   --rule:            rgba(255,59,189,0.1);
   --combo-burst-strong: rgba(255,59,189,0.35);
   --game-over-shadow: #ff3bbd;
+}
+
+/* ══ TIER + THEME SYNC (specificity: 2 attribute selectors > 1, always wins) ══
+   Neon and Cosmic boards are intentionally dark, but when a user has chosen
+   dark-navy or dark-forest the hardcoded neutral-dark clashes with the
+   theme palette. These rules tint the board / tray toward the active theme so
+   the game area feels continuous with the surrounding UI chrome.               */
+
+/* T5 NEON — Dark Navy: pull board toward the navy blue palette */
+[data-theme='dark-navy'][data-tier='4'] {
+  --board:           #071828;
+  --empty-cell:      #0d2438;
+  --piece-tray-bg:   #06101e;
+}
+
+/* T5 NEON — Dark Forest: pull board toward the forest green palette */
+[data-theme='dark-forest'][data-tier='4'] {
+  --board:           #071810;
+  --empty-cell:      #0d2418;
+  --piece-tray-bg:   #061010;
+}
+
+/* T6 COSMIC — Dark Navy: pull board toward the navy blue palette */
+[data-theme='dark-navy'][data-tier='5'] {
+  --board:           #0d091e;
+  --empty-cell:      #17103a;
+  --piece-tray-bg:   #080618;
+}
+
+/* T6 COSMIC — Dark Forest: pull board toward the forest green palette */
+[data-theme='dark-forest'][data-tier='5'] {
+  --board:           #0a0818;
+  --empty-cell:      #140a2c;
+  --piece-tray-bg:   #070514;
 }
