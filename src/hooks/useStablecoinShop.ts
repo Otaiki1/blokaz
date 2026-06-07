@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useAccount, useBalance, useWalletClient } from 'wagmi'
+import { useAccount, useBalance, usePublicClient, useWalletClient } from 'wagmi'
 import { encodeFunctionData } from 'viem'
 import {
   GAME_TREASURY,
@@ -29,6 +29,7 @@ function shopCost(sym: StablecoinSymbol): bigint {
 
 export function useStablecoinShop() {
   const { address } = useAccount()
+  const publicClient = usePublicClient()
   const { data: walletClient } = useWalletClient()
   const walletRef = useRef(walletClient)
   useEffect(() => { walletRef.current = walletClient }, [walletClient])
@@ -39,21 +40,27 @@ export function useStablecoinShop() {
   const [error, setError] = useState<string | null>(null)
   const isPayingRef = useRef(false)
 
-  const { data: usdcBal } = useBalance({
+  const { data: usdcBal, refetch: refetchUsdc } = useBalance({
     address,
     token: STABLECOIN_TOKENS.USDC.address,
     query: { enabled: !!address },
   })
-  const { data: usdtBal } = useBalance({
+  const { data: usdtBal, refetch: refetchUsdt } = useBalance({
     address,
     token: STABLECOIN_TOKENS.USDT.address,
     query: { enabled: !!address },
   })
-  const { data: usdmBal } = useBalance({
+  const { data: usdmBal, refetch: refetchUsdm } = useBalance({
     address,
     token: STABLECOIN_TOKENS.USDm.address,
     query: { enabled: !!address },
   })
+
+  const refetchBalances = useCallback(() => {
+    refetchUsdc()
+    refetchUsdt()
+    refetchUsdm()
+  }, [refetchUsdc, refetchUsdt, refetchUsdm])
 
   const balances: Record<StablecoinSymbol, bigint> = {
     USDC: usdcBal?.value ?? 0n,
@@ -95,6 +102,7 @@ export function useStablecoinShop() {
           args: [GAME_TREASURY, cost],
         })
 
+        let txHash: `0x${string}`
         if (isMiniPay()) {
           // Bypass viem entirely — viem's prepareTransactionRequest on the Celo
           // chain tries CIP-42 (maxFeePerGas) or calls eth_estimateGas with Celo
@@ -104,7 +112,7 @@ export function useStablecoinShop() {
           const accounts: string[] = await (window.ethereum as any).request({
             method: 'eth_accounts',
           })
-          await (window.ethereum as any).request({
+          txHash = await (window.ethereum as any).request({
             method: 'eth_sendTransaction',
             params: [{
               from: accounts[0],
@@ -115,9 +123,13 @@ export function useStablecoinShop() {
           })
         } else {
           if (!walletRef.current) throw new Error('Wallet not connected')
-          await walletRef.current.sendTransaction({ to: token.address, data })
+          txHash = await walletRef.current.sendTransaction({ to: token.address, data })
         }
 
+        // Wait for the tx to be mined before refreshing so the on-chain balance
+        // has actually changed when wagmi queries it.
+        if (publicClient) await publicClient.waitForTransactionReceipt({ hash: txHash })
+        refetchBalances()
         // Grant the item: revivalBundle = 3 revival credits, others = 1 use
         const qty = itemId === 'revivalBundle' ? 3 : 1
         addInventory(itemId, qty)
@@ -132,7 +144,7 @@ export function useStablecoinShop() {
         setIsPaying(false)
       }
     },
-    [address, addInventory]
+    [address, publicClient, addInventory, refetchBalances]
   )
 
   return {
