@@ -1,12 +1,4 @@
-/**
- * Server sync for player inventory and purchase log.
- *
- * - On wallet connect: fetch server inventory and merge with localStorage
- *   (server wins if it has more items — protects against localStorage wipe)
- * - On every inventory change: push to server (debounced 2 s)
- * - On purchase: log the tx + credit server inventory immediately
- */
-import { useEffect, useRef, useCallback } from 'react'
+import { useEffect, useRef } from 'react'
 import { useAccount } from 'wagmi'
 import { usePowerUpStore } from '../stores/powerUpStore'
 import type { PowerUpId } from '../stores/powerUpStore'
@@ -14,42 +6,69 @@ import type { PowerUpId } from '../stores/powerUpStore'
 const SERVER_URL = import.meta.env.VITE_SIGNER_URL ?? 'http://localhost:3001'
 const SYNC_DEBOUNCE_MS = 2_000
 
+async function fetchWithTimeout(
+  url: string,
+  options: RequestInit = {},
+  timeoutMs = 8_000,
+): Promise<Response> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    return await fetch(url, { ...options, signal: controller.signal })
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 async function serverPost(path: string, body: object): Promise<any> {
   try {
-    const res = await fetch(`${SERVER_URL}${path}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    })
+    const res = await fetchWithTimeout(
+      `${SERVER_URL}${path}`,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) },
+      8_000,
+    )
     return res.ok ? res.json() : null
   } catch {
     return null
   }
 }
 
-async function serverGet(path: string): Promise<any> {
+async function serverGet(path: string, timeoutMs = 5_000): Promise<any> {
   try {
-    const res = await fetch(`${SERVER_URL}${path}`)
+    const res = await fetchWithTimeout(`${SERVER_URL}${path}`, {}, timeoutMs)
     return res.ok ? res.json() : null
   } catch {
     return null
   }
 }
 
-/**
- * Fetches server inventory for an address and merges it into the local store.
- * Server wins when it has more items (it's the source of truth after a purchase).
- * localStorage wins when it has more free tries (prevents resetting free trials).
- */
+// Retries on failure — used for purchase receipts where losing the record
+// has a real cost to the player.
+async function postWithRetry(path: string, body: object, retries = 3): Promise<void> {
+  for (let attempt = 0; attempt < retries; attempt++) {
+    try {
+      const res = await fetchWithTimeout(
+        `${SERVER_URL}${path}`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) },
+        8_000,
+      )
+      if (res.ok || res.status === 409) return // 409 = already processed
+    } catch {
+      // Timeout or network error
+    }
+    if (attempt < retries - 1) await new Promise(r => setTimeout(r, 1_500 * (attempt + 1)))
+  }
+}
+
 export async function restoreInventoryFromServer(address: string): Promise<void> {
-  const data = await serverGet(`/inventory/${address.toLowerCase()}`)
+  // 5 s timeout — inventory restore should not block the UI on slow networks
+  const data = await serverGet(`/inventory/${address.toLowerCase()}`, 5_000)
   if (!data?.inventory) return
 
   const store = usePowerUpStore.getState()
   const localInv = store.inventory
   const localFt = store.freeTries
 
-  // Merge: take the max of server vs local for each field
   const mergedInv = {
     revivalBundle: Math.max(localInv.revivalBundle, data.inventory.revivalBundle ?? 0),
     scoreBoost:    Math.max(localInv.scoreBoost,    data.inventory.scoreBoost    ?? 0),
@@ -64,7 +83,6 @@ export async function restoreInventoryFromServer(address: string): Promise<void>
     rotatePass: Math.max(localFt.rotatePass, data.freeTries?.rotatePass ?? 0),
   }
 
-  // Only update the store if the server had something better
   const invChanged = (Object.keys(mergedInv) as (keyof typeof mergedInv)[])
     .some(k => mergedInv[k] !== localInv[k])
   const ftChanged = (Object.keys(mergedFt) as (keyof typeof mergedFt)[])
@@ -72,7 +90,6 @@ export async function restoreInventoryFromServer(address: string): Promise<void>
 
   if (invChanged || ftChanged) {
     usePowerUpStore.setState({ inventory: mergedInv, freeTries: mergedFt })
-    // Persist the merged state back to localStorage
     if (store.currentAddress) {
       try {
         localStorage.setItem(`blokaz:inv:${store.currentAddress}`, JSON.stringify(mergedInv))
@@ -83,8 +100,9 @@ export async function restoreInventoryFromServer(address: string): Promise<void>
 }
 
 /**
- * Logs a confirmed purchase to the server and credits the inventory.
- * Call this after waitForTransactionReceipt resolves.
+ * Logs a confirmed purchase to the server with retry.
+ * The on-chain tx is already permanent — this is the server-side receipt.
+ * Retries 3× with back-off so a shaky connection doesn't lose the record.
  */
 export async function logPurchase(
   address: string,
@@ -93,22 +111,14 @@ export async function logPurchase(
   tokenSymbol: string,
   txHash: string,
 ): Promise<void> {
-  await serverPost('/inventory/purchase', { address, itemId, quantity, tokenSymbol, txHash })
+  await postWithRetry('/inventory/purchase', { address, itemId, quantity, tokenSymbol, txHash }, 3)
 }
 
-/**
- * Pushes the current inventory + free tries to the server.
- * Exported so it can be called directly after a consume/activate.
- */
 export function syncInventoryToServer(address: string): void {
   const { inventory, freeTries } = usePowerUpStore.getState()
   serverPost('/inventory/sync', { address, inventory, freeTries })
 }
 
-/**
- * Hook — mounts in the main app shell (not just during a game).
- * Restores inventory from server on connect, syncs changes back debounced.
- */
 export function useInventorySync() {
   const { address } = useAccount()
   const inventory = usePowerUpStore((s) => s.inventory)

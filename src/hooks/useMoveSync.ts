@@ -5,15 +5,51 @@ import { useGameStore } from '../stores/gameStore'
 const SERVER_URL = import.meta.env.VITE_SIGNER_URL ?? 'http://localhost:3001'
 const SYNC_DEBOUNCE_MS = 3_000
 
+// Wraps fetch with an AbortController timeout.
+// On a shaky mobile connection, fetch can hang indefinitely without this.
+async function fetchWithTimeout(
+  url: string,
+  options: RequestInit = {},
+  timeoutMs = 8_000,
+): Promise<Response> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    return await fetch(url, { ...options, signal: controller.signal })
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+// Fire-and-forget POST. Failures are swallowed — localStorage is always
+// the primary fallback, the server is an additional safety net.
 async function post(path: string, body: object): Promise<void> {
   try {
-    await fetch(`${SERVER_URL}${path}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    })
+    await fetchWithTimeout(
+      `${SERVER_URL}${path}`,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) },
+      8_000,
+    )
   } catch {
-    // Network failure — localStorage remains the fallback
+    // Network failure or timeout — silent, localStorage covers it
+  }
+}
+
+// POST with up to `retries` attempts. Used for important receipts (purchases)
+// where losing the server record has a real cost.
+async function postWithRetry(path: string, body: object, retries = 3): Promise<void> {
+  for (let attempt = 0; attempt < retries; attempt++) {
+    try {
+      const res = await fetchWithTimeout(
+        `${SERVER_URL}${path}`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) },
+        8_000,
+      )
+      if (res.ok || res.status === 409) return // 409 = already processed, not an error
+    } catch {
+      // Timeout or network error — wait before retrying
+    }
+    if (attempt < retries - 1) await new Promise(r => setTimeout(r, 1_500 * (attempt + 1)))
   }
 }
 
@@ -25,16 +61,14 @@ export function useMoveSync() {
   const onChainGameId = useGameStore((s) => s.onChainGameId)
   const onChainSeed = useGameStore((s) => s.onChainSeed)
 
-  // Subscribe to the game seed so the effect re-fires when a new game starts.
-  // Previously this depended only on [address], so if gameSession was null
-  // at mount time (MiniPay), /session/start was never called.
+  // Subscribe to game seed so the effect re-fires when a new game starts.
   const gameSeed = useGameStore((s) => s.gameSession?.seed?.toString() ?? null)
 
   const registeredSeedRef = useRef<string | null>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastSyncedMoveCountRef = useRef(0)
 
-  // Fire /session/start whenever a new game session appears
+  // /session/start — fires when a new game session appears
   useEffect(() => {
     if (!address || !gameSeed) return
     if (registeredSeedRef.current === gameSeed) return
@@ -95,6 +129,11 @@ export function useMoveSync() {
   }, [])
 }
 
+/**
+ * Fetches the latest active session from the server with a hard 5-second
+ * timeout. If the server is down or the network is slow, returns null
+ * immediately so continueGame() falls back to localStorage without hanging.
+ */
 export async function fetchServerSession(address: string): Promise<{
   seed: string
   onChainGameId: string | null
@@ -107,7 +146,11 @@ export async function fetchServerSession(address: string): Promise<{
   updatedAt: string
 } | null> {
   try {
-    const res = await fetch(`${SERVER_URL}/session/restore/${address.toLowerCase()}`)
+    const res = await fetchWithTimeout(
+      `${SERVER_URL}/session/restore/${address.toLowerCase()}`,
+      {},
+      5_000, // 5 s max — player should not wait longer than this to continue
+    )
     if (!res.ok) return null
     const { session } = await res.json()
     return session ?? null
@@ -116,6 +159,11 @@ export async function fetchServerSession(address: string): Promise<{
   }
 }
 
+/**
+ * Marks the session as submitted after successful on-chain score submission.
+ * Retries up to 3 times — losing this record means the session could be
+ * offered for restore after it was already submitted.
+ */
 export async function markSessionComplete(address: string, seed: string): Promise<void> {
-  await post('/session/complete', { address, seed })
+  await postWithRetry('/session/complete', { address, seed }, 3)
 }
