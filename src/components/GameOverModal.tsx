@@ -587,7 +587,7 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
             {/* ── Actions ── */}
             <div className="flex flex-col gap-2.5 p-3">
               {/* Revival Bundle credits — shown first when player has pre-purchased credits */}
-              {bundleCredits > 0 && (mode === 'classic' || (mode === 'tournament' && !isAllSuccess)) && (
+              {bundleCredits > 0 && !isAllSuccess && (mode === 'classic' || mode === 'tournament') && (
                 <button
                   onClick={handleBundleRevive}
                   className="brutal-btn flex w-full items-center justify-center gap-2 border-[3px] border-ink py-3 font-display text-[11px] uppercase tracking-wider shadow-[3px_3px_0_var(--shadow)]"
@@ -604,8 +604,7 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
               )}
 
               {/* Stablecoin revival — shown in both classic and tournament modes */}
-              {(mode === 'classic' ||
-                (mode === 'tournament' && !isAllSuccess)) && (
+              {!isAllSuccess && (mode === 'classic' || mode === 'tournament') && (
                 <div
                   className="border-[3px] border-ink"
                   style={{ background: 'var(--paper-2)' }}
