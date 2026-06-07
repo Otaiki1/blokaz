@@ -503,6 +503,7 @@ const GameScreen: React.FC<GameScreenProps> = ({
   } = usePowerUpStore()
 
   const [showShop, setShowShop] = useState(false)
+  const [isContinuing, setIsContinuing] = useState(false)
 
   const { address, isConnected, isReconnecting } = useAccount()
   const isWhitelisted = isShopLotteryEnabled(address)
@@ -688,6 +689,7 @@ const GameScreen: React.FC<GameScreenProps> = ({
   // 1. Handle Start
   const handleStartGame = () => {
     if (isPending || isConfirming) return // already has a tx in flight
+    setSessionConflict(false)
     // Reset tier to T1 (PAPER) on new game
     const freshTier = getScoreTier(0)
     currentTierRef.current = freshTier
@@ -719,12 +721,16 @@ const GameScreen: React.FC<GameScreenProps> = ({
         // the session's own moveHistory, which would corrupt future snapshots.
         restoredSession.moveHistory = [...(stored.snapshot.moveHistory as MoveRecord[])]
         ;(window as any).currentPieces = restoredSession.currentPieces
+        currentTierRef.current = getScoreTier(restoredSession.score)
+        document.documentElement.setAttribute('data-tier', String(currentTierRef.current.id))
         useGameStore.setState({
           gameSession: restoredSession,
           score: restoredSession.score,
           comboStreak: restoredSession.comboStreak,
           currentPieces: [...restoredSession.currentPieces],
           isGameOver: restoredSession.isGameOver,
+          lotteryMultiplierMovesLeft: restoredSession.lotteryMultiplierMovesLeft,
+          reviveCount: (stored.snapshot.moveHistory as MoveRecord[]).filter(m => m.revive).length,
         })
       } else {
         resetActivePowerUps()
@@ -1165,7 +1171,9 @@ const GameScreen: React.FC<GameScreenProps> = ({
   )
 
   const continueGame = async () => {
-    if (!address) return
+    if (!address || isContinuing) return
+    setIsContinuing(true)
+    try {
 
     // Prefer the server session — it's always at least as fresh as localStorage
     // and survives browser cache clears, crashes, and privacy-mode wipes.
@@ -1179,7 +1187,10 @@ const GameScreen: React.FC<GameScreenProps> = ({
     const localMoves: MoveRecord[] = (stored?.snapshot?.moveHistory as MoveRecord[]) ?? []
     const moves = serverMoves.length >= localMoves.length ? serverMoves : localMoves
 
-    if (!moves.length) return
+    if (!moves.length) {
+      handleStartGame()
+      return
+    }
 
     // Seed: server stores it directly; localStorage stores it inside hash
     const seedStr = serverMoves.length >= localMoves.length
@@ -1202,6 +1213,11 @@ const GameScreen: React.FC<GameScreenProps> = ({
     restoredSession.moveHistory = [...moves]
     ;(window as any).currentPieces = restoredSession.currentPieces
 
+    // Snap tier to the restored score so the first score-change after restore
+    // doesn't spuriously fire a TIER_UP animation from PAPER.
+    currentTierRef.current = getScoreTier(restoredSession.score)
+    document.documentElement.setAttribute('data-tier', String(currentTierRef.current.id))
+
     const onChainSeedVal = serverSession?.onChainSeed ?? stored?.seed ?? null
     const onChainGameIdRaw = serverSession?.onChainGameId ?? stored?.gameId ?? null
 
@@ -1211,12 +1227,18 @@ const GameScreen: React.FC<GameScreenProps> = ({
       comboStreak: restoredSession.comboStreak,
       currentPieces: [...restoredSession.currentPieces],
       isGameOver: restoredSession.isGameOver,
+      lotteryMultiplierMovesLeft: restoredSession.lotteryMultiplierMovesLeft,
+      reviveCount: moves.filter(m => m.revive).length,
       // Restore on-chain refs so the game-over modal can submit the score
       // when the player continues into a finished-game state.
       onChainSeed: onChainSeedVal,
       onChainGameId: onChainGameIdRaw ? BigInt(onChainGameIdRaw) : null,
       onChainStatus: onChainGameIdRaw ? 'registered' as const : 'none' as const,
     })
+
+    } finally {
+      setIsContinuing(false)
+    }
   }
 
   const startNewGame = () => {
@@ -1403,6 +1425,7 @@ const GameScreen: React.FC<GameScreenProps> = ({
     startGameError,
     hasStoredGame,
     continueGame,
+    isContinuing,
     startNewGame,
     bombModeActive,
     onBombTap: handleBombTap,
@@ -1604,6 +1627,7 @@ interface CanvasAreaProps {
   startGameError?: Error | null
   hasStoredGame: boolean
   continueGame: () => void
+  isContinuing: boolean
   startNewGame: () => void
   bombModeActive?: boolean
   onBombTap?: (row: number, col: number) => void
@@ -1623,6 +1647,7 @@ const ClassicStartCard: React.FC<{
   startGameError?: Error | null
   hasStoredGame: boolean
   continueGame: () => void
+  isContinuing: boolean
   startNewGame: () => void
 }> = ({
   isConnected,
@@ -1637,6 +1662,7 @@ const ClassicStartCard: React.FC<{
   startGameError,
   hasStoredGame,
   continueGame,
+  isContinuing,
   startNewGame,
 }) => {
   const [showHowToPlay, setShowHowToPlay] = useState(!hasSeenOnboarding())
@@ -1693,11 +1719,15 @@ const ClassicStartCard: React.FC<{
     {hasStoredGame && (
       <button
         onClick={continueGame}
-        disabled={isPending || isConfirming || isSyncingContract || isMiniPayConnecting}
+        disabled={isPending || isConfirming || isSyncingContract || isMiniPayConnecting || isContinuing}
         className="brutal-btn flex w-full items-center justify-center gap-3 border-4 border-ink bg-accent-lime py-5 font-display text-sm uppercase tracking-[0.15em] shadow-[6px_6px_0_var(--shadow)] disabled:opacity-70"
         style={{ color: 'var(--ink-fixed)' }}
       >
-        ▶ CONTINUE GAME
+        {isContinuing ? (
+          <><div className="brutal-loader" /> LOADING...</>
+        ) : (
+          <>▶ CONTINUE GAME</>
+        )}
       </button>
     )}
 
@@ -1854,6 +1884,7 @@ const CanvasArea: React.FC<CanvasAreaProps> = ({
   startGameError,
   hasStoredGame,
   continueGame,
+  isContinuing,
   startNewGame,
   bombModeActive,
   onBombTap,
@@ -1874,6 +1905,7 @@ const CanvasArea: React.FC<CanvasAreaProps> = ({
         startGameError={startGameError}
         hasStoredGame={hasStoredGame}
         continueGame={continueGame}
+        isContinuing={isContinuing}
         startNewGame={startNewGame}
       />
     )

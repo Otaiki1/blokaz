@@ -295,10 +295,13 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
 
   React.useEffect(() => {
     if (isAllSuccess && address) {
-      clearStoredGameSession(storageKey)
-      // Mark session as submitted on the server so it won't be offered for restore
       const seed = useGameStore.getState().onChainSeed
-      if (seed) markSessionComplete(address, seed)
+      ;(async () => {
+        // Mark server session complete first (retries 3×) so the session can't
+        // be offered for restore after a successful on-chain submission.
+        if (seed) await markSessionComplete(address, seed)
+        clearStoredGameSession(storageKey)
+      })()
     }
   }, [isAllSuccess, storageKey, address])
 

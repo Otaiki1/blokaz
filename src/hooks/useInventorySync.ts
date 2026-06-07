@@ -5,6 +5,15 @@ import type { PowerUpId } from '../stores/powerUpStore'
 
 const SERVER_URL = import.meta.env.VITE_SIGNER_URL ?? 'http://localhost:3001'
 const SYNC_DEBOUNCE_MS = 2_000
+const PENDING_PURCHASES_KEY = 'blokaz:pending_purchases'
+
+interface PendingPurchase {
+  address: string
+  itemId: string
+  quantity: number
+  tokenSymbol: string
+  txHash: string
+}
 
 async function fetchWithTimeout(
   url: string,
@@ -76,11 +85,13 @@ export async function restoreInventoryFromServer(address: string): Promise<void>
     bomb:          Math.max(localInv.bomb,           data.inventory.bomb          ?? 0),
     rotatePass:    Math.max(localInv.rotatePass,     data.inventory.rotatePass    ?? 0),
   }
+  // freeTries are consumed (decremented) locally — use Math.min so a stale
+  // server value (not yet synced after a use) never restores a consumed try.
   const mergedFt = {
-    scoreBoost: Math.max(localFt.scoreBoost, data.freeTries?.scoreBoost ?? 0),
-    shield:     Math.max(localFt.shield,     data.freeTries?.shield     ?? 0),
-    bomb:       Math.max(localFt.bomb,       data.freeTries?.bomb       ?? 0),
-    rotatePass: Math.max(localFt.rotatePass, data.freeTries?.rotatePass ?? 0),
+    scoreBoost: Math.min(localFt.scoreBoost, data.freeTries?.scoreBoost ?? localFt.scoreBoost),
+    shield:     Math.min(localFt.shield,     data.freeTries?.shield     ?? localFt.shield),
+    bomb:       Math.min(localFt.bomb,       data.freeTries?.bomb       ?? localFt.bomb),
+    rotatePass: Math.min(localFt.rotatePass, data.freeTries?.rotatePass ?? localFt.rotatePass),
   }
 
   const invChanged = (Object.keys(mergedInv) as (keyof typeof mergedInv)[])
@@ -99,10 +110,44 @@ export async function restoreInventoryFromServer(address: string): Promise<void>
   }
 }
 
+function loadPendingPurchases(): PendingPurchase[] {
+  try {
+    const raw = localStorage.getItem(PENDING_PURCHASES_KEY)
+    return raw ? JSON.parse(raw) : []
+  } catch { return [] }
+}
+
+function savePendingPurchases(queue: PendingPurchase[]): void {
+  try {
+    if (queue.length === 0) localStorage.removeItem(PENDING_PURCHASES_KEY)
+    else localStorage.setItem(PENDING_PURCHASES_KEY, JSON.stringify(queue))
+  } catch {}
+}
+
+async function flushPendingPurchases(): Promise<void> {
+  const queue = loadPendingPurchases()
+  if (!queue.length) return
+  const remaining: PendingPurchase[] = []
+  for (const p of queue) {
+    try {
+      const res = await fetchWithTimeout(
+        `${SERVER_URL}/inventory/purchase`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(p) },
+        8_000,
+      )
+      if (!res.ok && res.status !== 409) remaining.push(p)
+    } catch {
+      remaining.push(p)
+    }
+  }
+  savePendingPurchases(remaining)
+}
+
 /**
  * Logs a confirmed purchase to the server with retry.
  * The on-chain tx is already permanent — this is the server-side receipt.
- * Retries 3× with back-off so a shaky connection doesn't lose the record.
+ * Retries 3× with back-off. If all retries fail (offline), queues to
+ * localStorage so it's flushed the next time the network comes back.
  */
 export async function logPurchase(
   address: string,
@@ -111,7 +156,24 @@ export async function logPurchase(
   tokenSymbol: string,
   txHash: string,
 ): Promise<void> {
-  await postWithRetry('/inventory/purchase', { address, itemId, quantity, tokenSymbol, txHash }, 3)
+  const body = { address, itemId, quantity, tokenSymbol, txHash }
+  let succeeded = false
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const res = await fetchWithTimeout(
+        `${SERVER_URL}/inventory/purchase`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) },
+        8_000,
+      )
+      if (res.ok || res.status === 409) { succeeded = true; break }
+    } catch {}
+    if (attempt < 2) await new Promise(r => setTimeout(r, 1_500 * (attempt + 1)))
+  }
+  if (!succeeded) {
+    const queue = loadPendingPurchases()
+    queue.push(body)
+    savePendingPurchases(queue)
+  }
 }
 
 export function syncInventoryToServer(address: string): void {
@@ -148,4 +210,16 @@ export function useInventorySync() {
     inventory.bomb, inventory.rotatePass,
     freeTries.scoreBoost, freeTries.shield, freeTries.bomb, freeTries.rotatePass,
   ])
+
+  // When network is restored, push the current inventory to the server and
+  // flush any purchase receipts that failed while the player was offline.
+  useEffect(() => {
+    if (!address) return
+    const handleOnline = () => {
+      syncInventoryToServer(address)
+      flushPendingPurchases()
+    }
+    window.addEventListener('online', handleOnline)
+    return () => window.removeEventListener('online', handleOnline)
+  }, [address])
 }

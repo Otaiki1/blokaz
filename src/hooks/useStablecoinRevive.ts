@@ -107,7 +107,7 @@ export function useStablecoinRevive() {
           args: [GAME_TREASURY, getReviveCost(sym)],
         })
 
-        let txHash: `0x${string}`
+        let txHash: `0x${string}` | undefined
         if (isMiniPay()) {
           // Bypass viem entirely — viem's prepareTransactionRequest on the Celo
           // chain tries CIP-42 (maxFeePerGas) or calls eth_estimateGas with Celo
@@ -131,6 +131,7 @@ export function useStablecoinRevive() {
           txHash = await walletRef.current.sendTransaction({ to: token.address, data })
         }
 
+        if (!txHash) throw new Error('Transaction hash unavailable — purchase may not have gone through')
         // Wait for the tx to be mined before refreshing so the on-chain balance
         // has actually changed when wagmi queries it.
         if (publicClient) await publicClient.waitForTransactionReceipt({ hash: txHash })

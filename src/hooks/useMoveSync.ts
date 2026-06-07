@@ -70,7 +70,7 @@ export function useMoveSync() {
 
   // /session/start — fires when a new game session appears
   useEffect(() => {
-    if (!address || !gameSeed) return
+    if (!address || !gameSeed || gameSeed === '0') return
     if (registeredSeedRef.current === gameSeed) return
     registeredSeedRef.current = gameSeed
     lastSyncedMoveCountRef.current = 0
@@ -117,16 +117,38 @@ export function useMoveSync() {
     debounceRef.current = setTimeout(() => syncNowRef.current(), SYNC_DEBOUNCE_MS)
   }, [score, address])
 
-  // Flush pending sync immediately on unmount (navigation away mid-game)
+  // Flush pending sync immediately on unmount (navigation away mid-game).
+  // Always fires — not gated on debounceRef — so a bomb or revival that
+  // changed moveHistory but not yet scheduled a debounce still gets sent.
   useEffect(() => {
     return () => {
-      if (debounceRef.current) {
-        clearTimeout(debounceRef.current)
-        syncNowRef.current()
-      }
+      if (debounceRef.current) clearTimeout(debounceRef.current)
+      syncNowRef.current()
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // When the network comes back, immediately push whatever localStorage has
+  // to the server — closes the gap left by any failed syncs during offline play.
+  useEffect(() => {
+    const handleOnline = () => {
+      const { gameSession, onChainGameId: gid, onChainSeed: gs } = useGameStore.getState()
+      if (!address || !gameSession) return
+      post('/session/sync', {
+        address,
+        seed: gameSession.seed.toString(),
+        moveHistory: gameSession.moveHistory,
+        score: gameSession.score,
+        scoreBoostActive: gameSession.scoreBoostActive,
+        isGameOver: gameSession.isGameOver,
+        reviveCount: useGameStore.getState().reviveCount,
+        onChainGameId: gid?.toString() ?? null,
+        onChainSeed: gs ?? null,
+      })
+    }
+    window.addEventListener('online', handleOnline)
+    return () => window.removeEventListener('online', handleOnline)
+  }, [address])
 }
 
 /**

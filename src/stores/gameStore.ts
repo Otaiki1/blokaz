@@ -111,6 +111,16 @@ export const useGameStore = create<GameState>((set, get) => ({
           reviveCount:                reviveCount + 1,
           lotteryMultiplierMovesLeft: gameSession.lotteryMultiplierMovesLeft,
         })
+        // Persist the shield-revival record synchronously so a crash between
+        // this set() and the next localStorage-write useEffect doesn't lose it.
+        try {
+          const raw = localStorage.getItem(CLASSIC_SESSION_STORAGE_KEY)
+          if (raw) {
+            const entry = JSON.parse(raw)
+            entry.snapshot = { moveHistory: gameSession.moveHistory, scoreBoostActive: gameSession.scoreBoostActive }
+            localStorage.setItem(CLASSIC_SESSION_STORAGE_KEY, JSON.stringify(entry))
+          }
+        } catch {}
         return { ...result, isGameOver: gameSession.isGameOver }
       }
     }
