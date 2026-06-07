@@ -85,30 +85,42 @@ router.post('/sync', syncLimiter, async (req, res) => {
 
   const addr = address.toLowerCase()
 
-  // Single upsert — no SELECT needed. Relies on the partial unique index:
-  //   CREATE UNIQUE INDEX idx_unique_active_session ON game_sessions (address, seed)
-  //   WHERE status = 'active';
-  const { error } = await supabase
-    .from('game_sessions')
-    .upsert(
-      {
-        address: addr,
-        seed: String(seed),
-        status: 'active',
-        move_history: moveHistory,
-        score: score ?? 0,
-        score_boost_active: !!scoreBoostActive,
-        is_game_over: !!isGameOver,
-        revive_count: reviveCount ?? 0,
-        ...(onChainGameId != null && { on_chain_game_id: String(onChainGameId) }),
-        ...(onChainSeed != null && { on_chain_seed: onChainSeed }),
-      },
-      { onConflict: 'address,seed', ignoreDuplicates: false }
-    )
+  const patch = {
+    move_history: moveHistory,
+    score: score ?? 0,
+    score_boost_active: !!scoreBoostActive,
+    is_game_over: !!isGameOver,
+    revive_count: reviveCount ?? 0,
+    ...(onChainGameId != null && { on_chain_game_id: String(onChainGameId) }),
+    ...(onChainSeed != null && { on_chain_seed: onChainSeed }),
+  }
 
-  if (error) {
-    console.error('session/sync error:', error)
+  // UPDATE the active session — no unique constraint required.
+  // If no active session exists yet (race on game start), INSERT one.
+  const { data: updated, error: updateError } = await supabase
+    .from('game_sessions')
+    .update(patch)
+    .eq('address', addr)
+    .eq('seed', String(seed))
+    .eq('status', 'active')
+    .select('id')
+    .limit(1)
+
+  if (updateError) {
+    console.error('session/sync update error:', updateError)
     return res.status(500).json({ error: 'Failed to sync session' })
+  }
+
+  // No active session found — create one (handles race where /start was missed)
+  if (!updated || updated.length === 0) {
+    const { error: insertError } = await supabase
+      .from('game_sessions')
+      .insert({ address: addr, seed: String(seed), status: 'active', ...patch })
+
+    if (insertError) {
+      console.error('session/sync insert error:', insertError)
+      return res.status(500).json({ error: 'Failed to sync session' })
+    }
   }
 
   res.json({ ok: true })
