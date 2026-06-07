@@ -262,7 +262,7 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
   const submitBlockReason: string | null = (() => {
     if (isAllSuccess || isRegistering) return null
     if (!gameSession) return 'Game session not found — start a new game'
-    if (!effectiveGameId) return 'Game not registered on-chain — start a new game'
+    if (!effectiveGameId) return 'Game not registered on-chain — the wallet prompt was missed at game start'
     if (!recoveredSeed) return 'Game seed unavailable — start a new game'
     return null
   })()

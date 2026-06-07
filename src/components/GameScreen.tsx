@@ -1247,6 +1247,16 @@ const GameScreen: React.FC<GameScreenProps> = ({
       onChainStatus: onChainGameIdRaw ? 'registered' as const : 'none' as const,
     })
 
+    // If the game was never registered on-chain (user ignored/dismissed the
+    // wallet prompt at game start), re-trigger the contract call now so the
+    // score can be submitted when the game ends. The background sync effect
+    // already polls for the new game ID and updates localStorage once confirmed.
+    if (!onChainGameIdRaw && onChainSeedVal && isConnected && address) {
+      const hash = (stored?.hash ?? stored?.seed ?? onChainSeedVal) as `0x${string}`
+      setCurrentSeed({ seed: onChainSeedVal as `0x${string}`, hash })
+      contractStartGame(hash)
+    }
+
     } finally {
       setIsContinuing(false)
     }
