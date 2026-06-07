@@ -53,6 +53,7 @@ import { PowerUpBar } from './PowerUpBar'
 import { ShopModal } from './ShopModal'
 import { usePowerUpStore } from '../stores/powerUpStore'
 import { useNotifications, ToastContainer } from './GameNotification'
+import { useMoveSync, fetchServerSession, markSessionComplete } from '../hooks/useMoveSync'
 
 const GAME_ADDRESS = contractInfo.game as `0x${string}`
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
@@ -480,6 +481,10 @@ const GameScreen: React.FC<GameScreenProps> = ({
   } = useGameStore()
 
   const { toasts, dismissToast, showToast } = useNotifications()
+
+  // Sync every move to the server so the session is recoverable even if
+  // localStorage is cleared or the browser crashes.
+  useMoveSync()
 
   // Derive the authoritative game-over flag from BOTH the store field AND the
   // mutable session object. The store field can lag by one React commit cycle
@@ -1159,21 +1164,47 @@ const GameScreen: React.FC<GameScreenProps> = ({
     readStoredGameSession(CLASSIC_SESSION_STORAGE_KEY, address, GAME_ADDRESS)?.snapshot?.moveHistory?.length
   )
 
-  const continueGame = () => {
+  const continueGame = async () => {
     if (!address) return
+
+    // Prefer the server session — it's always at least as fresh as localStorage
+    // and survives browser cache clears, crashes, and privacy-mode wipes.
+    const serverSession = await fetchServerSession(address)
+
+    // Fall back to localStorage if the server is unreachable or has no session
     const stored = readStoredGameSession(CLASSIC_SESSION_STORAGE_KEY, address, GAME_ADDRESS)
-    if (!stored?.snapshot?.moveHistory?.length || !stored.hash) return
-    const localSeed = BigInt(stored.hash.slice(0, 18))
-    const boost = !!(stored.snapshot as any).scoreBoostActive
-    const restoredSession = replayMoveHistory(localSeed, stored.snapshot.moveHistory, boost)
+
+    // Pick the source with the most moves (server wins ties)
+    const serverMoves: MoveRecord[] = serverSession?.moveHistory ?? []
+    const localMoves: MoveRecord[] = (stored?.snapshot?.moveHistory as MoveRecord[]) ?? []
+    const moves = serverMoves.length >= localMoves.length ? serverMoves : localMoves
+
+    if (!moves.length) return
+
+    // Seed: server stores it directly; localStorage stores it inside hash
+    const seedStr = serverMoves.length >= localMoves.length
+      ? serverSession!.seed
+      : stored?.hash ?? serverSession?.seed
+    if (!seedStr) return
+
+    const localSeed = BigInt(seedStr.slice(0, 18))
+    const boost = serverMoves.length >= localMoves.length
+      ? !!serverSession!.scoreBoostActive
+      : !!(stored?.snapshot as any)?.scoreBoostActive
+
+    const restoredSession = replayMoveHistory(localSeed, moves, boost)
     // Replace the replayed moveHistory with the original snapshot moveHistory.
     // replayMoveHistory processes marker records (revive, bomb, lottery) without
     // pushing them to the session's moveHistory, so the replayed history is
     // missing those markers. If the restored session later saves its moveHistory
     // to localStorage, those markers would be lost and the next restore would
     // replay incorrectly (post-revival moves silently fail at game-over state).
-    restoredSession.moveHistory = [...(stored.snapshot.moveHistory as MoveRecord[])]
+    restoredSession.moveHistory = [...moves]
     ;(window as any).currentPieces = restoredSession.currentPieces
+
+    const onChainSeedVal = serverSession?.onChainSeed ?? stored?.seed ?? null
+    const onChainGameIdRaw = serverSession?.onChainGameId ?? stored?.gameId ?? null
+
     useGameStore.setState({
       gameSession: restoredSession,
       score: restoredSession.score,
@@ -1182,9 +1213,9 @@ const GameScreen: React.FC<GameScreenProps> = ({
       isGameOver: restoredSession.isGameOver,
       // Restore on-chain refs so the game-over modal can submit the score
       // when the player continues into a finished-game state.
-      onChainSeed: stored.seed ?? null,
-      onChainGameId: stored.gameId ? BigInt(stored.gameId) : null,
-      onChainStatus: stored.gameId ? 'registered' as const : 'none' as const,
+      onChainSeed: onChainSeedVal,
+      onChainGameId: onChainGameIdRaw ? BigInt(onChainGameIdRaw) : null,
+      onChainStatus: onChainGameIdRaw ? 'registered' as const : 'none' as const,
     })
   }
 

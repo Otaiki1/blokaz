@@ -18,6 +18,7 @@ import { useAccount, useReadContract } from 'wagmi'
 import { BLOKZ_GAME_ABI, BLOKZ_TOURNAMENT_ABI } from '../constants/abi'
 import contractInfo from '../contract.json'
 import { requestSubmitSignature } from '../api/signer'
+import { markSessionComplete } from '../hooks/useMoveSync'
 import { keccak256, encodePacked } from 'viem'
 import {
   CLASSIC_SESSION_STORAGE_KEY,
@@ -293,10 +294,13 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
   })()
 
   React.useEffect(() => {
-    if (isAllSuccess) {
+    if (isAllSuccess && address) {
       clearStoredGameSession(storageKey)
+      // Mark session as submitted on the server so it won't be offered for restore
+      const seed = useGameStore.getState().onChainSeed
+      if (seed) markSessionComplete(address, seed)
     }
-  }, [isAllSuccess, storageKey])
+  }, [isAllSuccess, storageKey, address])
 
   // Start countdown once we have everything needed to submit (5s tournament, 10s classic)
   React.useEffect(() => {
