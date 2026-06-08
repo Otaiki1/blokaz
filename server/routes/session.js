@@ -67,36 +67,71 @@ router.post('/start', async (req, res) => {
 
 /**
  * POST /session/sync
- * Hot path — called after every move for every player.
- * Uses a single upsert (requires unique index on address+seed where status='active').
+ * Hot path — called after every debounced move batch for every player.
+ *
+ * Delta sync (preferred): client sends { newMoves, fromIndex } — only the
+ * moves since the last successful sync. The server appends them atomically
+ * via the append_session_moves Postgres function which deduplicates any
+ * overlap from retried requests.
+ *
+ * Legacy full-history sync: client sends { moveHistory } — replaces the
+ * entire history. Used by the network-recovery (handleOnline) path which
+ * sends fromIndex=0, letting the RPC treat it as a full resync.
+ *
  * Rate-limited to 60 req/min per IP.
  */
 router.post('/sync', syncLimiter, async (req, res) => {
   if (!requireDb(res)) return
   const {
-    address, seed, moveHistory, score,
-    scoreBoostActive, isGameOver, reviveCount,
+    address, seed,
+    newMoves, fromIndex,   // delta sync (preferred)
+    moveHistory,           // legacy fallback
+    score, scoreBoostActive, isGameOver, reviveCount,
     onChainGameId, onChainSeed,
   } = req.body
 
   if (!validateAddress(address)) return res.status(400).json({ error: 'Invalid address' })
   if (!validateSeed(seed)) return res.status(400).json({ error: 'Invalid seed' })
-  if (!Array.isArray(moveHistory)) return res.status(400).json({ error: 'moveHistory must be an array' })
+
+  const isDelta = Array.isArray(newMoves) && typeof fromIndex === 'number'
+  const isLegacy = Array.isArray(moveHistory)
+  if (!isDelta && !isLegacy) return res.status(400).json({ error: 'newMoves or moveHistory required' })
 
   const addr = address.toLowerCase()
 
-  const patch = {
-    move_history: moveHistory,
-    score: score ?? 0,
-    score_boost_active: !!scoreBoostActive,
-    is_game_over: !!isGameOver,
-    revive_count: reviveCount ?? 0,
-    ...(onChainGameId != null && { on_chain_game_id: String(onChainGameId) }),
-    ...(onChainSeed != null && { on_chain_seed: onChainSeed }),
+  // ── Delta path (90 %+ of syncs) ───────────────────────────────────────────
+  if (isDelta) {
+    const { error } = await supabase.rpc('append_session_moves', {
+      p_address:            addr,
+      p_seed:               String(seed),
+      p_new_moves:          newMoves,
+      p_from_index:         fromIndex,
+      p_score:              score ?? 0,
+      p_score_boost_active: !!scoreBoostActive,
+      p_is_game_over:       !!isGameOver,
+      p_revive_count:       reviveCount ?? 0,
+      p_on_chain_game_id:   onChainGameId ? String(onChainGameId) : null,
+      p_on_chain_seed:      onChainSeed ?? null,
+    })
+
+    if (error) {
+      console.error('session/sync rpc error:', error)
+      return res.status(500).json({ error: 'Failed to sync session' })
+    }
+    return res.json({ ok: true })
   }
 
-  // UPDATE the active session — no unique constraint required.
-  // If no active session exists yet (race on game start), INSERT one.
+  // ── Legacy full-history path (backward compat / safety net) ───────────────
+  const patch = {
+    move_history:       moveHistory,
+    score:              score ?? 0,
+    score_boost_active: !!scoreBoostActive,
+    is_game_over:       !!isGameOver,
+    revive_count:       reviveCount ?? 0,
+    ...(onChainGameId != null && { on_chain_game_id: String(onChainGameId) }),
+    ...(onChainSeed   != null && { on_chain_seed: onChainSeed }),
+  }
+
   const { data: updated, error: updateError } = await supabase
     .from('game_sessions')
     .update(patch)
@@ -155,16 +190,16 @@ router.get('/restore/:address', async (req, res) => {
 
   res.json({
     session: {
-      address: data.address,
-      seed: data.seed,
-      onChainGameId: data.on_chain_game_id,
-      onChainSeed: data.on_chain_seed,
-      moveHistory: data.move_history,
-      score: data.score,
+      address:        data.address,
+      seed:           data.seed,
+      onChainGameId:  data.on_chain_game_id,
+      onChainSeed:    data.on_chain_seed,
+      moveHistory:    data.move_history,
+      score:          data.score,
       scoreBoostActive: data.score_boost_active,
-      isGameOver: data.is_game_over,
-      reviveCount: data.revive_count,
-      updatedAt: data.updated_at,
+      isGameOver:     data.is_game_over,
+      reviveCount:    data.revive_count,
+      updatedAt:      data.updated_at,
     },
   })
 })

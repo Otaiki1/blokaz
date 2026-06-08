@@ -3,7 +3,7 @@ import { useAccount } from 'wagmi'
 import { useGameStore } from '../stores/gameStore'
 
 const SERVER_URL = import.meta.env.VITE_SIGNER_URL ?? 'http://localhost:3001'
-const SYNC_DEBOUNCE_MS = 3_000
+const SYNC_DEBOUNCE_MS = 5_000
 
 // Wraps fetch with an AbortController timeout.
 // On a shaky mobile connection, fetch can hang indefinitely without this.
@@ -21,17 +21,20 @@ async function fetchWithTimeout(
   }
 }
 
-// Fire-and-forget POST. Failures are swallowed — localStorage is always
-// the primary fallback, the server is an additional safety net.
-async function post(path: string, body: object): Promise<void> {
+// Returns true when the server accepted the request (2xx), false on any
+// network failure or non-2xx response. Callers use this to decide whether
+// to advance their "last synced" cursor.
+async function post(path: string, body: object): Promise<boolean> {
   try {
-    await fetchWithTimeout(
+    const res = await fetchWithTimeout(
       `${SERVER_URL}${path}`,
       { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) },
       8_000,
     )
+    return res.ok
   } catch {
-    // Network failure or timeout — silent, localStorage covers it
+    // Network failure or timeout — localStorage is the primary fallback
+    return false
   }
 }
 
@@ -66,6 +69,9 @@ export function useMoveSync() {
 
   const registeredSeedRef = useRef<string | null>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Tracks how many moves have been successfully acknowledged by the server.
+  // Only advances on a confirmed 2xx response so retries always re-send
+  // any moves that were lost in a failed sync.
   const lastSyncedMoveCountRef = useRef(0)
   // Preserved even after forceReset() sets gameSession to null, so the
   // unmount flush can still send the final state to the server.
@@ -103,19 +109,30 @@ export function useMoveSync() {
       const storeState = useGameStore.getState()
       const session = storeState.gameSession ?? lastKnownSessionRef.current
       if (!session || !address) return
-      // Update the preserved reference whenever we sync
       lastKnownSessionRef.current = session
-      lastSyncedMoveCountRef.current = session.moveHistory.length
+
+      // Delta sync: only send moves the server hasn't seen yet.
+      // fromIndex tells the server where these moves start in the full history
+      // so it can deduplicate if this request is a retry of a failed sync.
+      const fromIndex = lastSyncedMoveCountRef.current
+      const newMoves = session.moveHistory.slice(fromIndex)
+      const targetCount = session.moveHistory.length
+
       post('/session/sync', {
         address,
         seed: session.seed.toString(),
-        moveHistory: session.moveHistory,
+        newMoves,
+        fromIndex,
         score: session.score,
         scoreBoostActive: session.scoreBoostActive,
         isGameOver,
         reviveCount,
         onChainGameId: onChainGameId?.toString() ?? null,
         onChainSeed: onChainSeed ?? null,
+      }).then(ok => {
+        // Only advance the cursor on a confirmed success. If the sync failed,
+        // the same moves will be included in the next attempt.
+        if (ok) lastSyncedMoveCountRef.current = targetCount
       })
     }
   }, [address, isGameOver, reviveCount, onChainGameId, onChainSeed])
@@ -150,22 +167,32 @@ export function useMoveSync() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // When the network comes back, immediately push whatever localStorage has
-  // to the server — closes the gap left by any failed syncs during offline play.
+  // When the network comes back, send the full history as a recovery sync.
+  // fromIndex=0 means "start from the beginning" — the server will deduplicate
+  // moves it already has, so this is safe even if the session is partially synced.
   useEffect(() => {
     const handleOnline = () => {
       const { gameSession, onChainGameId: gid, onChainSeed: gs } = useGameStore.getState()
       if (!address || !gameSession) return
+      // Snapshot the length NOW — gameSession.moveHistory is a mutable array and
+      // by the time .then() fires more moves may have been appended to it.
+      // Using the live length in .then() would set the cursor too high and skip
+      // those newer moves on the next debounced sync.
+      const snapshotLen = gameSession.moveHistory.length
+      lastSyncedMoveCountRef.current = 0
       post('/session/sync', {
         address,
         seed: gameSession.seed.toString(),
-        moveHistory: gameSession.moveHistory,
+        newMoves: gameSession.moveHistory,
+        fromIndex: 0,
         score: gameSession.score,
         scoreBoostActive: gameSession.scoreBoostActive,
         isGameOver: gameSession.isGameOver,
         reviveCount: useGameStore.getState().reviveCount,
         onChainGameId: gid?.toString() ?? null,
         onChainSeed: gs ?? null,
+      }).then(ok => {
+        if (ok) lastSyncedMoveCountRef.current = snapshotLen
       })
     }
     window.addEventListener('online', handleOnline)
