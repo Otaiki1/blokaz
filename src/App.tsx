@@ -38,7 +38,7 @@ const getViewFromHash = (hash: string): AppView | null => {
 //   - Mid-game   → set a flag; App reloads as soon as they return to lobby
 // This ensures players always get the latest bundle without ever losing progress.
 
-const VERSION_CHECK_INTERVAL = 120_000 // 2 minutes
+const VERSION_CHECK_INTERVAL = 30_000 // 30 seconds
 let loadedVersion: number | null = null
 
 async function fetchVersion(): Promise<number | null> {
