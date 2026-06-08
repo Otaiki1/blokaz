@@ -6,6 +6,7 @@ import SplashScreen from './components/SplashScreen'
 import { ShopModal } from './components/ShopModal'
 import { isShopLotteryEnabled } from './utils/featureFlags'
 import { usePowerUpStore } from './stores/powerUpStore'
+import { useInventorySync } from './hooks/useInventorySync'
 
 // Lazy-loaded: these are large chunks not needed on initial paint
 const GameScreen = lazy(() => import('./components/GameScreen'))
@@ -17,6 +18,7 @@ const LobbyScreen = lazy(() => import('./components/LobbyScreen'))
 import { useGameStore } from './stores/gameStore'
 import { useThemeStore, type ThemeMode } from './stores/themeStore'
 import { IS_MINIPAY } from './utils/miniPay'
+import { isBetaTester, isAutoUpdateEnabled } from './utils/featureFlags'
 
 type AppView = 'lobby' | 'classic' | 'tournaments' | 'tournament-play' | 'admin'
 
@@ -28,6 +30,56 @@ const getViewFromHash = (hash: string): AppView | null => {
   if (hash === '#/admin') return 'admin'
   return null
 }
+
+// ─── Auto-update via version polling ─────────────────────────────────────────
+// At build time, vite.config.ts writes public/version.json with a timestamp.
+// We poll it every 2 minutes. When a new deploy is detected:
+//   - In lobby   → reload immediately (player isn't mid-game)
+//   - Mid-game   → set a flag; App reloads as soon as they return to lobby
+// This ensures players always get the latest bundle without ever losing progress.
+
+const VERSION_CHECK_INTERVAL = 120_000 // 2 minutes
+let loadedVersion: number | null = null
+
+async function fetchVersion(): Promise<number | null> {
+  try {
+    const res = await fetch(`/version.json?t=${Date.now()}`, { cache: 'no-store' })
+    if (!res.ok) return null
+    const { v } = await res.json()
+    return typeof v === 'number' ? v : null
+  } catch {
+    return null
+  }
+}
+
+function useAutoUpdate(isInLobby: boolean) {
+  const [updateReady, setUpdateReady] = useState(false)
+
+  // Capture the version the page loaded with on first mount
+  useEffect(() => {
+    fetchVersion().then(v => { if (v !== null) loadedVersion = v })
+  }, [])
+
+  useEffect(() => {
+    const check = async () => {
+      if (loadedVersion === null) return
+      const latest = await fetchVersion()
+      if (latest !== null && latest !== loadedVersion) {
+        setUpdateReady(true)
+      }
+    }
+    const interval = setInterval(check, VERSION_CHECK_INTERVAL)
+    return () => clearInterval(interval)
+  }, [])
+
+  // Reload as soon as the player is in the lobby
+  useEffect(() => {
+    if (updateReady && isInLobby) window.location.reload()
+  }, [updateReady, isInLobby])
+
+  return updateReady
+}
+// ─────────────────────────────────────────────────────────────────────────────
 
 const App: React.FC = () => {
   // If the static HTML splash in index.html is still present when React mounts,
@@ -46,12 +98,18 @@ const App: React.FC = () => {
   useEffect(() => {
     if (address) usePowerUpStore.getState().loadForAddress(address)
   }, [address])
+
+  // Sync inventory to/from server whenever wallet is connected
+  useInventorySync()
   const { setTournamentId, forceReset, gameSession } = useGameStore()
   const [activeView, setActiveView] = useState<AppView>('lobby')
   // Hide the header bar while actively playing — the game chrome has its own back/pause
   const isPlayingGame = !!gameSession && (activeView === 'classic' || activeView === 'tournament-play')
   const setThemeMode = useThemeStore((state) => state.setMode)
   const handleSplashDone = useCallback(() => setShowSplash(false), [])
+
+  const isInLobby = activeView === 'lobby' && !gameSession
+  const updateReady = useAutoUpdate(isInLobby && isAutoUpdateEnabled(address))
 
   useEffect(() => {
     const handleHashChange = () => {
@@ -120,6 +178,46 @@ const App: React.FC = () => {
           activeView={activeView}
           onViewChange={handleNavigate}
         />
+      )}
+
+      {/* Update-ready banner — shown mid-game so player knows an update is waiting */}
+      {updateReady && !isInLobby && (
+        <div
+          style={{
+            position: 'fixed',
+            bottom: 0,
+            left: 0,
+            right: 0,
+            zIndex: 9999,
+            background: 'var(--ink)',
+            color: 'var(--paper)',
+            padding: '10px 16px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            fontFamily: '"Archivo Black", sans-serif',
+            fontSize: 11,
+            letterSpacing: '0.12em',
+            borderTop: '3px solid var(--accent-yellow)',
+          }}
+        >
+          <span>A new version of Blokaz is available</span>
+          <button
+            onClick={() => window.location.reload()}
+            style={{
+              background: 'var(--accent-yellow)',
+              color: 'var(--ink)',
+              border: '2px solid var(--ink)',
+              padding: '4px 12px',
+              fontFamily: 'inherit',
+              fontSize: 10,
+              letterSpacing: '0.1em',
+              cursor: 'pointer',
+            }}
+          >
+            CLICK HERE TO UPDATE
+          </button>
+        </div>
       )}
 
       <div className={`flex flex-col ${

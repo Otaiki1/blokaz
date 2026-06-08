@@ -53,6 +53,7 @@ import { PowerUpBar } from './PowerUpBar'
 import { ShopModal } from './ShopModal'
 import { usePowerUpStore } from '../stores/powerUpStore'
 import { useNotifications, ToastContainer } from './GameNotification'
+import { useMoveSync, fetchServerSession, markSessionComplete } from '../hooks/useMoveSync'
 
 const GAME_ADDRESS = contractInfo.game as `0x${string}`
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
@@ -481,6 +482,10 @@ const GameScreen: React.FC<GameScreenProps> = ({
 
   const { toasts, dismissToast, showToast } = useNotifications()
 
+  // Sync every move to the server so the session is recoverable even if
+  // localStorage is cleared or the browser crashes.
+  useMoveSync()
+
   // Derive the authoritative game-over flag from BOTH the store field AND the
   // mutable session object. The store field can lag by one React commit cycle
   // in certain iOS/React-18 batching scenarios; reading the session directly
@@ -498,6 +503,7 @@ const GameScreen: React.FC<GameScreenProps> = ({
   } = usePowerUpStore()
 
   const [showShop, setShowShop] = useState(false)
+  const [isContinuing, setIsContinuing] = useState(false)
 
   const { address, isConnected, isReconnecting } = useAccount()
   const isWhitelisted = isShopLotteryEnabled(address)
@@ -683,6 +689,7 @@ const GameScreen: React.FC<GameScreenProps> = ({
   // 1. Handle Start
   const handleStartGame = () => {
     if (isPending || isConfirming) return // already has a tx in flight
+    setSessionConflict(false)
     // Reset tier to T1 (PAPER) on new game
     const freshTier = getScoreTier(0)
     currentTierRef.current = freshTier
@@ -714,12 +721,16 @@ const GameScreen: React.FC<GameScreenProps> = ({
         // the session's own moveHistory, which would corrupt future snapshots.
         restoredSession.moveHistory = [...(stored.snapshot.moveHistory as MoveRecord[])]
         ;(window as any).currentPieces = restoredSession.currentPieces
+        currentTierRef.current = getScoreTier(restoredSession.score)
+        document.documentElement.setAttribute('data-tier', String(currentTierRef.current.id))
         useGameStore.setState({
           gameSession: restoredSession,
           score: restoredSession.score,
           comboStreak: restoredSession.comboStreak,
           currentPieces: [...restoredSession.currentPieces],
           isGameOver: restoredSession.isGameOver,
+          lotteryMultiplierMovesLeft: restoredSession.lotteryMultiplierMovesLeft,
+          reviveCount: (stored.snapshot.moveHistory as MoveRecord[]).filter(m => m.revive).length,
         })
       } else {
         resetActivePowerUps()
@@ -843,12 +854,14 @@ const GameScreen: React.FC<GameScreenProps> = ({
     return () => document.removeEventListener('visibilitychange', saveOnHide)
   }, [])
 
-  // Save snapshot on every score change so navigating away (theme switcher, etc.)
-  // never rolls back to a stale snapshot.
+  // Save snapshot on every score change — including the game-over move.
+  // Without saving on game-over, a single move that jumps score AND ends the
+  // game (e.g. 218 → 5k via a big combo clear) leaves localStorage at the
+  // pre-combo score; the player loses the session on navigation.
   useEffect(() => {
     if (!score) return
     const session = useGameStore.getState().gameSession
-    if (!session || session.isGameOver || !session.moveHistory.length) return
+    if (!session || !session.moveHistory.length) return
     const raw = localStorage.getItem(CLASSIC_SESSION_STORAGE_KEY)
     if (!raw) return
     try {
@@ -1159,33 +1172,97 @@ const GameScreen: React.FC<GameScreenProps> = ({
     readStoredGameSession(CLASSIC_SESSION_STORAGE_KEY, address, GAME_ADDRESS)?.snapshot?.moveHistory?.length
   )
 
-  const continueGame = () => {
-    if (!address) return
+  const continueGame = async () => {
+    if (!address || isContinuing) return
+    setIsContinuing(true)
+    try {
+
+    // Prefer the server session — it's always at least as fresh as localStorage
+    // and survives browser cache clears, crashes, and privacy-mode wipes.
+    const serverSession = await fetchServerSession(address)
+
+    // Fall back to localStorage if the server is unreachable or has no session
     const stored = readStoredGameSession(CLASSIC_SESSION_STORAGE_KEY, address, GAME_ADDRESS)
-    if (!stored?.snapshot?.moveHistory?.length || !stored.hash) return
-    const localSeed = BigInt(stored.hash.slice(0, 18))
-    const boost = !!(stored.snapshot as any).scoreBoostActive
-    const restoredSession = replayMoveHistory(localSeed, stored.snapshot.moveHistory, boost)
+
+    // Pick the source with the most moves (server wins ties)
+    const serverMoves: MoveRecord[] = serverSession?.moveHistory ?? []
+    const localMoves: MoveRecord[] = (stored?.snapshot?.moveHistory as MoveRecord[]) ?? []
+    const moves = serverMoves.length >= localMoves.length ? serverMoves : localMoves
+
+    if (!moves.length) {
+      handleStartGame()
+      return
+    }
+
+    // Seed: server stores it directly; localStorage stores it inside hash
+    const seedStr = serverMoves.length >= localMoves.length
+      ? serverSession!.seed
+      : stored?.hash ?? serverSession?.seed
+    if (!seedStr) return
+
+    // The server stores the seed as a plain decimal string (bigint.toString()),
+    // e.g. "1587430469997234145" (can be 19–20 digits).
+    // localStorage stores the keccak256 hash as "0x…" (66 chars); the local
+    // seed is always the first 8 bytes → "0x" + 16 hex chars = exactly 18 chars.
+    // Applying slice(0,18) to a decimal string silently truncates it when it
+    // has more than 18 digits, producing a completely wrong seed and a broken
+    // replay — which is why the score would collapse to 99 after a lobby visit.
+    const localSeed = seedStr.startsWith('0x')
+      ? BigInt(seedStr.slice(0, 18))   // hex hash: take first 8 bytes
+      : BigInt(seedStr)                // decimal: use the exact value
+    const boost = serverMoves.length >= localMoves.length
+      ? !!serverSession!.scoreBoostActive
+      : !!(stored?.snapshot as any)?.scoreBoostActive
+
+    const restoredSession = replayMoveHistory(localSeed, moves, boost)
     // Replace the replayed moveHistory with the original snapshot moveHistory.
     // replayMoveHistory processes marker records (revive, bomb, lottery) without
     // pushing them to the session's moveHistory, so the replayed history is
     // missing those markers. If the restored session later saves its moveHistory
     // to localStorage, those markers would be lost and the next restore would
     // replay incorrectly (post-revival moves silently fail at game-over state).
-    restoredSession.moveHistory = [...(stored.snapshot.moveHistory as MoveRecord[])]
+    restoredSession.moveHistory = [...moves]
     ;(window as any).currentPieces = restoredSession.currentPieces
+
+    // Snap tier to the restored score so the first score-change after restore
+    // doesn't spuriously fire a TIER_UP animation from PAPER.
+    currentTierRef.current = getScoreTier(restoredSession.score)
+    document.documentElement.setAttribute('data-tier', String(currentTierRef.current.id))
+
+    const onChainSeedVal = serverSession?.onChainSeed ?? stored?.seed ?? null
+    const onChainGameIdRaw = serverSession?.onChainGameId ?? stored?.gameId ?? null
+
     useGameStore.setState({
       gameSession: restoredSession,
       score: restoredSession.score,
       comboStreak: restoredSession.comboStreak,
       currentPieces: [...restoredSession.currentPieces],
       isGameOver: restoredSession.isGameOver,
+      lotteryMultiplierMovesLeft: restoredSession.lotteryMultiplierMovesLeft,
+      reviveCount: moves.filter(m => m.revive).length,
       // Restore on-chain refs so the game-over modal can submit the score
       // when the player continues into a finished-game state.
-      onChainSeed: stored.seed ?? null,
-      onChainGameId: stored.gameId ? BigInt(stored.gameId) : null,
-      onChainStatus: stored.gameId ? 'registered' as const : 'none' as const,
+      onChainSeed: onChainSeedVal,
+      onChainGameId: (onChainGameIdRaw && onChainGameIdRaw !== '0') ? BigInt(onChainGameIdRaw) : null,
+      onChainStatus: (onChainGameIdRaw && onChainGameIdRaw !== '0') ? 'registered' as const : 'none' as const,
     })
+
+    // If the game was never registered on-chain (user ignored/dismissed the
+    // wallet prompt at game start), re-trigger the contract call now so the
+    // score can be submitted when the game ends. The background sync effect
+    // already polls for the new game ID and updates localStorage once confirmed.
+    // Note: treat "0" (string) the same as null/missing — the DB stores "0"
+    // when the on-chain game ID was never confirmed.
+    const gameIdMissing = !onChainGameIdRaw || onChainGameIdRaw === '0'
+    if (gameIdMissing && onChainSeedVal && isConnected && address) {
+      const hash = (stored?.hash ?? stored?.seed ?? onChainSeedVal) as `0x${string}`
+      setCurrentSeed({ seed: onChainSeedVal as `0x${string}`, hash })
+      contractStartGame(hash)
+    }
+
+    } finally {
+      setIsContinuing(false)
+    }
   }
 
   const startNewGame = () => {
@@ -1372,6 +1449,7 @@ const GameScreen: React.FC<GameScreenProps> = ({
     startGameError,
     hasStoredGame,
     continueGame,
+    isContinuing,
     startNewGame,
     bombModeActive,
     onBombTap: handleBombTap,
@@ -1573,6 +1651,7 @@ interface CanvasAreaProps {
   startGameError?: Error | null
   hasStoredGame: boolean
   continueGame: () => void
+  isContinuing: boolean
   startNewGame: () => void
   bombModeActive?: boolean
   onBombTap?: (row: number, col: number) => void
@@ -1592,6 +1671,7 @@ const ClassicStartCard: React.FC<{
   startGameError?: Error | null
   hasStoredGame: boolean
   continueGame: () => void
+  isContinuing: boolean
   startNewGame: () => void
 }> = ({
   isConnected,
@@ -1606,6 +1686,7 @@ const ClassicStartCard: React.FC<{
   startGameError,
   hasStoredGame,
   continueGame,
+  isContinuing,
   startNewGame,
 }) => {
   const [showHowToPlay, setShowHowToPlay] = useState(!hasSeenOnboarding())
@@ -1662,11 +1743,15 @@ const ClassicStartCard: React.FC<{
     {hasStoredGame && (
       <button
         onClick={continueGame}
-        disabled={isPending || isConfirming || isSyncingContract || isMiniPayConnecting}
+        disabled={isPending || isConfirming || isSyncingContract || isMiniPayConnecting || isContinuing}
         className="brutal-btn flex w-full items-center justify-center gap-3 border-4 border-ink bg-accent-lime py-5 font-display text-sm uppercase tracking-[0.15em] shadow-[6px_6px_0_var(--shadow)] disabled:opacity-70"
         style={{ color: 'var(--ink-fixed)' }}
       >
-        ▶ CONTINUE GAME
+        {isContinuing ? (
+          <><div className="brutal-loader" /> LOADING...</>
+        ) : (
+          <>▶ CONTINUE GAME</>
+        )}
       </button>
     )}
 
@@ -1823,6 +1908,7 @@ const CanvasArea: React.FC<CanvasAreaProps> = ({
   startGameError,
   hasStoredGame,
   continueGame,
+  isContinuing,
   startNewGame,
   bombModeActive,
   onBombTap,
@@ -1843,6 +1929,7 @@ const CanvasArea: React.FC<CanvasAreaProps> = ({
         startGameError={startGameError}
         hasStoredGame={hasStoredGame}
         continueGame={continueGame}
+        isContinuing={isContinuing}
         startNewGame={startNewGame}
       />
     )
