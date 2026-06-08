@@ -18,7 +18,7 @@ const LobbyScreen = lazy(() => import('./components/LobbyScreen'))
 import { useGameStore } from './stores/gameStore'
 import { useThemeStore, type ThemeMode } from './stores/themeStore'
 import { IS_MINIPAY } from './utils/miniPay'
-import { isBetaTester, isAutoUpdateEnabled } from './utils/featureFlags'
+import { isAutoUpdateEnabled } from './utils/featureFlags'
 
 type AppView = 'lobby' | 'classic' | 'tournaments' | 'tournament-play' | 'admin'
 
