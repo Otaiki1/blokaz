@@ -18,6 +18,7 @@ import UsernameSetupModal, {
 import { NewsNudge } from './GameNotification'
 import CampaignReminderModal from './CampaignReminderModal'
 import WinnerClaimModal from './WinnerClaimModal'
+import PlayerRewardsPanel from './PlayerRewardsPanel'
 
 const TOURNAMENT_ADDRESS = contractInfo.tournament as `0x${string}`
 
@@ -1171,6 +1172,11 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({
 
           {/* Right rail */}
           <div className="flex min-w-0 flex-col gap-5">
+            {address && (
+              <FadeUp delay={60}>
+                <PlayerRewardsPanel address={address} />
+              </FadeUp>
+            )}
             <FadeUp delay={100}>
               <RailShell title="WEEKLY LADDER" accent>
                 <div className="space-y-2">
@@ -1299,6 +1305,7 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({
 
         {/* ── Mobile stack ── */}
         <div className="mx-auto flex max-w-lg flex-col gap-3 pb-4 lg:hidden">
+          {address && <PlayerRewardsPanel address={address} />}
           {heroStack}
         </div>
       </div>
