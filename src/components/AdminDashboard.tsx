@@ -12,10 +12,19 @@ import {
   USDC_DECIMALS,
 } from '../hooks/useBlokzGame'
 import { parseUnits, formatUnits } from 'viem'
-import { useChainId, useWaitForTransactionReceipt } from 'wagmi'
+import { useChainId, useWaitForTransactionReceipt, useAccount } from 'wagmi'
 import { celo } from 'wagmi/chains'
+import {
+  useAdminRewards,
+  adminAddReward,
+  adminDeleteReward,
+} from '../hooks/useRewards'
+
+const ADMIN_ADDRESS = '0xe1a0f916e859624d4edbada23e4382d327eaf626'
 
 const AdminDashboard: React.FC = () => {
+  const { address } = useAccount()
+  const isAdmin = address?.toLowerCase() === ADMIN_ADDRESS
   const {
     createTournament,
     hash: createHash,
@@ -50,6 +59,48 @@ const AdminDashboard: React.FC = () => {
   const [maxPlayers, setMaxPlayers] = useState('100')
   const [protocolFeeInput, setProtocolFeeInput] = useState('10') // %
   const [newSigner, setNewSigner] = useState('')
+
+  // ─── Rewards state ───────────────────────────────────────────────────────────
+  const { rewards: allRewards, isLoading: isLoadingRewards, refetch: refetchRewards } =
+    useAdminRewards(isAdmin ? address : undefined)
+
+  const [rAddress, setRAddress] = useState('')
+  const [rCashLink, setRCashLink] = useState('')
+  const [rAmount, setRAmount] = useState('')
+  const [rToken, setRToken] = useState('USDT')
+  const [rLabel, setRLabel] = useState('')
+  const [rAdding, setRAdding] = useState(false)
+  const [rSuccess, setRSuccess] = useState(false)
+  const [rError, setRError] = useState<string | null>(null)
+
+  const handleAddReward = async () => {
+    if (!address || !rAddress || !rCashLink || !rAmount || !rLabel) return
+    setRAdding(true)
+    setRError(null)
+    const result = await adminAddReward(address, {
+      address: rAddress,
+      cashLinkUrl: rCashLink,
+      amount: rAmount,
+      token: rToken,
+      label: rLabel,
+    })
+    setRAdding(false)
+    if (result.ok) {
+      setRAddress(''); setRCashLink(''); setRAmount(''); setRLabel('')
+      setRSuccess(true)
+      refetchRewards()
+      setTimeout(() => setRSuccess(false), 2500)
+    } else {
+      setRError(result.error ?? 'Failed to add reward')
+    }
+  }
+
+  const handleDeleteReward = async (id: string) => {
+    if (!address) return
+    const result = await adminDeleteReward(address, id)
+    if (result.ok) refetchRewards()
+    else alert(result.error)
+  }
 
   useEffect(() => {
     if (isCreateSuccess) refetchCount()
@@ -308,6 +359,185 @@ const AdminDashboard: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* ── Campaign Rewards ────────────────────────────────────────────────── */}
+      {isAdmin && (
+        <div className="mt-12">
+          <div
+            className="inline-block border-4 border-ink bg-accent-lime px-4 py-2 font-display text-[11px] tracking-[0.16em]"
+            style={{ boxShadow: '4px 4px 0 var(--shadow)', transform: 'rotate(-1deg)' }}
+          >
+            REWARDS
+          </div>
+          <h2
+            className="mt-5 font-display text-[clamp(1.8rem,4vw,3rem)] leading-none"
+            style={{ letterSpacing: '-0.04em' }}
+          >
+            CAMPAIGN REWARDS
+          </h2>
+          <p className="mt-2 font-body text-[13px] uppercase tracking-[0.16em] text-ink/60">
+            Add MiniPay cash links for campaign winners.
+          </p>
+
+          <div className="mt-8 grid grid-cols-1 gap-8 md:grid-cols-2">
+            {/* Add reward form */}
+            <div
+              className="border-4 border-ink bg-accent-lime p-8"
+              style={{ boxShadow: '8px 8px 0 var(--shadow)' }}
+            >
+              <h3 className="mb-6 font-display text-[22px]" style={{ letterSpacing: '-0.02em' }}>
+                ADD REWARD
+              </h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="mb-1 block font-display text-[10px] uppercase tracking-[0.14em] text-ink/60">
+                    Player Address
+                  </label>
+                  <input
+                    type="text"
+                    value={rAddress}
+                    onChange={e => setRAddress(e.target.value)}
+                    className="brutal-input w-full"
+                    placeholder="0x..."
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block font-display text-[10px] uppercase tracking-[0.14em] text-ink/60">
+                    Label (e.g. Week 1 — Rank #1)
+                  </label>
+                  <input
+                    type="text"
+                    value={rLabel}
+                    onChange={e => setRLabel(e.target.value)}
+                    className="brutal-input w-full"
+                    placeholder="Week 1 — Rank #1"
+                  />
+                </div>
+                <div className="flex gap-3">
+                  <div className="flex-1">
+                    <label className="mb-1 block font-display text-[10px] uppercase tracking-[0.14em] text-ink/60">
+                      Amount
+                    </label>
+                    <input
+                      type="text"
+                      value={rAmount}
+                      onChange={e => setRAmount(e.target.value)}
+                      className="brutal-input w-full"
+                      placeholder="10"
+                    />
+                  </div>
+                  <div className="w-28">
+                    <label className="mb-1 block font-display text-[10px] uppercase tracking-[0.14em] text-ink/60">
+                      Token
+                    </label>
+                    <select
+                      value={rToken}
+                      onChange={e => setRToken(e.target.value)}
+                      className="brutal-input w-full"
+                    >
+                      <option value="USDT">USDT</option>
+                      <option value="USDC">USDC</option>
+                      <option value="USDm">USDm</option>
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className="mb-1 block font-display text-[10px] uppercase tracking-[0.14em] text-ink/60">
+                    MiniPay Cash Link URL
+                  </label>
+                  <input
+                    type="text"
+                    value={rCashLink}
+                    onChange={e => setRCashLink(e.target.value)}
+                    className="brutal-input w-full"
+                    placeholder="https://minipay.opera.com/link/..."
+                  />
+                </div>
+                <button
+                  onClick={handleAddReward}
+                  disabled={rAdding || !rAddress || !rCashLink || !rAmount || !rLabel}
+                  className="brutal-btn w-full border-4 border-ink bg-ink py-4 font-display text-[12px] tracking-[0.14em] text-paper disabled:opacity-50"
+                  style={{ boxShadow: '6px 6px 0 var(--shadow)' }}
+                >
+                  {rAdding ? 'ADDING...' : rSuccess ? '✓ REWARD ADDED' : 'ADD REWARD'}
+                </button>
+                {rError && (
+                  <div className="border-2 border-danger p-3 font-display text-[10px] uppercase tracking-wider text-danger">
+                    {rError}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* All rewards list */}
+            <div
+              className="border-4 border-ink bg-paper-2 p-8"
+              style={{ boxShadow: '8px 8px 0 var(--shadow)' }}
+            >
+              <div className="mb-6 flex items-center justify-between">
+                <h3 className="font-display text-[22px]" style={{ letterSpacing: '-0.02em' }}>
+                  ALL REWARDS
+                </h3>
+                <button
+                  onClick={refetchRewards}
+                  className="brutal-btn border-2 border-ink bg-paper px-3 py-1 font-display text-[10px] uppercase"
+                >
+                  REFRESH
+                </button>
+              </div>
+              {isLoadingRewards ? (
+                <div className="space-y-3">
+                  {[1, 2, 3].map(i => (
+                    <div key={i} className="h-14 animate-pulse border-2 border-ink bg-paper" />
+                  ))}
+                </div>
+              ) : allRewards.length === 0 ? (
+                <div className="border-2 border-ink bg-paper p-6 text-center font-display text-[11px] uppercase tracking-widest text-ink/50">
+                  No rewards yet
+                </div>
+              ) : (
+                <div className="space-y-3 max-h-[520px] overflow-y-auto pr-1">
+                  {allRewards.map(r => (
+                    <div
+                      key={r.id}
+                      className="flex items-center gap-3 border-2 border-ink p-3"
+                      style={{ background: r.claimed_at ? 'var(--paper)' : 'var(--accent-yellow)' }}
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="font-display text-[11px] uppercase tracking-[0.08em]">
+                          {r.label}
+                        </div>
+                        <div className="mt-0.5 font-display text-[10px] opacity-60">
+                          {r.address.slice(0, 6)}…{r.address.slice(-4)} · {r.amount} {r.token}
+                        </div>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <span
+                          className="border-2 border-ink px-2 py-0.5 font-display text-[9px] uppercase tracking-wider"
+                          style={{
+                            background: r.claimed_at ? 'var(--accent-lime)' : 'var(--ink)',
+                            color: r.claimed_at ? 'var(--ink-fixed)' : 'var(--paper)',
+                          }}
+                        >
+                          {r.claimed_at ? 'CLAIMED' : 'PENDING'}
+                        </span>
+                        {!r.claimed_at && (
+                          <button
+                            onClick={() => handleDeleteReward(r.id)}
+                            className="brutal-btn border-2 border-ink bg-danger px-2 py-0.5 font-display text-[9px] uppercase text-paper"
+                          >
+                            ✕
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

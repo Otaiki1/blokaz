@@ -10,6 +10,7 @@ import { useThemeStore, type UserTheme, type ThemeName } from '../stores/themeSt
 import LegalModal, { type LegalModalType } from './LegalModal'
 import FAQSheet from './FAQSheet'
 import HowToPlayModal from './HowToPlayModal'
+import { usePlayerRewards, getRewardUrl } from '../hooks/useRewards'
 
 type HeaderView = 'lobby' | 'classic' | 'tournaments' | 'tournament-play' | 'admin'
 
@@ -169,6 +170,42 @@ const SettingsSheet: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     userTheme: s.userTheme,
     setUserTheme: s.setUserTheme,
   }))
+  const { address } = useAccount()
+  const { rewards, isLoading: isLoadingRewards } = usePlayerRewards(address)
+  const [claimingId, setClaimingId] = React.useState<string | null>(null)
+  const [claimErr, setClaimErr] = React.useState<string | null>(null)
+
+  // Load locally saved cash link URLs so claimed rewards can still be opened
+  const savedLinks: Record<string, string> = React.useMemo(() => {
+    if (!address) return {}
+    try {
+      const raw = JSON.parse(localStorage.getItem(`blokaz_claimed_${address.toLowerCase()}`) ?? '{}')
+      const result: Record<string, string> = {}
+      for (const [id, entry] of Object.entries(raw)) {
+        result[id] = (entry as any).cashLinkUrl
+      }
+      return result
+    } catch { return {} }
+  }, [address])
+
+  const handleSettingsClaim = async (rewardId: string, label: string, amount: string, token: string) => {
+    if (!address) return
+    setClaimingId(rewardId)
+    setClaimErr(null)
+    const result = await getRewardUrl(address, rewardId)
+    setClaimingId(null)
+    if (result.ok && result.cashLinkUrl) {
+      // Save pending claim — confirmation modal will appear when user returns
+      const pending = { rewardId, cashLinkUrl: result.cashLinkUrl, label, amount, token }
+      localStorage.setItem(`blokaz_pending_claim_${address.toLowerCase()}`, JSON.stringify(pending))
+      window.location.href = result.cashLinkUrl
+    } else {
+      setClaimErr(result.error ?? 'Failed to get reward')
+    }
+  }
+
+  const claimed   = rewards.filter(r => r.claimed_at)
+  const unclaimed = rewards.filter(r => !r.claimed_at)
 
   return (
     <div className="fixed inset-0 z-[200] flex flex-col lg:hidden">
@@ -348,6 +385,104 @@ const SettingsSheet: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                 </a>
               </div>
             </section>
+
+            {/* ── Rewards ── */}
+            {address && (
+              <section>
+                <div className="mb-4 border-l-4 border-ink pl-3 font-display text-[11px] uppercase tracking-[0.2em]" style={{ color: 'var(--ink-soft)' }}>
+                  REWARDS
+                </div>
+
+                {isLoadingRewards ? (
+                  <div className="space-y-2">
+                    {[1, 2].map(i => (
+                      <div key={i} className="h-14 animate-pulse border-[3px] border-ink" style={{ background: 'var(--paper-2)' }} />
+                    ))}
+                  </div>
+                ) : rewards.length === 0 ? (
+                  <div
+                    className="border-[3px] border-ink px-5 py-5 text-center font-display text-[11px] uppercase tracking-widest"
+                    style={{ background: 'var(--paper-2)', color: 'var(--ink-soft)' }}
+                  >
+                    No rewards yet
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-3">
+                    {/* Unclaimed */}
+                    {unclaimed.map(r => (
+                      <div
+                        key={r.id}
+                        className="flex items-center justify-between border-[3px] border-ink px-5 py-4"
+                        style={{ background: 'var(--accent-yellow)', boxShadow: '4px 4px 0 var(--shadow)' }}
+                      >
+                        <div>
+                          <div className="font-display text-[11px] uppercase tracking-[0.1em]" style={{ color: 'var(--ink-fixed)' }}>
+                            {r.label}
+                          </div>
+                          <div className="mt-0.5 font-display text-[18px] leading-none" style={{ letterSpacing: '-0.02em', color: 'var(--ink-fixed)' }}>
+                            {r.amount} <span className="text-[11px] opacity-60">{r.token}</span>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => handleSettingsClaim(r.id, r.label, r.amount, r.token)}
+                          disabled={claimingId === r.id}
+                          className="brutal-btn border-2 border-ink bg-ink px-4 py-2 font-display text-[10px] uppercase tracking-wider text-paper disabled:opacity-50"
+                          style={{ boxShadow: '3px 3px 0 var(--shadow)' }}
+                        >
+                          {claimingId === r.id ? '...' : 'CLAIM'}
+                        </button>
+                      </div>
+                    ))}
+
+                    {/* Claimed history */}
+                    {claimed.map(r => (
+                      <div
+                        key={r.id}
+                        className="flex items-center justify-between border-[3px] border-ink px-5 py-4"
+                        style={{ background: 'var(--paper-2)', boxShadow: '4px 4px 0 var(--shadow)' }}
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="font-display text-[11px] uppercase tracking-[0.1em]">
+                            {r.label}
+                          </div>
+                          <div className="mt-0.5 font-display text-[18px] leading-none" style={{ letterSpacing: '-0.02em' }}>
+                            {r.amount} <span className="text-[11px] opacity-60">{r.token}</span>
+                          </div>
+                          <div className="mt-1 font-display text-[9px] uppercase tracking-wider" style={{ color: 'var(--ink-soft)' }}>
+                            {new Date(r.claimed_at!).toLocaleDateString()}
+                          </div>
+                        </div>
+                        <div className="ml-3 flex shrink-0 flex-col items-end gap-1">
+                          <span
+                            className="border-2 border-ink px-2 py-0.5 font-display text-[9px] uppercase tracking-wider"
+                            style={{ background: 'var(--accent-lime)', color: 'var(--ink-fixed)' }}
+                          >
+                            ✓ DONE
+                          </span>
+                          {savedLinks[r.id] && (
+                            <button
+                              onClick={() => { window.location.href = savedLinks[r.id] }}
+                              className="brutal-btn border-2 border-ink px-2 py-0.5 font-display text-[9px] uppercase tracking-wider"
+                              style={{ background: 'var(--accent-yellow)', color: 'var(--ink-fixed)' }}
+                            >
+                              OPEN LINK
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {claimErr && (
+                  <div className="mt-3 border-2 border-danger bg-danger px-4 py-3 font-display text-[10px] uppercase tracking-wider text-paper">
+                    {claimErr}
+                  </div>
+                )}
+              </section>
+            )}
+
+            <div className="border-t-[3px] border-ink border-dashed" />
 
             {/* ── Version stamp ── */}
             <div
