@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { useStablecoinShop } from '../hooks/useStablecoinShop'
 import { usePowerUpStore, type PowerUpId } from '../stores/powerUpStore'
 import { STABLECOIN_TOKENS, type StablecoinSymbol } from '../constants/contracts'
+import PowerUpDemoModal, { type DemoId } from './PowerUpDemoModal'
 
 interface ShopModalProps {
   isOpen: boolean
@@ -139,16 +140,32 @@ const TOKEN_LABELS: Record<StablecoinSymbol, string> = {
 
 // ── Shared sub-components ────────────────────────────────────
 
-function ItemGlyph({ glyph, bg, size = 56 }: { glyph: string; bg: string; size?: number }) {
+function ItemGlyph({
+  glyph, bg, size = 56, onDemo,
+}: {
+  glyph: string; bg: string; size?: number; onDemo?: () => void
+}) {
   return (
-    <div style={{
-      width: size, height: size, background: INK, color: bg,
-      border: `2.5px solid ${bg}`,
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      fontFamily: '"Archivo Black", system-ui',
-      fontSize: Math.round(size * 0.46), lineHeight: 1, flexShrink: 0,
-    }}>
+    <div
+      onClick={onDemo}
+      title={onDemo ? 'Tap to see demo' : undefined}
+      style={{
+        width: size, height: size, background: INK, color: bg,
+        border: `2.5px solid ${bg}`,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontFamily: '"Archivo Black", system-ui',
+        fontSize: Math.round(size * 0.46), lineHeight: 1, flexShrink: 0,
+        position: 'relative', cursor: onDemo ? 'pointer' : 'default',
+      }}
+    >
       {glyph}
+      {onDemo && (
+        <span style={{
+          position: 'absolute', bottom: 2, right: 3,
+          fontSize: 8, color: bg, opacity: 0.75, lineHeight: 1,
+          fontFamily: '"Archivo Black", system-ui',
+        }}>▶</span>
+      )}
     </div>
   )
 }
@@ -169,10 +186,11 @@ function PriceChip({ amount, token = 'USDT', bg = LIME }: { amount: string; toke
 
 // ── Item Card ────────────────────────────────────────────────
 function ItemCard({
-  design, onBuy, isBuying, isSuccess, affordable, freeTryCount, purchasedCount,
+  design, onBuy, onDemo, isBuying, isSuccess, affordable, freeTryCount, purchasedCount,
 }: {
   design: ItemDesign
   onBuy: () => void
+  onDemo: () => void
   isBuying: boolean
   isSuccess: boolean
   affordable: boolean
@@ -207,7 +225,7 @@ function ItemCard({
       )}
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <ItemGlyph glyph={design.glyph} bg={design.bg} size={54} />
+        <ItemGlyph glyph={design.glyph} bg={design.bg} size={54} onDemo={onDemo} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <span style={{ fontSize: 17, letterSpacing: '-0.01em', lineHeight: 1.05, color: INK }}>
@@ -270,6 +288,7 @@ function ItemCard({
         </span>
       </div>
 
+      {/* Price + buy row */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <PriceChip amount={design.price} />
         <button
@@ -277,9 +296,9 @@ function ItemCard({
           disabled={!affordable || isBuying}
           style={{
             background: isSuccess ? LIME : design.bg,
-            color: isSuccess ? INK : INK,
+            color: INK,
             border: SB, boxShadow: SSH(3, 3, INK),
-            padding: '8px 18px',
+            padding: '8px 16px',
             fontFamily: '"Archivo Black", system-ui',
             fontSize: 13, letterSpacing: '0.12em',
             cursor: affordable && !isBuying ? 'pointer' : 'not-allowed',
@@ -562,6 +581,7 @@ export const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose }) => {
   // Track whether current pending purchase is a bundle (and which one)
   const [pendingBundle, setPendingBundle] = useState<BundleDef | null>(null)
   const [pendingItemId, setPendingItemId] = useState<ShopItemId | null>(null)
+  const [demoId, setDemoId] = useState<DemoId | null>(null)
 
   if (!isOpen) return null
 
@@ -803,6 +823,7 @@ export const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose }) => {
                   key={id}
                   design={design}
                   onBuy={() => handleBuyClick(id, design)}
+                  onDemo={() => setDemoId(id as DemoId)}
                   isBuying={isBuying}
                   isSuccess={isSuccess}
                   affordable={affordable}
@@ -902,6 +923,19 @@ export const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose }) => {
           onConfirm={handleConfirm}
           onCancel={handleCancelSheet}
           state={purchaseState}
+        />
+      )}
+
+      {/* ── Power-up demo modal ── */}
+      {demoId && (
+        <PowerUpDemoModal
+          demoId={demoId}
+          onClose={() => setDemoId(null)}
+          onBuy={() => {
+            const design = ITEM_DESIGN[demoId]
+            if (design) handleBuyClick(demoId as ShopItemId, design)
+            setDemoId(null)
+          }}
         />
       )}
     </>
