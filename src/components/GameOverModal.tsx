@@ -7,6 +7,7 @@ import {
   type StablecoinSymbol,
 } from '../constants/contracts'
 import { packMoves } from '../engine/replay'
+import { getComboMultiplier } from '../engine/scoring'
 import {
   useSubmitScore,
   useActiveGame,
@@ -398,6 +399,34 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
     }
   }, [comboStreak, gameSession?.moveHistory])
 
+  // Points that score boost contributed (or would have contributed) this run.
+  // Only counts piece placements (pieceIndex >= 0), not bombs.
+  const boostDelta = useMemo(() => {
+    const moves = gameSession?.moveHistory ?? []
+    return moves
+      .filter((m) => m.pieceIndex >= 0)
+      .reduce((sum, m) => {
+        const bp = m.scoreEvent?.basePoints ?? 0
+        const cm = m.scoreEvent?.comboMultiplier ?? 1.0
+        // boost doubles basePoints, so the added value = basePoints * comboMultiplier
+        return sum + Math.round(bp * cm)
+      }, 0)
+  }, [gameSession?.moveHistory])
+
+  // Total points scored via bomb moves this run
+  const bombPoints = useMemo(() => {
+    const moves = gameSession?.moveHistory ?? []
+    return moves
+      .filter((m) => m.bomb != null)
+      .reduce((sum, m) => sum + (m.scoreEvent?.totalPoints ?? 0), 0)
+  }, [gameSession?.moveHistory])
+
+  // How many times shield auto-saved the run
+  const shieldSaves = useMemo(() => {
+    const moves = gameSession?.moveHistory ?? []
+    return moves.filter((m) => m.revive === true).length
+  }, [gameSession?.moveHistory])
+
   const rankData = useMemo(() => {
     const scores = (leaderboard ?? [])
       .map((entry) => entry.score)
@@ -612,6 +641,64 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
                 </div>
               ))}
             </div>
+
+            {/* ── Power-up recap strip ── */}
+            {(shieldSaves > 0 || boostDelta > 0 || bombPoints > 0) && (
+              <div
+                className="flex items-stretch border-b-4 border-ink"
+                style={{ background: 'var(--paper-2)' }}
+              >
+                {shieldSaves > 0 && (
+                  <div className="flex flex-1 flex-col items-center justify-center gap-0.5 border-r-4 border-ink px-2 py-2">
+                    <span className="text-base leading-none">🛡️</span>
+                    <div className="font-display text-[8px] uppercase tracking-[0.1em] opacity-60">SHIELD</div>
+                    <div className="font-display text-[11px] font-bold leading-none">
+                      SAVED ×{shieldSaves}
+                    </div>
+                  </div>
+                )}
+                {boostDelta > 0 && (
+                  <div
+                    className={`flex flex-1 flex-col items-center justify-center gap-0.5 px-2 py-2${bombPoints > 0 ? ' border-r-4 border-ink' : ''}`}
+                  >
+                    <span className="text-base leading-none">⚡</span>
+                    <div className="font-display text-[8px] uppercase tracking-[0.1em] opacity-60">
+                      {gameSession?.scoreBoostActive ? 'BOOST ADDED' : 'BOOST MISSED'}
+                    </div>
+                    <div className="font-display text-[11px] font-bold leading-none">
+                      +{boostDelta.toLocaleString()}
+                    </div>
+                  </div>
+                )}
+                {bombPoints > 0 && (
+                  <div className="flex flex-1 flex-col items-center justify-center gap-0.5 px-2 py-2">
+                    <span className="text-base leading-none">💣</span>
+                    <div className="font-display text-[8px] uppercase tracking-[0.1em] opacity-60">BOMB PTS</div>
+                    <div className="font-display text-[11px] font-bold leading-none">
+                      +{bombPoints.toLocaleString()}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ── Near-miss shield prompt ── */}
+            {shieldSaves === 0 && stats.bestCombo >= 3 && (
+              <div
+                className="flex items-center gap-2 border-b-4 border-ink px-3 py-2"
+                style={{ background: '#fee2e2', color: 'var(--ink-fixed)' }}
+              >
+                <span className="text-lg leading-none">🛡️</span>
+                <div className="flex flex-col gap-0.5">
+                  <div className="font-display text-[9px] uppercase tracking-[0.12em]">
+                    YOU LOST ON A ×{getComboMultiplier(stats.bestCombo)} COMBO
+                  </div>
+                  <div className="font-display text-[8px] uppercase tracking-[0.1em] opacity-60">
+                    A Shield would have kept it going
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* ── Actions ── */}
             <div className="flex flex-col gap-2.5 p-3">

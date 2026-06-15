@@ -2,6 +2,35 @@ import React from 'react'
 import { usePowerUpStore, type PowerUpId } from '../stores/powerUpStore'
 import { useGameStore } from '../stores/gameStore'
 
+// Inject keyframes once
+if (typeof document !== 'undefined' && !document.getElementById('pu-hint-style')) {
+  const s = document.createElement('style')
+  s.id = 'pu-hint-style'
+  s.textContent = `
+    @keyframes pu-pulse {
+      0%,100% { box-shadow: 0 0 0 0 rgba(255,213,31,0.85), 3px 3px 0 #0C0C10; }
+      50%      { box-shadow: 0 0 0 7px rgba(255,213,31,0),  3px 3px 0 #0C0C10; }
+    }
+    @keyframes pu-pulse-shield {
+      0%,100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.85), 3px 3px 0 #0C0C10; }
+      50%      { box-shadow: 0 0 0 7px rgba(239,68,68,0),  3px 3px 0 #0C0C10; }
+    }
+    @keyframes pu-pulse-bomb {
+      0%,100% { box-shadow: 0 0 0 0 rgba(255,59,59,0.85), 3px 3px 0 #0C0C10; }
+      50%      { box-shadow: 0 0 0 7px rgba(255,59,59,0),  3px 3px 0 #0C0C10; }
+    }
+    @keyframes pu-shop-pulse {
+      0%,100% { box-shadow: 0 0 0 0 rgba(255,59,59,0.9), 3px 3px 0 #FFD51F; }
+      50%      { box-shadow: 0 0 0 8px rgba(255,59,59,0), 3px 3px 0 #FFD51F; }
+    }
+    @keyframes pu-empty-breathe {
+      0%,100% { opacity: 0.55; }
+      50%      { opacity: 1; }
+    }
+  `
+  document.head.appendChild(s)
+}
+
 interface PowerUpBarProps {
   onOpenShop: () => void
   onRotatePiece: (pieceIndex: number) => void
@@ -76,14 +105,15 @@ const ICONS: Record<string, (fg: string) => React.ReactNode> = {
   rotatePass: (fg) => <IcoSpin c={fg} />,
 }
 
-// ── Rotated count sticker ──────────────────────────────────────
-function CountSticker({ n, depleted }: { n: number; depleted: boolean }) {
+// ── Rotated count sticker — colour-coded by urgency ───────────
+function CountSticker({ n }: { n: number }) {
+  const bg    = n === 0 ? '#FF3B3B' : n === 1 ? '#FF8C00' : LIME
+  const color = n === 0 || n === 1 ? '#fff' : INK
   return (
     <div style={{
       position: 'absolute', top: -10, right: -8,
       minWidth: 22, height: 22, padding: '0 5px',
-      background: depleted ? '#C9C0B0' : LIME,
-      color: depleted ? '#fff' : INK,
+      background: bg, color,
       border: '2.5px solid #0C0C10',
       display: 'grid', placeItems: 'center',
       transform: 'rotate(6deg)',
@@ -97,25 +127,56 @@ function CountSticker({ n, depleted }: { n: number; depleted: boolean }) {
   )
 }
 
-// ── Single power-up tile (Direction A) ────────────────────────
+// Pulse animation name per power-up id
+const PULSE_ANIM: Record<string, string> = {
+  scoreBoost: 'pu-pulse 0.9s ease-in-out infinite',
+  shield:     'pu-pulse-shield 0.9s ease-in-out infinite',
+  bomb:       'pu-pulse-bomb 0.9s ease-in-out infinite',
+  rotatePass: 'pu-pulse 0.9s ease-in-out infinite',
+}
+
+// ── Single power-up tile ──────────────────────────────────────
 function PowerTile({
-  id, charges, isActive, onClick,
+  id, charges, isActive, isHighlighted, hintText, onClick,
 }: {
   id: keyof typeof PU_CONFIG
   charges: number
   isActive: boolean
+  isHighlighted?: boolean
+  hintText?: string | null
   onClick: () => void
 }) {
-  const cfg = PU_CONFIG[id]
+  const cfg      = PU_CONFIG[id]
   const depleted = charges === 0
-  // Active: invert — ink tile, piece-colour icon + piece-colour shadow
-  const tileBg    = isActive ? INK : (depleted ? '#E7E0D2' : cfg.bg)
-  const iconColor = isActive ? cfg.bg : (depleted ? '#A8A095' : (cfg.fg === '#fff' ? '#fff' : INK))
-  const shadow    = isActive ? PSH(3, 3, cfg.bg) : (depleted ? 'none' : PSH(3, 3))
-  const border    = isActive ? `4px solid ${cfg.bg}` : PBT
+  const isLow    = charges === 1
+
+  // Visual state
+  const tileBg    = isActive   ? INK
+                  : depleted   ? '#1C1C22'   // near-black "drained" look
+                  : cfg.bg
+  const iconColor = isActive   ? cfg.bg
+                  : depleted   ? '#555566'
+                  : (cfg.fg === '#fff' ? '#fff' : INK)
+  const border    = isHighlighted ? `4px solid ${YELLOW}`
+                  : depleted      ? '4px solid #FF3B3B'
+                  : isActive      ? `4px solid ${cfg.bg}`
+                  : PBT
+
+  // Which hint text to display in the fixed slot below the label
+  const slotText = isHighlighted && hintText ? hintText
+                 : depleted                  ? 'TAP TO BUY'
+                 : isLow                     ? '⚠ LAST ONE'
+                 : null
+  const slotColor = isHighlighted  ? YELLOW
+                  : depleted       ? '#FF3B3B'
+                  : '#FF8C00'   // orange for "last one"
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5 }}>
+    <div style={{
+      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+      width: 54,
+    }}>
+      {/* ── Button + stickers ── */}
       <div style={{ position: 'relative' }}>
         <button
           onClick={onClick}
@@ -123,60 +184,132 @@ function PowerTile({
             width: 54, height: 54,
             background: tileBg,
             border,
-            boxShadow: shadow,
+            boxShadow: isHighlighted
+              ? undefined
+              : depleted
+                ? 'none'
+                : isActive ? PSH(3, 3, cfg.bg) : PSH(3, 3),
+            animation: isHighlighted ? PULSE_ANIM[id] : undefined,
             outline: 'none',
             display: 'grid', placeItems: 'center',
             cursor: 'pointer',
             padding: 0,
             touchAction: 'manipulation',
-            transition: 'background 100ms, border 100ms, box-shadow 100ms',
+            transition: isHighlighted ? 'none' : 'background 100ms, border 100ms, box-shadow 100ms',
+            position: 'relative', overflow: 'hidden',
           }}
         >
-          <div style={{ width: 28, height: 28, opacity: depleted ? 0.45 : 1 }}>
+          <div style={{
+            width: 28, height: 28,
+            opacity: depleted ? 0.25 : 1,
+            filter: depleted ? 'grayscale(1)' : 'none',
+          }}>
             {ICONS[id](iconColor)}
           </div>
+
+          {/* Depleted overlay — shopping cart CTA over the icon */}
+          {depleted && (
+            <div style={{
+              position: 'absolute', inset: 0,
+              display: 'flex', flexDirection: 'column',
+              alignItems: 'center', justifyContent: 'center', gap: 2,
+              animation: 'pu-empty-breathe 1.6s ease-in-out infinite',
+            }}>
+              <svg viewBox="0 0 24 24" width={20} height={20} fill="none">
+                <path d="M5 8h14l-1 12H6L5 8Z" fill="#FF3B3B" />
+                <path d="M9 9V6a3 3 0 0 1 6 0v3" stroke="#FF3B3B" strokeWidth="2.4" strokeLinecap="square" />
+                <path d="M9.5 13h5" stroke="#fff" strokeWidth="2" strokeLinecap="square" />
+              </svg>
+              <span style={{
+                fontFamily: '"Archivo Black", sans-serif',
+                fontSize: 7, letterSpacing: '0.1em', color: '#FF3B3B', lineHeight: 1,
+              }}>
+                EMPTY
+              </span>
+            </div>
+          )}
         </button>
-        <CountSticker n={charges} depleted={depleted} />
+        <CountSticker n={charges} />
       </div>
+
+      {/* ── Power-up name ── */}
       <span style={{
         fontFamily: '"Archivo Black", sans-serif',
         fontSize: 10, letterSpacing: '0.1em',
-        color: depleted ? 'var(--ink-soft)' : 'var(--ink)',
-        lineHeight: 1,
+        color: isHighlighted ? YELLOW
+             : depleted       ? '#666677'
+             : 'var(--ink)',
+        lineHeight: 1, textAlign: 'center',
       }}>
         {cfg.label}
       </span>
+
+      {/* ── Status slot: always 13px tall — shows hint / low / empty ── */}
+      <div style={{ height: 13, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        {slotText && (
+          <span style={{
+            fontFamily: '"Archivo Black", sans-serif',
+            fontSize: 7.5, letterSpacing: '0.08em',
+            color: slotColor,
+            lineHeight: 1, textAlign: 'center',
+            background: depleted || isLow ? 'transparent' : INK,
+            padding: depleted || isLow ? 0 : '2px 4px',
+            whiteSpace: 'nowrap',
+          }}>
+            {slotText}
+          </span>
+        )}
+      </div>
     </div>
   )
 }
 
 // ── Shop tile ──────────────────────────────────────────────────
-function ShopTile({ onClick }: { onClick: () => void }) {
+function ShopTile({ onClick, depletedCount }: { onClick: () => void; depletedCount: number }) {
+  const urgent = depletedCount > 0
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5 }}>
-      <button
-        onClick={onClick}
-        style={{
-          width: 54, height: 54,
-          background: INK,
-          border: PBT,
-          boxShadow: PSH(3, 3, YELLOW),
-          display: 'grid', placeItems: 'center',
-          cursor: 'pointer',
-          padding: 0,
-          touchAction: 'manipulation',
-        }}
-      >
-        <div style={{ width: 28, height: 28 }}>
-          <IcoShop c={YELLOW} />
-        </div>
-      </button>
+      <div style={{ position: 'relative' }}>
+        <button
+          onClick={onClick}
+          style={{
+            width: 54, height: 54,
+            background: INK,
+            border: urgent ? '4px solid #FF3B3B' : PBT,
+            boxShadow: undefined,
+            animation: urgent ? 'pu-shop-pulse 1s ease-in-out infinite' : undefined,
+            display: 'grid', placeItems: 'center',
+            cursor: 'pointer',
+            padding: 0,
+            touchAction: 'manipulation',
+          }}
+        >
+          <div style={{ width: 28, height: 28 }}>
+            <IcoShop c={urgent ? '#FF3B3B' : YELLOW} />
+          </div>
+        </button>
+        {/* Badge: number of depleted power-ups */}
+        {urgent && (
+          <div style={{
+            position: 'absolute', top: -10, right: -8,
+            minWidth: 22, height: 22, padding: '0 5px',
+            background: '#FF3B3B', color: '#fff',
+            border: '2.5px solid #0C0C10',
+            display: 'grid', placeItems: 'center',
+            transform: 'rotate(6deg)',
+            fontFamily: '"Archivo Black", sans-serif',
+            fontSize: 11, boxShadow: '1px 1px 0 #0C0C10', zIndex: 3,
+          }}>
+            {depletedCount}
+          </div>
+        )}
+      </div>
       <span style={{
         fontFamily: '"Archivo Black", sans-serif',
         fontSize: 10, letterSpacing: '0.1em',
-        color: 'var(--ink)', lineHeight: 1,
+        color: urgent ? '#FF3B3B' : 'var(--ink)', lineHeight: 1,
       }}>
-        SHOP
+        {urgent ? 'REFILL' : 'SHOP'}
       </span>
     </div>
   )
@@ -273,10 +406,31 @@ export const PowerUpBar: React.FC<PowerUpBarProps> = ({
     exitRotateMode,
   } = usePowerUpStore()
 
+  const { gameSession, comboStreak } = useGameStore()
+
   const scoreBoostCharges = getCharges('scoreBoost')
   const shieldCharges     = getCharges('shield')
   const bombCharges       = getCharges('bomb')
   const rotatePassCharges = getCharges('rotatePass')
+
+  // Grid fill % — recomputed each render (store triggers re-render on each move)
+  const gridFill = gameSession
+    ? Array.from(gameSession.grid).filter((v) => v !== 0).length / 81
+    : 0
+
+  // Contextual suggestion: which power-up should the player use right now?
+  let suggestedId: PowerUpId | null = null
+  let hintText: string | null = null
+  if (comboStreak >= 3 && !active.scoreBoost && scoreBoostCharges > 0) {
+    suggestedId = 'scoreBoost'
+    hintText    = `×${comboStreak} COMBO!`
+  } else if (gridFill >= 0.65 && bombCharges > 0 && active.bombCount === 0 && !bombModeActive) {
+    suggestedId = 'bomb'
+    hintText    = 'BOARD FULL'
+  } else if (gridFill >= 0.75 && shieldCharges > 0 && active.shieldCount === 0) {
+    suggestedId = 'shield'
+    hintText    = 'DANGER!'
+  }
 
   // Always show pool charges — the armed bomb already deducted its charge on activation
 
@@ -307,14 +461,17 @@ export const PowerUpBar: React.FC<PowerUpBarProps> = ({
       alignItems: 'flex-start',
       justifyContent: 'space-between',
       padding: '10px 14px 6px',
+      overflow: 'visible',
     }}>
       {/* Power-up tiles */}
-      <div style={{ display: 'flex', gap: 10 }}>
+      <div style={{ display: 'flex', gap: 10, overflow: 'visible' }}>
         {/* Score Boost */}
         <PowerTile
           id="scoreBoost"
           charges={scoreBoostCharges}
           isActive={active.scoreBoost}
+          isHighlighted={suggestedId === 'scoreBoost'}
+          hintText={suggestedId === 'scoreBoost' ? hintText : null}
           onClick={() => handleTileClick('scoreBoost')}
         />
 
@@ -323,6 +480,8 @@ export const PowerUpBar: React.FC<PowerUpBarProps> = ({
           id="shield"
           charges={shieldCharges}
           isActive={active.shieldCount > 0}
+          isHighlighted={suggestedId === 'shield'}
+          hintText={suggestedId === 'shield' ? hintText : null}
           onClick={() => handleTileClick('shield')}
         />
 
@@ -331,6 +490,8 @@ export const PowerUpBar: React.FC<PowerUpBarProps> = ({
           id="bomb"
           charges={bombCharges}
           isActive={bombModeActive || active.bombCount > 0}
+          isHighlighted={suggestedId === 'bomb'}
+          hintText={suggestedId === 'bomb' ? hintText : null}
           onClick={() => handleTileClick('bomb')}
         />
 
@@ -359,7 +520,10 @@ export const PowerUpBar: React.FC<PowerUpBarProps> = ({
             margin: '2px 0 18px',
             alignSelf: 'stretch',
           }} />
-          <ShopTile onClick={onOpenShop} />
+          <ShopTile
+            onClick={onOpenShop}
+            depletedCount={[scoreBoostCharges, shieldCharges, bombCharges, rotatePassCharges].filter(c => c === 0).length}
+          />
         </div>
       )}
     </div>

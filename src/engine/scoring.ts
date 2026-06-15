@@ -137,7 +137,7 @@ export interface ScoreEvent {
   multiLineFactor: number // 1.0 | 1.5 | 2.5
 }
 
-const MILESTONE_BONUS: Record<number, number> = { 3: 300, 5: 750, 10: 2000 }
+export const MILESTONE_BONUS: Record<number, number> = { 3: 300, 5: 750, 10: 2000 }
 
 export function getComboMultiplier(streak: number): number {
   if (streak >= 10) return 4.0
@@ -166,7 +166,7 @@ export function calculateScore(
   currentComboStreak: number,
   scoreBoostActive = false
 ): ScoreEvent {
-  const basePoints = Math.round(piece.cellCount * piece.cellCount * (scoreBoostActive ? 1.5 : 1.0))
+  const basePoints = Math.round(piece.cellCount * piece.cellCount * (scoreBoostActive ? 2.0 : 1.0))
 
   const multiLineFactor = linesCleared >= 3 ? 2.5 : linesCleared === 2 ? 1.5 : 1.0
   const linePoints = Math.round(linesCleared * 100 * multiLineFactor)

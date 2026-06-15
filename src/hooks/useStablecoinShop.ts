@@ -23,9 +23,14 @@ const ERC20_TRANSFER_ABI = [
   },
 ] as const
 
-// $0.10 cost per item — same structure as reviveCost
+// $0.10 cost per item
 function shopCost(sym: StablecoinSymbol): bigint {
   return STABLECOIN_TOKENS[sym].reviveCost
+}
+
+// Bundle cost: priceCents = price in cents (e.g. 25 = $0.25)
+function bundleCost(sym: StablecoinSymbol, priceCents: number): bigint {
+  return BigInt(priceCents) * STABLECOIN_TOKENS[sym].reviveCost / 10n
 }
 
 export function useStablecoinShop() {
@@ -71,6 +76,12 @@ export function useStablecoinShop() {
 
   const canAfford = useCallback(
     (sym: StablecoinSymbol) => balances[sym] >= shopCost(sym),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [balances.USDC, balances.USDT, balances.USDm]
+  )
+
+  const canAffordCents = useCallback(
+    (sym: StablecoinSymbol, priceCents: number) => balances[sym] >= bundleCost(sym, priceCents),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [balances.USDC, balances.USDT, balances.USDm]
   )
@@ -151,14 +162,68 @@ export function useStablecoinShop() {
     [address, publicClient, addInventory, refetchBalances]
   )
 
+  const purchaseBundle = useCallback(
+    async (
+      bundleId: string,
+      priceCents: number,
+      contents: Array<{ id: PowerUpId | 'revivalBundle'; qty: number }>,
+      sym: StablecoinSymbol,
+    ): Promise<boolean> => {
+      if (!address || isPayingRef.current) return false
+      isPayingRef.current = true
+      setIsPaying(true)
+      setError(null)
+      try {
+        const token = STABLECOIN_TOKENS[sym]
+        const cost = bundleCost(sym, priceCents)
+        const data = encodeFunctionData({
+          abi: ERC20_TRANSFER_ABI,
+          functionName: 'transfer',
+          args: [GAME_TREASURY, cost],
+        })
+
+        let txHash: `0x${string}` | undefined
+        if (isMiniPay()) {
+          const accounts: string[] = await (window.ethereum as any).request({ method: 'eth_accounts' })
+          txHash = await (window.ethereum as any).request({
+            method: 'eth_sendTransaction',
+            params: [{ from: accounts[0], to: token.address, data, gas: '0x493E0' }],
+          })
+        } else {
+          if (!walletRef.current) throw new Error('Wallet not connected')
+          txHash = await walletRef.current.sendTransaction({ to: token.address, data })
+        }
+
+        if (!txHash) throw new Error('Transaction hash unavailable — purchase may not have gone through')
+        if (publicClient) await publicClient.waitForTransactionReceipt({ hash: txHash })
+        refetchBalances()
+        for (const { id, qty } of contents) {
+          addInventory(id, qty)
+        }
+        logPurchase(address, bundleId, 1, sym, txHash)
+        return true
+      } catch (err: any) {
+        const msg = err?.message || err?.data?.message || (typeof err === 'string' ? err : 'Transaction failed')
+        setError(msg.length > 80 ? msg.slice(0, 80) + '…' : msg)
+        return false
+      } finally {
+        isPayingRef.current = false
+        setIsPaying(false)
+      }
+    },
+    [address, publicClient, addInventory, refetchBalances]
+  )
+
   return {
     balances,
     canAfford,
+    canAffordCents,
     hasAnyBalance,
     defaultToken,
     isPaying,
     error,
     purchase,
+    purchaseBundle,
     shopCost,
   }
 }

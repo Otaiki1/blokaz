@@ -1,4 +1,4 @@
-export type AnimationType = 'LINE_CLEAR' | 'COMBO' | 'SCORE' | 'SNAP' | 'DROP_FLASH' | 'TIER_UP'
+export type AnimationType = 'LINE_CLEAR' | 'COMBO' | 'SCORE' | 'SNAP' | 'DROP_FLASH' | 'TIER_UP' | 'MULTI_CLEAR'
 
 interface Animation {
   type: AnimationType
@@ -26,10 +26,11 @@ export class AnimationManager {
 
   trigger(type: AnimationType, params: any): void {
     const duration =
-      type === 'COMBO'      ? 800  :
-      type === 'LINE_CLEAR' ? 500  :
-      type === 'DROP_FLASH' ? 220  :
-      type === 'TIER_UP'    ? 2400 :
+      type === 'COMBO'       ? 800  :
+      type === 'LINE_CLEAR'  ? 500  :
+      type === 'DROP_FLASH'  ? 220  :
+      type === 'TIER_UP'     ? 2400 :
+      type === 'MULTI_CLEAR' ? 1000 :
       300
     // Only one TIER_UP at a time
     if (type === 'TIER_UP') {
@@ -108,14 +109,70 @@ export class AnimationManager {
         }
 
       } else if (anim.type === 'SCORE') {
-        const { x, y, score } = anim.params
+        const { x, y, score, label, small } = anim.params
         const inkColor = getThemeColor('--ink')
-        ctx.fillStyle = isTournament ? getThemeColor('--accent-cyan') : inkColor
         ctx.globalAlpha = 1 - anim.progress
-        ctx.font = '22px "Archivo Black"'
         ctx.shadowColor = 'rgba(0,0,0,0.3)'
         ctx.shadowBlur = 4
-        ctx.fillText(`+${score}`, x, y - anim.progress * 60)
+        ctx.textAlign = 'center'
+        const drift = anim.progress * (small ? 40 : 60)
+        if (label) {
+          ctx.font = `${small ? 11 : 14}px "Archivo Black"`
+          ctx.fillStyle = getThemeColor('--accent-pink')
+          ctx.fillText(label, x, y - drift - (small ? 14 : 22))
+        }
+        ctx.fillStyle = isTournament ? getThemeColor('--accent-cyan') : inkColor
+        ctx.font = `${small ? 14 : 22}px "Archivo Black"`
+        ctx.fillText(`+${score}`, x, y - drift)
+
+      } else if (anim.type === 'MULTI_CLEAR') {
+        const { count, linePoints } = anim.params as { count: number; linePoints: number }
+        const boardW = 9 * cellSize
+        const label = count >= 3 ? 'TRIPLE CLEAR!' : count >= 2 ? 'DOUBLE CLEAR!' : 'CLEAR!'
+        const badgeW = count >= 3 ? 220 : 200
+        const badgeH = 48
+        const cx = boardW / 2
+        const cy = 9 * cellSize * 0.3
+
+        // Fade in fast, hold, fade out
+        const fadeIn  = Math.min(1, anim.progress / 0.15)
+        const fadeOut = Math.max(0, (anim.progress - 0.7) / 0.3)
+        const alpha   = fadeIn * (1 - fadeOut)
+        if (alpha <= 0) { ctx.restore(); return }
+
+        const scale = 0.8 + fadeIn * 0.2
+        ctx.globalAlpha = alpha
+        ctx.save()
+        ctx.translate(cx, cy)
+        ctx.rotate(-0.04)
+        ctx.scale(scale, scale)
+        ctx.translate(-cx, -cy)
+
+        // Shadow
+        ctx.fillStyle = '#0C0C10'
+        ctx.fillRect(cx - badgeW / 2 + 5, cy - badgeH / 2 + 5, badgeW, badgeH)
+
+        // Badge bg — lime for double, cyan for triple
+        ctx.fillStyle = count >= 3 ? '#29e6e6' : '#B7FF3B'
+        ctx.fillRect(cx - badgeW / 2, cy - badgeH / 2, badgeW, badgeH)
+        ctx.strokeStyle = '#0C0C10'
+        ctx.lineWidth = 3
+        ctx.strokeRect(cx - badgeW / 2, cy - badgeH / 2, badgeW, badgeH)
+
+        // Label text
+        ctx.fillStyle = '#0C0C10'
+        ctx.font = '20px "Archivo Black"'
+        ctx.textAlign = 'center'
+        ctx.textBaseline = 'middle'
+        ctx.fillText(label, cx, cy - 8)
+
+        // Points sub-label
+        ctx.font = '13px "Archivo Black"'
+        ctx.fillStyle = '#0C0C10'
+        ctx.globalAlpha = alpha * 0.7
+        ctx.fillText(`+${linePoints.toLocaleString()} LINE PTS`, cx, cy + 14)
+
+        ctx.restore()
 
       } else if (anim.type === 'COMBO') {
         const { streak } = anim.params

@@ -988,6 +988,34 @@ const GameScreen: React.FC<GameScreenProps> = ({
             cols: linesCleared.cols,
             accent: currentTierRef.current.accent,
           })
+
+          // Per-row/col floating score pops — positioned at the cleared line
+          if (result.scoreEvent && result.scoreEvent.linePoints > 0) {
+            const gs = gridRenderer.currentGridSize
+            const cs = gs / 9
+            const totalLines = linesCleared.rows.length + linesCleared.cols.length
+            const perLine = Math.round(result.scoreEvent.linePoints / totalLines)
+            linesCleared.rows.forEach((r) => {
+              animManager.trigger('SCORE', {
+                x: gs * 0.5, y: (r + 0.5) * cs,
+                score: perLine, small: true,
+              })
+            })
+            linesCleared.cols.forEach((c) => {
+              animManager.trigger('SCORE', {
+                x: (c + 0.5) * cs, y: gs * 0.5,
+                score: perLine, small: true,
+              })
+            })
+            // Multi-clear sticker for 2+ simultaneous lines
+            if (totalLines >= 2) {
+              animManager.trigger('MULTI_CLEAR', {
+                count: totalLines,
+                linePoints: result.scoreEvent.linePoints,
+              })
+            }
+          }
+
           if (result.scoreEvent && result.scoreEvent.newComboStreak > 0) {
             animManager.trigger('COMBO', {
               streak: result.scoreEvent.newComboStreak,
@@ -1272,37 +1300,30 @@ const GameScreen: React.FC<GameScreenProps> = ({
     handleStartGame()
   }
 
-  // Bomb: fire bombZone on the session, update score, consume the charge
+  // Bomb: fire bombZone on the session, update score + combo, consume the charge
   const handleBombTap = (row: number, col: number) => {
     const session = useGameStore.getState().gameSession
     if (!session) return
-    const pts = session.bombZone(row, col)
+    const bombEvent = session.bombZone(row, col)
     session.moveHistory.push({
       pieceIndex: -1,
       shapeId: '',
       row: 0,
       col: 0,
       bomb: { row, col },
-      scoreEvent: {
-        basePoints: pts,
-        linePoints: 0,
-        comboBonus: 0,
-        totalPoints: pts,
-        linesCleared: 0,
-        newComboStreak: session.comboStreak,
-        comboMultiplier: 1.0,
-        isMilestone: false,
-        multiLineFactor: 1.0,
-      },
+      scoreEvent: bombEvent,
     })
     consumeBomb()
-    useGameStore.setState({ score: session.score })
+    useGameStore.setState({ score: session.score, comboStreak: bombEvent.newComboStreak })
     prevScoreRef.current = session.score
-    if (pts > 0) {
+    if (bombEvent.totalPoints > 0) {
       animManagerRef.current.trigger('SCORE', {
         x: (canvasDims?.gridSize ?? 200) * 0.5,
         y: (canvasDims?.gridSize ?? 200) * 0.45,
-        score: pts,
+        score: bombEvent.totalPoints,
+        label: bombEvent.newComboStreak >= 2
+          ? `BOMB ×${bombEvent.comboMultiplier}!`
+          : undefined,
       })
       hapticNotification()
     } else {

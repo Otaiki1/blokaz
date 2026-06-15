@@ -6,6 +6,25 @@ const router = Router()
 const VALID_ITEM_IDS = new Set(['revivalBundle', 'scoreBoost', 'shield', 'bomb', 'rotatePass'])
 const VALID_TOKENS = new Set(['USDC', 'USDT', 'USDm'])
 
+const BUNDLE_IDS = new Set(['revivalMegaPack', 'powerPack', 'starterPack'])
+
+// What each bundle credits to player_inventory
+const BUNDLE_CONTENTS = {
+  revivalMegaPack: [{ column: 'revival_bundle', qty: 9 }],
+  powerPack: [
+    { column: 'score_boost', qty: 2 },
+    { column: 'shield', qty: 2 },
+    { column: 'bomb', qty: 2 },
+  ],
+  starterPack: [
+    { column: 'revival_bundle', qty: 3 },
+    { column: 'score_boost', qty: 1 },
+    { column: 'shield', qty: 1 },
+    { column: 'bomb', qty: 1 },
+    { column: 'rotate_pass', qty: 1 },
+  ],
+}
+
 function requireDb(res) {
   if (!supabase) {
     res.status(503).json({ error: 'Session persistence not configured' })
@@ -112,7 +131,9 @@ router.post('/purchase', async (req, res) => {
   const { address, itemId, quantity, tokenSymbol, txHash } = req.body
 
   if (!validateAddress(address)) return res.status(400).json({ error: 'Invalid address' })
-  if (!VALID_ITEM_IDS.has(itemId)) return res.status(400).json({ error: 'Invalid itemId' })
+  if (!VALID_ITEM_IDS.has(itemId) && !BUNDLE_IDS.has(itemId)) {
+    return res.status(400).json({ error: 'Invalid itemId' })
+  }
   if (!VALID_TOKENS.has(tokenSymbol)) return res.status(400).json({ error: 'Invalid tokenSymbol' })
   if (!Number.isInteger(quantity) || quantity < 1 || quantity > 100) {
     return res.status(400).json({ error: 'Invalid quantity' })
@@ -134,7 +155,32 @@ router.post('/purchase', async (req, res) => {
     }
   }
 
-  // Map itemId to the column name in player_inventory
+  // ── Bundle purchase: credit each component item ─────────────────────────────
+  if (BUNDLE_IDS.has(itemId)) {
+    const contents = BUNDLE_CONTENTS[itemId]
+    const logResult = await supabase.from('purchase_log').insert({
+      address: addr, item_id: itemId, quantity: 1,
+      token_symbol: tokenSymbol, tx_hash: txHash ?? null,
+    })
+    if (logResult.error) console.error('purchase_log bundle insert error:', logResult.error)
+
+    for (const { column, qty } of contents) {
+      const r = await supabase.rpc('increment_inventory', { p_address: addr, p_column: column, p_qty: qty })
+      if (r.error?.code === 'PGRST202') {
+        const { data } = await supabase.from('player_inventory').select(column).eq('address', addr).single()
+        await supabase.from('player_inventory').upsert(
+          { address: addr, [column]: (data?.[column] ?? 0) + qty },
+          { onConflict: 'address' }
+        )
+      } else if (r.error) {
+        console.error(`bundle inventory credit error (${column}):`, r.error)
+        return res.status(500).json({ error: 'Failed to credit bundle inventory' })
+      }
+    }
+    return res.json({ ok: true })
+  }
+
+  // ── Single item purchase ─────────────────────────────────────────────────────
   const columnMap = {
     revivalBundle: 'revival_bundle',
     scoreBoost: 'score_boost',
@@ -144,8 +190,6 @@ router.post('/purchase', async (req, res) => {
   }
   const column = columnMap[itemId]
 
-  // Log the purchase + credit inventory atomically using an RPC function
-  // (falls back to two sequential writes if the RPC doesn't exist yet)
   const [logResult, invResult] = await Promise.all([
     supabase.from('purchase_log').insert({
       address: addr,
@@ -159,7 +203,6 @@ router.post('/purchase', async (req, res) => {
       p_column: column,
       p_qty: quantity,
     }).then(r => {
-      // If the RPC doesn't exist yet, fall back to read-modify-write
       if (r.error?.code === 'PGRST202') {
         return supabase
           .from('player_inventory')
