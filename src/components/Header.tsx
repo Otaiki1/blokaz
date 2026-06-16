@@ -1,7 +1,7 @@
 import React, { useRef, useState, useEffect } from 'react'
 import { ConnectButton } from '@rainbow-me/rainbowkit'
 import { useAccount, useConnect } from 'wagmi'
-import { useOwner } from '../hooks/useBlokzGame'
+import { useOwner, useUsername } from '../hooks/useBlokzGame'
 import { useTheme } from '../hooks/useTheme'
 import { BrutalIcon } from './BrutalIcon'
 import ThemeToggle from './ThemeToggle'
@@ -170,8 +170,41 @@ const SettingsSheet: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     userTheme: s.userTheme,
     setUserTheme: s.setUserTheme,
   }))
+  const [themeOpen, setThemeOpen] = React.useState(false)
+  const themeRef = React.useRef<HTMLDivElement>(null)
   const { address } = useAccount()
+  const { username } = useUsername(address)
   const { rewards, isLoading: isLoadingRewards } = usePlayerRewards(address)
+
+  // Close theme dropdown on outside click
+  React.useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (themeRef.current && !themeRef.current.contains(e.target as Node)) setThemeOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  // Derive a 9-cell block pattern from wallet address for decorative avatar accent
+  const blockPattern = React.useMemo(() => {
+    const palette = [
+      'var(--accent-yellow)',
+      'var(--accent-pink)',
+      'var(--accent-lime)',
+      'var(--accent)',
+      'var(--paper-2)',
+    ]
+    return Array.from({ length: 9 }, (_, i) => {
+      if (!address) return palette[4]
+      const char = address.replace('0x', '')[i * 2] ?? '0'
+      const v = parseInt(char, 16)
+      if (v < 3) return palette[4]
+      if (v < 7) return palette[0]
+      if (v < 10) return palette[2]
+      if (v < 13) return palette[1]
+      return palette[3]
+    })
+  }, [address])
   const [claimingId, setClaimingId] = React.useState<string | null>(null)
   const [claimErr, setClaimErr] = React.useState<string | null>(null)
 
@@ -250,50 +283,101 @@ const SettingsSheet: React.FC<{ onClose: () => void }> = ({ onClose }) => {
           className="flex-1 overflow-y-auto overscroll-contain"
           style={{ WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
         >
-          <div className="px-6 py-6 space-y-8" style={{ paddingBottom: 'max(32px, env(safe-area-inset-bottom))' }}>
+          <div className="px-6 py-5 space-y-6" style={{ paddingBottom: 'max(32px, env(safe-area-inset-bottom))' }}>
+
+            {/* ── User profile card ── */}
+            <section>
+              <div
+                className="flex items-center gap-3 border-[3px] border-ink px-4 py-4"
+                style={{ background: 'var(--paper-2)', boxShadow: '4px 4px 0 var(--shadow)' }}
+              >
+                {/* Avatar */}
+                <div
+                  className="flex h-12 w-12 shrink-0 items-center justify-center border-[3px] border-ink font-display text-[14px] leading-none"
+                  style={{ background: 'var(--accent-yellow)', color: 'var(--ink-fixed)' }}
+                >
+                  {address ? address.slice(-2).toUpperCase() : 'GS'}
+                </div>
+                {/* Identity */}
+                <div className="min-w-0 flex-1">
+                  <div className="truncate font-display text-[14px] uppercase tracking-[0.08em]">
+                    {username || (address ? truncateAddress(address) : 'GUEST')}
+                  </div>
+                  <div
+                    className="mt-0.5 truncate font-body text-[10px]"
+                    style={{ color: 'var(--ink-soft)' }}
+                  >
+                    {address ? truncateAddress(address) : 'NOT CONNECTED'}
+                  </div>
+                </div>
+                {/* Decorative block pattern derived from wallet address */}
+                <div
+                  className="grid shrink-0 gap-[3px] border-[3px] border-ink p-[5px]"
+                  style={{
+                    gridTemplateColumns: 'repeat(3, 10px)',
+                    gridTemplateRows: 'repeat(3, 10px)',
+                    background: 'var(--paper-2)',
+                    boxShadow: '3px 3px 0 var(--shadow)',
+                  }}
+                >
+                  {blockPattern.map((color, i) => (
+                    <div key={i} style={{ background: color, width: 10, height: 10 }} />
+                  ))}
+                </div>
+              </div>
+            </section>
 
             {/* ── Appearance ── */}
             <section>
-              <div
-                className="mb-3 flex items-center justify-between"
-              >
-                <div
-                  className="border-l-4 border-ink pl-3 font-display text-[11px] uppercase tracking-[0.2em]"
-                  style={{ color: 'var(--ink-soft)' }}
-                >
-                  APPEARANCE
-                </div>
-                <span
-                  className="font-display text-[9px] uppercase tracking-widest"
-                  style={{ color: 'var(--ink-soft)' }}
-                >
-                  {THEME_OPTIONS.find(o => o.value === userTheme)?.label}
-                </span>
+              <div className="mb-2 border-l-4 border-ink pl-3 font-display text-[11px] uppercase tracking-[0.2em]" style={{ color: 'var(--ink-soft)' }}>
+                APPEARANCE
               </div>
-              {/* Segmented control — single row, compact */}
-              <div
-                className="flex border-[3px] border-ink overflow-hidden"
-                style={{ boxShadow: '4px 4px 0 var(--shadow)' }}
-              >
-                {THEME_OPTIONS.map((opt, i) => {
-                  const isActive = userTheme === opt.value
-                  return (
-                    <button
-                      key={opt.value}
-                      onClick={() => setUserTheme(opt.value)}
-                      className="flex flex-1 flex-col items-center justify-center gap-1 py-3 font-display text-[9px] uppercase tracking-[0.1em] transition-colors"
-                      style={{
-                        background: isActive ? 'var(--accent-yellow)' : 'var(--paper-2)',
-                        color: isActive ? 'var(--ink-fixed)' : 'var(--ink)',
-                        borderRight: i < THEME_OPTIONS.length - 1 ? '2px solid var(--ink)' : 'none',
-                        opacity: isActive ? 1 : 0.7,
-                      }}
-                    >
-                      <span className="text-base leading-none">{opt.icon}</span>
-                      <span>{opt.label}</span>
-                    </button>
-                  )
-                })}
+              {/* Brutalist theme dropdown */}
+              <div ref={themeRef} className="relative">
+                <button
+                  onClick={() => setThemeOpen(v => !v)}
+                  className="flex w-full items-center justify-between border-[3px] border-ink px-4 py-3 font-display text-[11px] uppercase tracking-[0.12em]"
+                  style={{
+                    background: 'var(--accent-yellow)',
+                    color: 'var(--ink-fixed)',
+                    boxShadow: '4px 4px 0 var(--shadow)',
+                  }}
+                >
+                  <span className="flex items-center gap-2">
+                    <span className="text-[15px] leading-none">
+                      {THEME_OPTIONS.find(o => o.value === userTheme)?.icon}
+                    </span>
+                    {THEME_OPTIONS.find(o => o.value === userTheme)?.label}
+                  </span>
+                  <span className="text-[10px] leading-none">{themeOpen ? '▴' : '▾'}</span>
+                </button>
+
+                {themeOpen && (
+                  <div
+                    className="absolute left-0 right-0 top-[calc(100%+4px)] z-10 border-[3px] border-ink"
+                    style={{ background: 'var(--paper)', boxShadow: '4px 4px 0 var(--shadow)' }}
+                  >
+                    {THEME_OPTIONS.map((opt, i) => {
+                      const isActive = userTheme === opt.value
+                      return (
+                        <button
+                          key={opt.value}
+                          onClick={() => { setUserTheme(opt.value); setThemeOpen(false) }}
+                          className="flex w-full items-center gap-2.5 px-4 py-3 font-display text-[11px] uppercase tracking-[0.12em] transition-colors"
+                          style={{
+                            background: isActive ? 'var(--paper-2)' : 'transparent',
+                            color: isActive ? 'var(--accent-yellow)' : 'var(--ink)',
+                            borderTop: i > 0 ? '2px solid var(--ink)' : 'none',
+                          }}
+                        >
+                          <span className="text-[15px] leading-none">{opt.icon}</span>
+                          <span className="flex-1 text-left">{opt.label}</span>
+                          {isActive && <span className="text-[10px] opacity-60">✓</span>}
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
               </div>
             </section>
 
