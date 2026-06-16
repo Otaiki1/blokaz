@@ -542,12 +542,41 @@ const GameScreen: React.FC<GameScreenProps> = ({
   // ─── Power-up hint overlay (two-phase: DOM hand → canvas effect) ─────────
   const [hintTrigger, setHintTrigger] = useState<{ type: HintType; id: number } | null>(null)
 
+  // Screen flash state for power-up activation (DOM-layer cinematic hit)
+  const [screenFlash, setScreenFlash] = useState<{ color: string; key: number } | null>(null)
+  const flashKeyRef = useRef(0)
+
   // Register the auto-trigger callback once so the hint manager can fire the
   // DOM hand animation at psychologically timed moments
   useEffect(() => {
     powerUpHintRef.current.setAutoTriggerCallback((type) => {
       setHintTrigger(prev => ({ type, id: (prev?.id ?? 0) + 1 }))
     })
+  }, [])
+
+  // Listen for power-up activations from PowerUpBar — trigger canvas animation + screen flash
+  useEffect(() => {
+    const FLASH_COLORS: Record<string, string> = {
+      scoreBoost: 'rgba(255,213,31,0.18)',
+      shield:     'rgba(59,130,246,0.18)',
+      bomb:       'rgba(255,87,34,0.22)',
+      rotatePass: 'rgba(56,189,248,0.15)',
+    }
+    const handler = (e: Event) => {
+      const type = (e as CustomEvent<{ type: string }>).detail.type
+      const cs = cellSizeRef.current
+      if (!cs) return
+      // Canvas burst animation
+      animManagerRef.current.trigger('POWER_UP', { subType: type })
+      // DOM screen flash
+      const color = FLASH_COLORS[type]
+      if (color) {
+        setScreenFlash({ color, key: ++flashKeyRef.current })
+        setTimeout(() => setScreenFlash(null), 350)
+      }
+    }
+    window.addEventListener('pu-activated', handler)
+    return () => window.removeEventListener('pu-activated', handler)
   }, [])
 
   // Load power-up inventory whenever the wallet changes
@@ -1352,6 +1381,10 @@ const GameScreen: React.FC<GameScreenProps> = ({
           ? `BOMB ×${bombEvent.comboMultiplier}!`
           : undefined,
       })
+      // Explosion burst from the tapped cell
+      animManagerRef.current.trigger('POWER_UP', { subType: 'bomb', row, col })
+      setScreenFlash({ color: 'rgba(255,87,34,0.30)', key: ++flashKeyRef.current })
+      setTimeout(() => setScreenFlash(null), 280)
       hapticNotification()
     } else {
       hapticError()
@@ -1577,6 +1610,19 @@ const GameScreen: React.FC<GameScreenProps> = ({
             powerUpHintRef.current.commitCanvasHint(type, grid)
           }}
         />
+        {/* Screen flash — DOM-layer cinematic hit for power-up activations */}
+        {screenFlash && (
+          <div
+            key={screenFlash.key}
+            aria-hidden
+            style={{
+              position: 'fixed', inset: 0, zIndex: 8999,
+              background: screenFlash.color,
+              pointerEvents: 'none',
+              animation: 'pu-screen-flash 0.32s ease-out forwards',
+            }}
+          />
+        )}
         {showNoGasModal && <NoGasModal address={address} onDismiss={() => setNoGasDismissed(true)} />}
         {showSocialNudge && <SocialNudgeModal onDismiss={() => setShowSocialNudge(false)} />}
         {isWhitelisted && lotteryPrize && !isGameOver && (

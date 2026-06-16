@@ -1,6 +1,7 @@
-import React from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import { usePowerUpStore, type PowerUpId } from '../stores/powerUpStore'
 import { useGameStore } from '../stores/gameStore'
+import { hapticPowerUp } from '../miniapp/haptics'
 
 // Inject keyframes once
 if (typeof document !== 'undefined' && !document.getElementById('pu-hint-style')) {
@@ -26,6 +27,21 @@ if (typeof document !== 'undefined' && !document.getElementById('pu-hint-style')
     @keyframes pu-empty-breathe {
       0%,100% { opacity: 0.55; }
       50%      { opacity: 1; }
+    }
+    @keyframes pu-press {
+      0%   { transform: scale(1)    translateY(0px);  }
+      22%  { transform: scale(0.86) translateY(2px);  }
+      55%  { transform: scale(1.10) translateY(-1px); }
+      78%  { transform: scale(0.97) translateY(0px);  }
+      100% { transform: scale(1)    translateY(0px);  }
+    }
+    @keyframes pu-ring {
+      0%   { opacity: 1; transform: scale(1);   }
+      100% { opacity: 0; transform: scale(2.1); }
+    }
+    @keyframes pu-ring-outer {
+      0%   { opacity: 0.7; transform: scale(1);   }
+      100% { opacity: 0;   transform: scale(2.7); }
     }
   `
   document.head.appendChild(s)
@@ -137,7 +153,7 @@ const PULSE_ANIM: Record<string, string> = {
 
 // ── Single power-up tile ──────────────────────────────────────
 function PowerTile({
-  id, charges, isActive, isHighlighted, hintText, onClick,
+  id, charges, isActive, isHighlighted, hintText, onClick, activated, activationKey,
 }: {
   id: keyof typeof PU_CONFIG
   charges: number
@@ -145,6 +161,8 @@ function PowerTile({
   isHighlighted?: boolean
   hintText?: string | null
   onClick: () => void
+  activated?: boolean
+  activationKey?: number
 }) {
   const cfg      = PU_CONFIG[id]
   const depleted = charges === 0
@@ -162,14 +180,9 @@ function PowerTile({
                   : isActive      ? `4px solid ${cfg.bg}`
                   : PBT
 
-  // Which hint text to display in the fixed slot below the label
-  const slotText = isHighlighted && hintText ? hintText
-                 : depleted                  ? 'TAP TO BUY'
-                 : isLow                     ? '⚠ LAST ONE'
-                 : null
-  const slotColor = isHighlighted  ? YELLOW
-                  : depleted       ? '#FF3B3B'
-                  : '#FF8C00'   // orange for "last one"
+  // Only show text for contextual suggestions — sticker + border already signal empty/low
+  const slotText  = isHighlighted && hintText ? hintText : null
+  const slotColor = YELLOW
 
   return (
     <div style={{
@@ -178,6 +191,22 @@ function PowerTile({
     }}>
       {/* ── Button + stickers ── */}
       <div style={{ position: 'relative' }}>
+        {/* Activation ring bursts — two staggered rings */}
+        {activated && (
+          <>
+            <div key={`r1-${activationKey}`} style={{
+              position: 'absolute', inset: -1, pointerEvents: 'none', zIndex: 10,
+              border: `3px solid ${cfg.bg}`,
+              boxShadow: `0 0 8px ${cfg.bg}`,
+              animation: 'pu-ring 0.52s ease-out forwards',
+            }} />
+            <div key={`r2-${activationKey}`} style={{
+              position: 'absolute', inset: -1, pointerEvents: 'none', zIndex: 10,
+              border: `2px solid ${cfg.bg}`,
+              animation: 'pu-ring-outer 0.72s 0.08s ease-out forwards',
+            }} />
+          </>
+        )}
         <button
           id={`pu-tile-${id}`}
           onClick={onClick}
@@ -190,13 +219,15 @@ function PowerTile({
               : depleted
                 ? 'none'
                 : isActive ? PSH(3, 3, cfg.bg) : PSH(3, 3),
-            animation: isHighlighted ? PULSE_ANIM[id] : undefined,
+            animation: activated
+              ? 'pu-press 0.40s ease-out'
+              : isHighlighted ? PULSE_ANIM[id] : undefined,
             outline: 'none',
             display: 'grid', placeItems: 'center',
             cursor: 'pointer',
             padding: 0,
             touchAction: 'manipulation',
-            transition: isHighlighted ? 'none' : 'background 100ms, border 100ms, box-shadow 100ms',
+            transition: activated || isHighlighted ? 'none' : 'background 100ms, border 100ms, box-shadow 100ms',
             position: 'relative', overflow: 'hidden',
           }}
         >
@@ -208,25 +239,18 @@ function PowerTile({
             {ICONS[id](iconColor)}
           </div>
 
-          {/* Depleted overlay — shopping cart CTA over the icon */}
+          {/* Depleted overlay — cart icon signals "tap to refill" */}
           {depleted && (
             <div style={{
               position: 'absolute', inset: 0,
-              display: 'flex', flexDirection: 'column',
-              alignItems: 'center', justifyContent: 'center', gap: 2,
+              display: 'grid', placeItems: 'center',
               animation: 'pu-empty-breathe 1.6s ease-in-out infinite',
             }}>
-              <svg viewBox="0 0 24 24" width={20} height={20} fill="none">
+              <svg viewBox="0 0 24 24" width={22} height={22} fill="none">
                 <path d="M5 8h14l-1 12H6L5 8Z" fill="#FF3B3B" />
                 <path d="M9 9V6a3 3 0 0 1 6 0v3" stroke="#FF3B3B" strokeWidth="2.4" strokeLinecap="square" />
                 <path d="M9.5 13h5" stroke="#fff" strokeWidth="2" strokeLinecap="square" />
               </svg>
-              <span style={{
-                fontFamily: '"Archivo Black", sans-serif',
-                fontSize: 7, letterSpacing: '0.1em', color: '#FF3B3B', lineHeight: 1,
-              }}>
-                EMPTY
-              </span>
             </div>
           )}
         </button>
@@ -245,22 +269,17 @@ function PowerTile({
         {cfg.label}
       </span>
 
-      {/* ── Status slot: always 13px tall — shows hint / low / empty ── */}
-      <div style={{ height: 13, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        {slotText && (
-          <span style={{
-            fontFamily: '"Archivo Black", sans-serif',
-            fontSize: 7.5, letterSpacing: '0.08em',
-            color: slotColor,
-            lineHeight: 1, textAlign: 'center',
-            background: depleted || isLow ? 'transparent' : INK,
-            padding: depleted || isLow ? 0 : '2px 4px',
-            whiteSpace: 'nowrap',
-          }}>
-            {slotText}
-          </span>
-        )}
-      </div>
+      {/* ── Contextual hint — only rendered when a suggestion is active ── */}
+      {slotText && (
+        <span style={{
+          fontFamily: '"Archivo Black", sans-serif',
+          fontSize: 7.5, letterSpacing: '0.08em',
+          color: slotColor, lineHeight: 1, textAlign: 'center',
+          background: INK, padding: '2px 4px', whiteSpace: 'nowrap',
+        }}>
+          {slotText}
+        </span>
+      )}
     </div>
   )
 }
@@ -394,6 +413,20 @@ export const PowerUpBar: React.FC<PowerUpBarProps> = ({
   onOpenShop,
   onRotatePiece,
 }) => {
+  // Track which tile is mid-activation animation
+  const [activeAnim, setActiveAnim] = useState<{ id: string; key: number } | null>(null)
+  const animTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const fireAnim = (id: PowerUpId) => {
+    if (animTimerRef.current) clearTimeout(animTimerRef.current)
+    setActiveAnim(prev => ({ id, key: (prev?.key ?? 0) + 1 }))
+    animTimerRef.current = setTimeout(() => setActiveAnim(null), 750)
+    hapticPowerUp(id)
+    window.dispatchEvent(new CustomEvent('pu-activated', { detail: { type: id } }))
+  }
+
+  useEffect(() => () => { if (animTimerRef.current) clearTimeout(animTimerRef.current) }, [])
+
   const {
     getCharges,
     active,
@@ -440,18 +473,18 @@ export const PowerUpBar: React.FC<PowerUpBarProps> = ({
     if (charges === 0) { onOpenShop?.(); return }
     switch (id) {
       case 'scoreBoost':
-        if (!active.scoreBoost) activateScoreBoost()
+        if (!active.scoreBoost) { activateScoreBoost(); fireAnim(id) }
         break
       case 'shield':
-        activateShield()
+        activateShield(); fireAnim(id)
         break
       case 'bomb':
         if (bombModeActive) exitBombMode()
-        else if (active.bombCount > 0) enterBombMode() // already armed — re-enter targeting without consuming another charge
-        else activateBomb()
+        else if (active.bombCount > 0) { enterBombMode(); fireAnim(id) }
+        else { activateBomb(); fireAnim(id) }
         break
       case 'rotatePass':
-        if (!active.rotatePassActive) activateRotatePass()
+        if (!active.rotatePassActive) { activateRotatePass(); fireAnim(id) }
         break
     }
   }
@@ -474,6 +507,8 @@ export const PowerUpBar: React.FC<PowerUpBarProps> = ({
           isHighlighted={suggestedId === 'scoreBoost'}
           hintText={suggestedId === 'scoreBoost' ? hintText : null}
           onClick={() => handleTileClick('scoreBoost')}
+          activated={activeAnim?.id === 'scoreBoost'}
+          activationKey={activeAnim?.key}
         />
 
         {/* Shield */}
@@ -484,6 +519,8 @@ export const PowerUpBar: React.FC<PowerUpBarProps> = ({
           isHighlighted={suggestedId === 'shield'}
           hintText={suggestedId === 'shield' ? hintText : null}
           onClick={() => handleTileClick('shield')}
+          activated={activeAnim?.id === 'shield'}
+          activationKey={activeAnim?.key}
         />
 
         {/* Bomb */}
@@ -494,6 +531,8 @@ export const PowerUpBar: React.FC<PowerUpBarProps> = ({
           isHighlighted={suggestedId === 'bomb'}
           hintText={suggestedId === 'bomb' ? hintText : null}
           onClick={() => handleTileClick('bomb')}
+          activated={activeAnim?.id === 'bomb'}
+          activationKey={activeAnim?.key}
         />
 
         {/* Rotate Pass — tile OR picker when active */}
@@ -508,6 +547,8 @@ export const PowerUpBar: React.FC<PowerUpBarProps> = ({
             charges={rotatePassCharges}
             isActive={false}
             onClick={() => handleTileClick('rotatePass')}
+            activated={activeAnim?.id === 'rotatePass'}
+            activationKey={activeAnim?.key}
           />
         )}
       </div>

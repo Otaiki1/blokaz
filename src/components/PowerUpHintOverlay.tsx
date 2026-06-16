@@ -16,6 +16,10 @@ if (typeof document !== 'undefined' && !document.getElementById('pu-hint-overlay
       0%   { transform: scale(0.25); opacity: 1; }
       100% { transform: scale(2.4);  opacity: 0; }
     }
+    @keyframes pu-screen-flash {
+      0%   { opacity: 1; }
+      100% { opacity: 0; }
+    }
   `
   document.head.appendChild(s)
 }

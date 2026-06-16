@@ -1,4 +1,4 @@
-export type AnimationType = 'LINE_CLEAR' | 'COMBO' | 'SCORE' | 'SNAP' | 'DROP_FLASH' | 'TIER_UP' | 'MULTI_CLEAR'
+export type AnimationType = 'LINE_CLEAR' | 'COMBO' | 'SCORE' | 'SNAP' | 'DROP_FLASH' | 'TIER_UP' | 'MULTI_CLEAR' | 'POWER_UP'
 
 interface Animation {
   type: AnimationType
@@ -25,12 +25,16 @@ export class AnimationManager {
   private animations: Animation[] = []
 
   trigger(type: AnimationType, params: any): void {
+    const POWER_UP_DUR: Record<string, number> = {
+      scoreBoost: 1500, shield: 1300, bomb: 950, rotatePass: 1400,
+    }
     const duration =
       type === 'COMBO'       ? 800  :
       type === 'LINE_CLEAR'  ? 500  :
       type === 'DROP_FLASH'  ? 220  :
       type === 'TIER_UP'     ? 2400 :
       type === 'MULTI_CLEAR' ? 1000 :
+      type === 'POWER_UP'    ? (POWER_UP_DUR[(params as any).subType] ?? 1200) :
       300
     // Only one TIER_UP at a time
     if (type === 'TIER_UP') {
@@ -206,6 +210,9 @@ export class AnimationManager {
         ctx.strokeText(`x${streak}`, center, yPos + 40)
         ctx.fillText(`x${streak}`, center, yPos + 40)
 
+      } else if (anim.type === 'POWER_UP') {
+        drawPowerUpActivation(ctx, cellSize, anim.params, anim.progress)
+
       } else if (anim.type === 'TIER_UP') {
         // ─── TIER UP REVEAL ───────────────────────────────────────
         // 3 phases: 0-0.25 sunburst in, 0.25-0.75 hold, 0.75-1 fade out
@@ -296,4 +303,226 @@ export class AnimationManager {
       ctx.restore()
     })
   }
+}
+
+// ─── Power-up activation canvas bursts ───────────────────────────────────────
+
+function ease(t: number): number { return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t }
+
+function drawBadge(
+  ctx: CanvasRenderingContext2D,
+  cx: number, cy: number, text: string,
+  bg: string, w: number, h: number, scale: number,
+): void {
+  ctx.save()
+  ctx.translate(cx, cy)
+  ctx.scale(scale, scale)
+  ctx.fillStyle = '#0C0C10'
+  ctx.fillRect(-w / 2 + 5, -h / 2 + 5, w, h)
+  ctx.fillStyle = bg
+  ctx.fillRect(-w / 2, -h / 2, w, h)
+  ctx.strokeStyle = '#0C0C10'
+  ctx.lineWidth = 3
+  ctx.strokeRect(-w / 2, -h / 2, w, h)
+  ctx.fillStyle = '#0C0C10'
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.font = `bold ${Math.round(h * 0.44)}px "Archivo Black"`
+  ctx.fillText(text, 0, 0)
+  ctx.restore()
+}
+
+function drawPowerUpActivation(
+  ctx: CanvasRenderingContext2D,
+  cs: number,
+  params: any,
+  p: number,
+): void {
+  const { subType, row, col } = params
+  const boardW = 9 * cs
+  const cx = boardW / 2
+  const cy = 9 * cs / 2
+
+  ctx.save()
+  ctx.shadowBlur = 0
+
+  switch (subType as string) {
+
+    case 'scoreBoost': {
+      const C = '#FFD51F'
+      // Gold board wash
+      const washA = p < 0.2 ? p / 0.2 : p > 0.6 ? (1 - p) / 0.4 : 1
+      ctx.globalAlpha = washA * 0.22
+      ctx.fillStyle = C
+      ctx.fillRect(0, 0, boardW, 9 * cs)
+
+      // 3 staggered radial rings
+      for (let i = 0; i < 3; i++) {
+        const rp = Math.max(0, Math.min(1, (p - i * 0.11) / 0.65))
+        if (rp <= 0) continue
+        const radius = rp * boardW * 0.88
+        const ringA = (1 - rp) * washA
+        ctx.globalAlpha = ringA * 0.95
+        ctx.strokeStyle = C
+        ctx.lineWidth = Math.max(1.5, (1 - rp) * 6)
+        ctx.shadowColor = C
+        ctx.shadowBlur = 14
+        ctx.beginPath()
+        ctx.arc(cx, cy, radius, 0, Math.PI * 2)
+        ctx.stroke()
+        ctx.shadowBlur = 0
+      }
+
+      // Badge
+      if (p > 0.1 && p < 0.88) {
+        const ba = p < 0.2 ? (p - 0.1) / 0.1 : p > 0.75 ? (0.88 - p) / 0.13 : 1
+        const sc = 0.82 + ease(Math.min(1, (p - 0.1) / 0.12)) * 0.18
+        ctx.globalAlpha = ba
+        drawBadge(ctx, cx, cy, '⚡  ×2 ACTIVE', C, 200, 56, sc)
+      }
+      break
+    }
+
+    case 'shield': {
+      const C = '#3B82F6'
+      const sweepY = Math.min(9 * cs, p * (9 * cs) / 0.5)
+      const fadeA = p > 0.45 ? 1 - (p - 0.45) / 0.55 : 1
+
+      // Blue curtain
+      if (sweepY > 0) {
+        ctx.globalAlpha = 0.38 * fadeA
+        ctx.fillStyle = C
+        ctx.shadowColor = C
+        ctx.shadowBlur = 18
+        ctx.fillRect(0, 0, boardW, sweepY)
+        ctx.shadowBlur = 0
+
+        // Bright leading edge
+        const edgeY = Math.min(9 * cs - 2, sweepY)
+        ctx.globalAlpha = Math.max(0, (1 - p / 0.55)) * 0.9
+        ctx.fillStyle = '#fff'
+        ctx.fillRect(0, edgeY - 4, boardW, 7)
+      }
+
+      // Badge
+      if (p > 0.18 && p < 0.88) {
+        const ba = p < 0.28 ? (p - 0.18) / 0.1 : p > 0.75 ? (0.88 - p) / 0.13 : 1
+        const sc = 0.82 + ease(Math.min(1, (p - 0.18) / 0.12)) * 0.18
+        ctx.globalAlpha = ba
+        drawBadge(ctx, cx, cy, '🛡  SHIELD ARMED', C, 220, 56, sc)
+      }
+      break
+    }
+
+    case 'bomb': {
+      const C = '#FF5722'
+      const YELLOW = '#FFD51F'
+      const bx = (col ?? 4) * cs + cs / 2
+      const by = (row ?? 4) * cs + cs / 2
+      const maxR = boardW * 0.92
+
+      // 2 staggered shockwave rings from blast cell
+      for (let i = 0; i < 2; i++) {
+        const rp = Math.max(0, Math.min(1, (p - i * 0.16) / 0.72))
+        if (rp <= 0) continue
+        const radius = rp * maxR
+        const ringA = (1 - rp) * (1 - p * 0.4)
+        ctx.globalAlpha = ringA * 0.9
+        ctx.strokeStyle = i === 0 ? '#fff' : C
+        ctx.lineWidth = Math.max(1.5, (1 - rp) * 7)
+        ctx.shadowColor = C
+        ctx.shadowBlur = 16
+        ctx.beginPath()
+        ctx.arc(bx, by, radius, 0, Math.PI * 2)
+        ctx.stroke()
+        ctx.shadowBlur = 0
+      }
+
+      // Cross-cell flash (row + col of blast point)
+      const flashA = p < 0.18 ? p / 0.18 : p < 0.42 ? (0.42 - p) / 0.24 : 0
+      if (flashA > 0.01 && row != null && col != null) {
+        ctx.globalAlpha = flashA * 0.72
+        ctx.fillStyle = YELLOW
+        for (let c = 0; c < 9; c++) ctx.fillRect(c * cs + 1, row * cs + 1, cs - 2, cs - 2)
+        for (let r = 0; r < 9; r++) ctx.fillRect(col * cs + 1, r * cs + 1, cs - 2, cs - 2)
+      }
+
+      // "BOOM!" badge — fast in, fast out
+      if (p < 0.45) {
+        const ba = p < 0.08 ? p / 0.08 : p > 0.3 ? (0.45 - p) / 0.15 : 1
+        const sc = 0.75 + ease(Math.min(1, p / 0.1)) * 0.35
+        ctx.globalAlpha = ba
+        drawBadge(ctx, cx, cy - cs * 0.8, '💥  BOOM!', C, 160, 52, sc)
+      }
+      break
+    }
+
+    case 'rotatePass': {
+      const C = '#38BDF8'
+      const trayY = 9 * cs
+      const slotCx = [cs * 1.5, cs * 4.5, cs * 7.5]
+      const spin = p * Math.PI * 3.5
+
+      // Board wash
+      const washA = p < 0.15 ? p / 0.15 : p > 0.65 ? (1 - p) / 0.35 : 1
+      ctx.globalAlpha = washA * 0.12
+      ctx.fillStyle = C
+      ctx.fillRect(0, 0, boardW, boardW)
+
+      ctx.strokeStyle = C
+      ctx.lineWidth = Math.max(2, cs * 0.075)
+      ctx.lineCap = 'round'
+      ctx.shadowColor = C
+      ctx.shadowBlur = cs * 0.22
+
+      for (let i = 0; i < 3; i++) {
+        const delay = i * 0.1
+        const lp = Math.max(0, Math.min(1, (p - delay) / (1 - delay)))
+        if (lp <= 0) continue
+        const envA = lp < 0.12 ? lp / 0.12 : lp > 0.78 ? (1 - lp) / 0.22 : 1
+        const sx = slotCx[i]
+        const sy = trayY + cs * 1.5
+        const r = cs * 0.82
+
+        // Dashed slot
+        ctx.globalAlpha = envA * washA * 0.7
+        ctx.setLineDash([cs * 0.14, cs * 0.1])
+        ctx.strokeRect(sx - r, sy - r, r * 2, r * 2)
+        ctx.setLineDash([])
+
+        // Spinning arc
+        const startA = spin + (i * Math.PI * 2) / 3
+        const endA = startA + Math.PI * 1.7
+        ctx.globalAlpha = envA * washA
+        ctx.beginPath()
+        ctx.arc(sx, sy, r * 0.72, startA, endA)
+        ctx.stroke()
+
+        // Arrowhead
+        const ax = sx + Math.cos(endA) * r * 0.72
+        const ay = sy + Math.sin(endA) * r * 0.72
+        const tan = endA + Math.PI / 2
+        const as = cs * 0.16
+        ctx.beginPath()
+        ctx.moveTo(ax, ay)
+        ctx.lineTo(ax - Math.cos(tan - 0.5) * as, ay - Math.sin(tan - 0.5) * as)
+        ctx.moveTo(ax, ay)
+        ctx.lineTo(ax - Math.cos(tan + 0.5) * as, ay - Math.sin(tan + 0.5) * as)
+        ctx.stroke()
+      }
+      ctx.lineCap = 'butt'
+      ctx.shadowBlur = 0
+
+      // Badge
+      if (p > 0.12 && p < 0.82) {
+        const ba = p < 0.22 ? (p - 0.12) / 0.1 : p > 0.7 ? (0.82 - p) / 0.12 : 1
+        const sc = 0.82 + ease(Math.min(1, (p - 0.12) / 0.12)) * 0.18
+        ctx.globalAlpha = ba
+        drawBadge(ctx, cx, cy, '↻  ROTATIONS UNLOCKED', C, 250, 56, sc)
+      }
+      break
+    }
+  }
+
+  ctx.restore()
 }
