@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import { useStablecoinShop } from '../hooks/useStablecoinShop'
 import { usePowerUpStore, type PowerUpId } from '../stores/powerUpStore'
 import { STABLECOIN_TOKENS, type StablecoinSymbol } from '../constants/contracts'
@@ -140,6 +140,14 @@ const TOKEN_LABELS: Record<StablecoinSymbol, string> = {
 
 // ── Shared sub-components ────────────────────────────────────
 
+function IcoPlay() {
+  return (
+    <svg viewBox="0 0 10 12" width={11} height={13} fill="currentColor">
+      <polygon points="0,0 10,6 0,12" />
+    </svg>
+  )
+}
+
 function ItemGlyph({
   glyph, bg, size = 56, onDemo,
 }: {
@@ -159,13 +167,6 @@ function ItemGlyph({
       }}
     >
       {glyph}
-      {onDemo && (
-        <span style={{
-          position: 'absolute', bottom: 2, right: 3,
-          fontSize: 8, color: bg, opacity: 0.75, lineHeight: 1,
-          fontFamily: '"Archivo Black", system-ui',
-        }}>▶</span>
-      )}
     </div>
   )
 }
@@ -198,7 +199,15 @@ function ItemCard({
   purchasedCount: number
 }) {
   const [hover, setHover] = useState(false)
+  const [playHover, setPlayHover] = useState(false)
+  const playTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const off = hover ? 4 : 6
+
+  const cancelPlayTimer = () => {
+    if (playTimerRef.current) { clearTimeout(playTimerRef.current); playTimerRef.current = null }
+  }
+
+  useEffect(() => cancelPlayTimer, [])
 
   return (
     <div
@@ -224,10 +233,11 @@ function ItemCard({
         </div>
       )}
 
+      {/* Header row: glyph · name/tags · play button */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <ItemGlyph glyph={design.glyph} bg={design.bg} size={54} onDemo={onDemo} />
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <ItemGlyph glyph={design.glyph} bg={design.bg} size={54} />
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', flex: 1 }}>
             <span style={{ fontSize: 17, letterSpacing: '-0.01em', lineHeight: 1.05, color: INK }}>
               {design.name}
             </span>
@@ -256,6 +266,32 @@ function ItemCard({
               </span>
             )}
           </div>
+
+          {/* Play / demo button */}
+          <button
+            onClick={(e) => { e.stopPropagation(); cancelPlayTimer(); onDemo() }}
+            onMouseEnter={() => {
+              setPlayHover(true)
+              if (window.matchMedia?.('(hover: hover) and (pointer: fine)').matches) {
+                playTimerRef.current = setTimeout(onDemo, 600)
+              }
+            }}
+            onMouseLeave={() => { setPlayHover(false); cancelPlayTimer() }}
+            title="See it in action"
+            style={{
+              flexShrink: 0,
+              width: 34, height: 34,
+              background: playHover ? design.bg : INK,
+              border: `3px solid ${design.bg}`,
+              boxShadow: playHover ? `2px 2px 0 ${INK}` : `2px 2px 0 ${design.bg}`,
+              color: playHover ? INK : design.bg,
+              cursor: 'pointer',
+              display: 'grid', placeItems: 'center',
+              padding: 0, transition: 'background 110ms, color 110ms',
+            }}
+          >
+            <IcoPlay />
+          </button>
         </div>
       </div>
 
