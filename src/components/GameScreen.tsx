@@ -4,6 +4,9 @@ import { GridRenderer } from '../canvas/GridRenderer'
 import { PieceRenderer } from '../canvas/PieceRenderer'
 import { TouchController } from '../canvas/TouchController'
 import { AnimationManager } from '../canvas/AnimationManager'
+import { PowerUpHintManager } from '../canvas/PowerUpHintManager'
+import type { HintType } from '../canvas/PowerUpHintManager'
+import { PowerUpHintOverlay } from './PowerUpHintOverlay'
 import { Grid } from '../engine/grid'
 import { SHAPES, TOTAL_WEIGHT } from '../engine/shapes'
 import type { ShapeDefinition } from '../engine/shapes'
@@ -459,6 +462,7 @@ const GameScreen: React.FC<GameScreenProps> = ({
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const boardContainerRef = useRef<HTMLDivElement>(null)
   const animManagerRef = useRef<AnimationManager>(new AnimationManager())
+  const powerUpHintRef = useRef<PowerUpHintManager>(new PowerUpHintManager())
   const lastTimeRef = useRef<number>(0)
   const trayHoverIndexRef = useRef<number | null>(null)
   const cellSizeRef = useRef<number>(0)
@@ -534,6 +538,46 @@ const GameScreen: React.FC<GameScreenProps> = ({
 
   // ─── Social nudge ───────────────────────────────────────────────────────
   const [showSocialNudge, setShowSocialNudge] = useState(false)
+
+  // ─── Power-up hint overlay (two-phase: DOM hand → canvas effect) ─────────
+  const [hintTrigger, setHintTrigger] = useState<{ type: HintType; id: number } | null>(null)
+
+  // Screen flash state for power-up activation (DOM-layer cinematic hit)
+  const [screenFlash, setScreenFlash] = useState<{ color: string; key: number } | null>(null)
+  const flashKeyRef = useRef(0)
+
+  // Register the auto-trigger callback once so the hint manager can fire the
+  // DOM hand animation at psychologically timed moments
+  useEffect(() => {
+    powerUpHintRef.current.setAutoTriggerCallback((type) => {
+      setHintTrigger(prev => ({ type, id: (prev?.id ?? 0) + 1 }))
+    })
+  }, [])
+
+  // Listen for power-up activations from PowerUpBar — trigger canvas animation + screen flash
+  useEffect(() => {
+    const FLASH_COLORS: Record<string, string> = {
+      scoreBoost: 'rgba(255,213,31,0.18)',
+      shield:     'rgba(59,130,246,0.18)',
+      bomb:       'rgba(255,87,34,0.22)',
+      rotatePass: 'rgba(56,189,248,0.15)',
+    }
+    const handler = (e: Event) => {
+      const type = (e as CustomEvent<{ type: string }>).detail.type
+      const cs = cellSizeRef.current
+      if (!cs) return
+      // Canvas burst animation
+      animManagerRef.current.trigger('POWER_UP', { subType: type })
+      // DOM screen flash
+      const color = FLASH_COLORS[type]
+      if (color) {
+        setScreenFlash({ color, key: ++flashKeyRef.current })
+        setTimeout(() => setScreenFlash(null), 350)
+      }
+    }
+    window.addEventListener('pu-activated', handler)
+    return () => window.removeEventListener('pu-activated', handler)
+  }, [])
 
   // Load power-up inventory whenever the wallet changes
   useEffect(() => {
@@ -697,6 +741,7 @@ const GameScreen: React.FC<GameScreenProps> = ({
     // Reset lottery so each new game gets fresh threshold triggers
     resetLotterySession()
     prevScoreRef.current = 0
+    powerUpHintRef.current.notifyPiecePlaced(performance.now())
     setLotteryPrize(null)
     const freshState = useGameStore.getState()
     const { onChainSeed: latestSeed, onChainGameId: latestGameId } = freshState
@@ -970,6 +1015,7 @@ const GameScreen: React.FC<GameScreenProps> = ({
           return
         }
         hapticImpact()
+        powerUpHintRef.current.notifyPiecePlaced(performance.now())
         // Brief drop-flash on placed cells
         if (preShape) {
           const placedCells = (preShape.cells as [number, number][])
@@ -983,11 +1029,40 @@ const GameScreen: React.FC<GameScreenProps> = ({
           (linesCleared.rows.length > 0 || linesCleared.cols.length > 0)
         ) {
           hapticNotification()
+          powerUpHintRef.current.notifyLineClear(performance.now())
           animManager.trigger('LINE_CLEAR', {
             rows: linesCleared.rows,
             cols: linesCleared.cols,
             accent: currentTierRef.current.accent,
           })
+
+          // Per-row/col floating score pops — positioned at the cleared line
+          if (result.scoreEvent && result.scoreEvent.linePoints > 0) {
+            const gs = gridRenderer.currentGridSize
+            const cs = gs / 9
+            const totalLines = linesCleared.rows.length + linesCleared.cols.length
+            const perLine = Math.round(result.scoreEvent.linePoints / totalLines)
+            linesCleared.rows.forEach((r) => {
+              animManager.trigger('SCORE', {
+                x: gs * 0.5, y: (r + 0.5) * cs,
+                score: perLine, small: true,
+              })
+            })
+            linesCleared.cols.forEach((c) => {
+              animManager.trigger('SCORE', {
+                x: (c + 0.5) * cs, y: gs * 0.5,
+                score: perLine, small: true,
+              })
+            })
+            // Multi-clear sticker for 2+ simultaneous lines
+            if (totalLines >= 2) {
+              animManager.trigger('MULTI_CLEAR', {
+                count: totalLines,
+                linePoints: result.scoreEvent.linePoints,
+              })
+            }
+          }
+
           if (result.scoreEvent && result.scoreEvent.newComboStreak > 0) {
             animManager.trigger('COMBO', {
               streak: result.scoreEvent.newComboStreak,
@@ -1123,6 +1198,15 @@ const GameScreen: React.FC<GameScreenProps> = ({
       }
 
       gridRenderer.draw(currentSession.grid, ghostCells, false)
+
+      // Power-up ghost hint — overlaid after board, before score popups
+      const isInteracting = dragState.isDragging || !!ghost
+      powerUpHintRef.current.update(
+        timestamp, delta, currentSession.grid,
+        !isInteracting && !currentSession.isGameOver,
+      )
+      powerUpHintRef.current.draw(ctx, cellSizeRef.current)
+
       pieceRenderer.drawTray(
         currentSession.currentPieces,
         activeIdx ?? undefined,
@@ -1272,38 +1356,35 @@ const GameScreen: React.FC<GameScreenProps> = ({
     handleStartGame()
   }
 
-  // Bomb: fire bombZone on the session, update score, consume the charge
+  // Bomb: fire bombZone on the session, update score + combo, consume the charge
   const handleBombTap = (row: number, col: number) => {
     const session = useGameStore.getState().gameSession
     if (!session) return
-    const pts = session.bombZone(row, col)
+    const bombEvent = session.bombZone(row, col)
     session.moveHistory.push({
       pieceIndex: -1,
       shapeId: '',
       row: 0,
       col: 0,
       bomb: { row, col },
-      scoreEvent: {
-        basePoints: pts,
-        linePoints: 0,
-        comboBonus: 0,
-        totalPoints: pts,
-        linesCleared: 0,
-        newComboStreak: session.comboStreak,
-        comboMultiplier: 1.0,
-        isMilestone: false,
-        multiLineFactor: 1.0,
-      },
+      scoreEvent: bombEvent,
     })
     consumeBomb()
-    useGameStore.setState({ score: session.score })
+    useGameStore.setState({ score: session.score, comboStreak: bombEvent.newComboStreak })
     prevScoreRef.current = session.score
-    if (pts > 0) {
+    if (bombEvent.totalPoints > 0) {
       animManagerRef.current.trigger('SCORE', {
         x: (canvasDims?.gridSize ?? 200) * 0.5,
         y: (canvasDims?.gridSize ?? 200) * 0.45,
-        score: pts,
+        score: bombEvent.totalPoints,
+        label: bombEvent.newComboStreak >= 2
+          ? `BOMB ×${bombEvent.comboMultiplier}!`
+          : undefined,
       })
+      // Explosion burst from the tapped cell
+      animManagerRef.current.trigger('POWER_UP', { subType: 'bomb', row, col })
+      setScreenFlash({ color: 'rgba(255,87,34,0.30)', key: ++flashKeyRef.current })
+      setTimeout(() => setScreenFlash(null), 280)
       hapticNotification()
     } else {
       hapticError()
@@ -1522,6 +1603,26 @@ const GameScreen: React.FC<GameScreenProps> = ({
           onRotatePiece={handleRotatePiece}
           activePieceIndex={trayHoverIndexRef.current}
         />
+        <PowerUpHintOverlay
+          hintTrigger={hintTrigger}
+          onBoardEffect={(type) => {
+            const grid = useGameStore.getState().gameSession?.grid
+            powerUpHintRef.current.commitCanvasHint(type, grid)
+          }}
+        />
+        {/* Screen flash — DOM-layer cinematic hit for power-up activations */}
+        {screenFlash && (
+          <div
+            key={screenFlash.key}
+            aria-hidden
+            style={{
+              position: 'fixed', inset: 0, zIndex: 8999,
+              background: screenFlash.color,
+              pointerEvents: 'none',
+              animation: 'pu-screen-flash 0.32s ease-out forwards',
+            }}
+          />
+        )}
         {showNoGasModal && <NoGasModal address={address} onDismiss={() => setNoGasDismissed(true)} />}
         {showSocialNudge && <SocialNudgeModal onDismiss={() => setShowSocialNudge(false)} />}
         {isWhitelisted && lotteryPrize && !isGameOver && (

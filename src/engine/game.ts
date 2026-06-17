@@ -2,7 +2,7 @@ import { Grid } from './grid'
 import { SHAPES } from './shapes'
 import type { ShapeDefinition } from './shapes'
 import { DeterministicRNG, dealThree } from './rng'
-import { calculateScore } from './scoring'
+import { calculateScore, getComboMultiplier, MILESTONE_BONUS } from './scoring'
 import type { ScoreEvent } from './scoring'
 
 export interface MoveRecord {
@@ -73,6 +73,34 @@ export class GameSession {
     this.deal()
   }
 
+  // Shield revive: clears the 3 most-filled columns to create space, then revives.
+  // Returns the column indices that were cleared (for UI feedback).
+  shieldRevive(): number[] {
+    // Count filled cells per column
+    const fillCounts = Array.from({ length: Grid.SIZE }, (_, col) => {
+      let count = 0
+      for (let r = 0; r < Grid.SIZE; r++) {
+        if (this.grid[r * Grid.SIZE + col] !== 0) count++
+      }
+      return { col, count }
+    })
+    // Pick 3 most-filled columns
+    const topThree = fillCounts
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 3)
+      .map((x) => x.col)
+
+    // Clear those columns
+    for (const col of topThree) {
+      for (let r = 0; r < Grid.SIZE; r++) {
+        this.grid[r * Grid.SIZE + col] = 0
+      }
+    }
+
+    this.revive()
+    return topThree.sort((a, b) => a - b)
+  }
+
   // Rotate piece at index 90° CW. Returns false if slot is empty.
   rotatePiece(pieceIndex: number): boolean {
     const piece = this.currentPieces[pieceIndex]
@@ -81,24 +109,47 @@ export class GameSession {
     return true
   }
 
-  // Clear a 3×3 zone centred on (centerRow, centerCol). Returns score awarded.
-  bombZone(centerRow: number, centerCol: number): number {
+  // Explode the full row and column through (centerRow, centerCol).
+  // Treats the cross as 2 line clears — feeds combo streak and applies score boost.
+  bombZone(centerRow: number, centerCol: number): ScoreEvent {
     let cellsCleared = 0
-    for (let dr = -1; dr <= 1; dr++) {
-      for (let dc = -1; dc <= 1; dc++) {
-        const r = centerRow + dr
-        const c = centerCol + dc
-        if (r >= 0 && r < Grid.SIZE && c >= 0 && c < Grid.SIZE) {
-          if (this.grid[r * Grid.SIZE + c] !== 0) {
-            this.grid[r * Grid.SIZE + c] = 0
-            cellsCleared++
-          }
-        }
+    for (let c = 0; c < Grid.SIZE; c++) {
+      if (this.grid[centerRow * Grid.SIZE + c] !== 0) {
+        this.grid[centerRow * Grid.SIZE + c] = 0
+        cellsCleared++
       }
     }
-    const pts = cellsCleared * 5
-    this.score += pts
-    return pts
+    for (let r = 0; r < Grid.SIZE; r++) {
+      if (this.grid[r * Grid.SIZE + centerCol] !== 0) {
+        this.grid[r * Grid.SIZE + centerCol] = 0
+        cellsCleared++
+      }
+    }
+
+    // Cell pts: 3× when both boost and bomb are synergised, 2× for boost alone
+    const basePoints   = Math.round(cellsCleared * 5 * (this.scoreBoostActive ? 3.0 : 1.0))
+    // Row + column = 2 line clears → 2-line multi-factor
+    const linesCleared    = 2
+    const multiLineFactor = 1.5
+    const linePoints      = Math.round(linesCleared * 100 * multiLineFactor)
+
+    // Feed the combo streak
+    const newComboStreak  = this.comboStreak + 1
+    const comboMultiplier = getComboMultiplier(newComboStreak)
+    const isMilestone     = newComboStreak in MILESTONE_BONUS
+    const milestoneBonus  = MILESTONE_BONUS[newComboStreak] ?? 0
+
+    const rawPoints  = basePoints + linePoints
+    const totalPoints = Math.round(rawPoints * comboMultiplier) + milestoneBonus
+    const comboBonus  = totalPoints - rawPoints
+
+    this.comboStreak = newComboStreak
+    this.score      += totalPoints
+
+    return {
+      basePoints, linePoints, comboBonus, totalPoints,
+      linesCleared, newComboStreak, comboMultiplier, isMilestone, multiLineFactor,
+    }
   }
 
   deal(): void {

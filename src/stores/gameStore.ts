@@ -78,6 +78,10 @@ export const useGameStore = create<GameState>((set, get) => ({
     const { gameSession, reviveCount } = get()
     if (!gameSession) return null
 
+    // Capture streak before placement — if shield fires we restore it so the
+    // player keeps their combo alive even though the fatal move cleared nothing.
+    const preComboStreak = gameSession.comboStreak
+
     const result = gameSession.placePiece(index, r, c)
     if (!result.success) return result
 
@@ -87,6 +91,10 @@ export const useGameStore = create<GameState>((set, get) => ({
     if (result.isGameOver) {
       const shielded = usePowerUpStore.getState().triggerShield()
       if (shielded) {
+        // Restore the combo streak from before the fatal move — the shield
+        // preserves momentum so the player keeps their multiplier going.
+        gameSession.comboStreak = preComboStreak
+
         // Record the shield-triggered revival so replayMoveHistory can call
         // session.revive() at this exact position during session restore.
         const minimalScoreEvent = {
@@ -100,7 +108,7 @@ export const useGameStore = create<GameState>((set, get) => ({
           scoreEvent: minimalScoreEvent,
         })
 
-        gameSession.revive()
+        gameSession.shieldRevive()
         // @ts-ignore
         window.currentPieces = gameSession.currentPieces
         set({

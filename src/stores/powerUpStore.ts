@@ -17,20 +17,20 @@ export const POWER_UP_META: Record<PowerUpId | 'revivalBundle', {
   scoreBoost: {
     label: 'SCORE BOOST',
     icon: '⚡',
-    description: 'Activates ×1.5 base points for every piece you place — for one full game.',
-    shortDesc: '×1.5 base pts / game',
+    description: 'Activates ×2 base points for every piece you place — for one full game.',
+    shortDesc: '×2 base pts / game',
   },
   shield: {
     label: 'SHIELD',
     icon: '🛡️',
-    description: 'Prevents one game-over. Auto-triggers and gives you a fresh set of pieces.',
-    shortDesc: 'Prevent 1 game-over',
+    description: 'Prevents one game-over. Auto-triggers, clears your 3 most-blocked columns, deals fresh pieces, and preserves your combo streak.',
+    shortDesc: 'Clear 3 cols + keep combo',
   },
   bomb: {
     label: 'BOMB',
     icon: '💣',
-    description: 'Tap any cell on the grid to blast a 3×3 zone. 5 pts per cell cleared.',
-    shortDesc: '3×3 blast, 5 pts/cell',
+    description: 'Tap any cell to blast the entire row and column simultaneously. 5 pts per cell, feeds your combo. Use with Score Boost for ×3 cell points.',
+    shortDesc: 'Full cross blast + combo',
   },
   rotatePass: {
     label: 'ROTATE PASS',
