@@ -238,3 +238,170 @@ export async function fetchServerSession(address: string): Promise<{
 export async function markSessionComplete(address: string, seed: string): Promise<void> {
   await postWithRetry('/session/complete', { address, seed }, 3)
 }
+
+/**
+ * Syncs tournament game sessions to the dedicated tournament_sessions table.
+ * Mirror of useMoveSync but uses /tournament-session/* endpoints and always
+ * includes the tournamentId so sessions are scoped to a specific tournament.
+ */
+export function useTournamentMoveSync(tournamentId: bigint | null) {
+  const { address } = useAccount()
+  const score       = useGameStore((s) => s.score)
+  const isGameOver  = useGameStore((s) => s.isGameOver)
+  const reviveCount = useGameStore((s) => s.reviveCount)
+  const onChainGameId = useGameStore((s) => s.onChainGameId)
+  const onChainSeed   = useGameStore((s) => s.onChainSeed)
+  const gameSeed      = useGameStore((s) => s.gameSession?.seed?.toString() ?? null)
+
+  const registeredSeedRef        = useRef<string | null>(null)
+  const debounceRef              = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const lastSyncedMoveCountRef   = useRef(0)
+  const lastKnownSessionRef      = useRef(useGameStore.getState().gameSession)
+
+  const tid = tournamentId?.toString() ?? null
+
+  // /tournament-session/start — fires once per new seed
+  useEffect(() => {
+    if (!address || !gameSeed || gameSeed === '0' || !tid) return
+    if (registeredSeedRef.current === gameSeed) return
+    registeredSeedRef.current = gameSeed
+    lastSyncedMoveCountRef.current = 0
+
+    const session = useGameStore.getState().gameSession
+    if (session && session.moveHistory.length > 0) return
+
+    post('/tournament-session/start', {
+      address,
+      tournamentId: tid,
+      seed: gameSeed,
+      onChainGameId: onChainGameId?.toString() ?? null,
+      onChainSeed: onChainSeed ?? null,
+    })
+  }, [address, gameSeed, tid, onChainGameId, onChainSeed])
+
+  const syncNowRef = useRef<() => void>(() => {})
+  useEffect(() => {
+    syncNowRef.current = () => {
+      const storeState = useGameStore.getState()
+      const session = storeState.gameSession ?? lastKnownSessionRef.current
+      if (!session || !address || !tid) return
+      lastKnownSessionRef.current = session
+
+      const fromIndex = lastSyncedMoveCountRef.current
+      const newMoves  = session.moveHistory.slice(fromIndex)
+      const targetCount = session.moveHistory.length
+
+      post('/tournament-session/sync', {
+        address,
+        tournamentId: tid,
+        seed: session.seed.toString(),
+        newMoves,
+        fromIndex,
+        score: session.score,
+        scoreBoostActive: session.scoreBoostActive,
+        isGameOver,
+        reviveCount,
+        onChainGameId: onChainGameId?.toString() ?? null,
+        onChainSeed: onChainSeed ?? null,
+      }).then(ok => {
+        if (ok) lastSyncedMoveCountRef.current = targetCount
+      })
+    }
+  }, [address, tid, isGameOver, reviveCount, onChainGameId, onChainSeed])
+
+  useEffect(() => {
+    const session = useGameStore.getState().gameSession
+    if (session) lastKnownSessionRef.current = session
+  }, [gameSeed, score])
+
+  // Debounced sync on every score change
+  useEffect(() => {
+    if (!address || !score || !tid) return
+    const { gameSession } = useGameStore.getState()
+    if (!gameSession || !gameSession.moveHistory.length) return
+
+    const currentMoveCount = gameSession.moveHistory.length
+    if (currentMoveCount === lastSyncedMoveCountRef.current) return
+
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => syncNowRef.current(), SYNC_DEBOUNCE_MS)
+  }, [score, address, tid])
+
+  // Flush on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current)
+      syncNowRef.current()
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Network recovery — full resync
+  useEffect(() => {
+    const handleOnline = () => {
+      const { gameSession, onChainGameId: gid, onChainSeed: gs } = useGameStore.getState()
+      if (!address || !gameSession || !tid) return
+      const snapshotLen = gameSession.moveHistory.length
+      lastSyncedMoveCountRef.current = 0
+      post('/tournament-session/sync', {
+        address,
+        tournamentId: tid,
+        seed: gameSession.seed.toString(),
+        newMoves: gameSession.moveHistory,
+        fromIndex: 0,
+        score: gameSession.score,
+        scoreBoostActive: gameSession.scoreBoostActive,
+        isGameOver: gameSession.isGameOver,
+        reviveCount: useGameStore.getState().reviveCount,
+        onChainGameId: gid?.toString() ?? null,
+        onChainSeed: gs ?? null,
+      }).then(ok => {
+        if (ok) lastSyncedMoveCountRef.current = snapshotLen
+      })
+    }
+    window.addEventListener('online', handleOnline)
+    return () => window.removeEventListener('online', handleOnline)
+  }, [address, tid])
+}
+
+/**
+ * Marks a tournament session as submitted after successful on-chain score submission.
+ */
+export async function markTournamentSessionComplete(
+  address: string,
+  tournamentId: string,
+  seed: string,
+): Promise<void> {
+  await postWithRetry('/tournament-session/complete', { address, tournamentId, seed }, 3)
+}
+
+/**
+ * Fetches the latest active tournament session from the server for session recovery.
+ */
+export async function fetchTournamentServerSession(
+  address: string,
+  tournamentId: string,
+): Promise<{
+  seed: string
+  onChainGameId: string | null
+  onChainSeed: string | null
+  moveHistory: any[]
+  score: number
+  scoreBoostActive: boolean
+  isGameOver: boolean
+  reviveCount: number
+  updatedAt: string
+} | null> {
+  try {
+    const res = await fetchWithTimeout(
+      `${SERVER_URL}/tournament-session/restore/${address.toLowerCase()}/${tournamentId}`,
+      {},
+      5_000,
+    )
+    if (!res.ok) return null
+    const { session } = await res.json()
+    return session ?? null
+  } catch {
+    return null
+  }
+}
