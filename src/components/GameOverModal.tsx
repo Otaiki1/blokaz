@@ -20,7 +20,7 @@ import { useAccount, useReadContract } from 'wagmi'
 import { BLOKZ_GAME_ABI, BLOKZ_TOURNAMENT_ABI } from '../constants/abi'
 import contractInfo from '../contract.json'
 import { requestSubmitSignature } from '../api/signer'
-import { markSessionComplete } from '../hooks/useMoveSync'
+import { markSessionComplete, markTournamentSessionComplete } from '../hooks/useMoveSync'
 import { keccak256, encodePacked } from 'viem'
 import {
   CLASSIC_SESSION_STORAGE_KEY,
@@ -327,9 +327,11 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
     if (isAllSuccess && address) {
       const seed = useGameStore.getState().onChainSeed
       ;(async () => {
-        // Mark server session complete first (retries 3×) so the session can't
-        // be offered for restore after a successful on-chain submission.
-        if (seed) await markSessionComplete(address, seed)
+        if (isTournamentMode && tournamentId !== null) {
+          if (seed) await markTournamentSessionComplete(address, tournamentId.toString(), seed)
+        } else {
+          if (seed) await markSessionComplete(address, seed)
+        }
         clearStoredGameSession(storageKey)
       })()
     }

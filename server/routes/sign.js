@@ -3,6 +3,7 @@ import { createPublicClient, http } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 import { celo } from 'viem/chains'
 import dotenv from 'dotenv'
+import { replayAndValidateScore } from '../engine/scoreReplay.js'
 dotenv.config()
 
 const router = Router()
@@ -40,9 +41,11 @@ const types = {
 }
 
 function validateScore(tid, gid, score, moves, seed) {
-  console.log(`Validating score for Tournament ${tid}, Game ${gid}: ${score}`)
-  // TODO: replay moves server-side to verify score
-  return true
+  console.log(`Validating score for Tournament ${tid}, Game ${gid}: ${score} (${moves?.length ?? 0} moves)`)
+  if (!Array.isArray(moves)) return false
+  const valid = replayAndValidateScore(moves, score)
+  if (!valid) console.warn(`[sign] Score replay failed for tid=${tid} gid=${gid} claimed=${score}`)
+  return valid
 }
 
 router.post('/sign-start', async (req, res) => {
