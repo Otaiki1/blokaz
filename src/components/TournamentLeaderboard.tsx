@@ -1,20 +1,19 @@
 import React from 'react'
-import { useTournamentLeaderboard, useUsername } from '../hooks/useBlokzGame'
+import { useTournament, useTournamentLeaderboard, useTournamentRewardsBps, useUsername } from '../hooks/useBlokzGame'
 import { useAccount } from 'wagmi'
 import contractInfo from '../contract.json'
 import { BrutalIcon } from './BrutalIcon'
 
-const RANK_BG: Record<number, string> = { 
-  1: 'var(--accent-yellow)', 
-  2: 'var(--accent-lime)', 
-  3: 'var(--accent-cyan)' 
+const RANK_BG: Record<number, string> = {
+  1: 'var(--accent-yellow)',
+  2: 'var(--accent-lime)',
+  3: 'var(--accent-cyan)'
 }
 
 interface TournamentLeaderboardProps {
   tournamentId: bigint | null
   isOpen: boolean
   onClose: () => void
-  prizePool?: bigint
 }
 
 const PlayerName: React.FC<{ address: string; isCurrentUser: boolean }> = ({ address, isCurrentUser }) => {
@@ -24,20 +23,23 @@ const PlayerName: React.FC<{ address: string; isCurrentUser: boolean }> = ({ add
   return <span className={`font-body text-sm ${isCurrentUser ? 'font-bold' : ''}`} style={{ color: 'inherit' }}>{username || truncated(address)}</span>
 }
 
-const TournamentLeaderboard: React.FC<TournamentLeaderboardProps> = ({ tournamentId, isOpen, onClose, prizePool }) => {
+const TournamentLeaderboard: React.FC<TournamentLeaderboardProps> = ({ tournamentId, isOpen, onClose }) => {
   const { address } = useAccount()
   const { leaderboard, isLoading, refetch } = useTournamentLeaderboard(tournamentId ?? undefined)
+  const { tournament } = useTournament(tournamentId ?? 0n)
+  const { rewardsBps } = useTournamentRewardsBps(tournamentId ?? undefined)
 
   React.useEffect(() => {
     if (isOpen && tournamentId !== null) refetch()
   }, [isOpen, tournamentId, refetch])
 
-  const getPrizeEstimate = (rank: number) => {
+  const prizePool = (tournament as any)?.prizePool as bigint | undefined
+
+  const getPrizeEstimate = (rank: number): bigint | null => {
     if (!prizePool || prizePool === 0n) return null
-    if (rank === 1) return (prizePool * 50n) / 100n
-    if (rank === 2) return (prizePool * 25n) / 100n
-    if (rank === 3) return (prizePool * 15n) / 100n
-    return null
+    if (!rewardsBps || rewardsBps.length < rank) return null
+    const bps = BigInt(rewardsBps[rank - 1])
+    return (prizePool * bps) / 10000n
   }
 
   const formatAmount = (amt: bigint) => (Number(amt) / 1e6).toFixed(2)
@@ -95,7 +97,7 @@ const TournamentLeaderboard: React.FC<TournamentLeaderboardProps> = ({ tournamen
               <div key={i} className="h-20 border-4 border-ink animate-pulse" style={{ background: 'var(--paper-2)' }} />
             ))
           ) : leaderboard && leaderboard.length > 0 ? (
-            leaderboard
+            [...leaderboard]
               .sort((a, b) => b.score - a.score)
               .map((entry, index) => {
                 const isCurrentUser = address?.toLowerCase() === entry.player.toLowerCase()
@@ -135,7 +137,7 @@ const TournamentLeaderboard: React.FC<TournamentLeaderboardProps> = ({ tournamen
                           </span>
                         )}
                       </div>
-                      {prize && (
+                      {prize !== null && (
                         <div className="flex items-center gap-1.5 mt-1">
                           <span className="font-display text-[9px] tracking-[0.1em] opacity-70">EST. PRIZE:</span>
                           <span
