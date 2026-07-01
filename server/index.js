@@ -9,7 +9,9 @@ dotenv.config()
 import { globalLimiter } from './middleware/rateLimits.js'
 import signRouter, { account, publicClient, TOURNAMENT_ADDRESS } from './routes/sign.js'
 import sessionRouter from './routes/session.js'
+import tournamentSessionRouter from './routes/tournament-session.js'
 import inventoryRouter from './routes/inventory.js'
+import rewardsRouter from './routes/rewards.js'
 
 const app = express()
 
@@ -63,7 +65,9 @@ app.use((_req, res, next) => {
 // ── Routes ───────────────────────────────────────────────────────────────────
 app.use('/', signRouter)
 app.use('/session', sessionRouter)
+app.use('/tournament-session', tournamentSessionRouter)
 app.use('/inventory', inventoryRouter)
+app.use('/rewards', rewardsRouter)
 
 // ── Health check ──────────────────────────────────────────────────────────────
 app.get('/health', (_req, res) => res.json({ ok: true, ts: Date.now() }))

@@ -141,6 +141,113 @@ begin
 end;
 $$;
 
+-- ── tournament_sessions ───────────────────────────────────────────────────────
+-- Dedicated table for tournament game sessions — keeps tournament data
+-- separate from classic sessions and enables tournament-specific queries
+-- (e.g. leaderboard by tournament_id + score).
+
+create table if not exists tournament_sessions (
+  id               uuid primary key default gen_random_uuid(),
+  address          text not null,
+  tournament_id    text not null,
+  seed             text not null,
+  on_chain_game_id text,
+  on_chain_seed    text,
+  move_history     jsonb not null default '[]',
+  score            integer not null default 0,
+  score_boost_active boolean not null default false,
+  is_game_over     boolean not null default false,
+  revive_count     integer not null default 0,
+  status           text not null default 'active',  -- active | submitted | abandoned
+  created_at       timestamptz not null default now(),
+  updated_at       timestamptz not null default now()
+);
+
+-- One active session per player per tournament
+create unique index if not exists idx_unique_active_tournament_session
+  on tournament_sessions (address, tournament_id)
+  where status = 'active';
+
+-- Fast lookup for restore and leaderboard
+create index if not exists idx_tournament_sessions_address_status
+  on tournament_sessions (address, status, updated_at desc);
+
+create index if not exists idx_tournament_sessions_leaderboard
+  on tournament_sessions (tournament_id, score desc)
+  where status in ('active', 'submitted');
+
+-- ── Delta-sync append RPC for tournament sessions ─────────────────────────────
+
+create or replace function append_tournament_moves(
+  p_address            text,
+  p_tournament_id      text,
+  p_seed               text,
+  p_new_moves          jsonb,
+  p_from_index         integer,
+  p_score              integer,
+  p_score_boost_active boolean,
+  p_is_game_over       boolean,
+  p_revive_count       integer,
+  p_on_chain_game_id   text    default null,
+  p_on_chain_seed      text    default null
+) returns void language plpgsql as $$
+declare
+  v_id            uuid;
+  v_current_len   integer;
+  v_skip          integer;
+  v_to_append     jsonb;
+begin
+  select id, jsonb_array_length(move_history) into v_id, v_current_len
+  from   tournament_sessions
+  where  address = p_address and tournament_id = p_tournament_id and status = 'active'
+  for update;
+
+  if not found then
+    insert into tournament_sessions (
+      address, tournament_id, seed, move_history, score, score_boost_active,
+      is_game_over, revive_count, on_chain_game_id, on_chain_seed, status
+    ) values (
+      p_address, p_tournament_id, p_seed, p_new_moves, p_score, p_score_boost_active,
+      p_is_game_over, p_revive_count, p_on_chain_game_id, p_on_chain_seed, 'active'
+    ) on conflict do nothing;
+    return;
+  end if;
+
+  v_skip := v_current_len - p_from_index;
+  if v_skip < 0 then v_skip := 0; end if;
+
+  if v_skip >= jsonb_array_length(p_new_moves) then
+    v_to_append := '[]'::jsonb;
+  else
+    select coalesce(jsonb_agg(elem order by idx), '[]'::jsonb)
+    into   v_to_append
+    from   jsonb_array_elements(p_new_moves) with ordinality t(elem, idx)
+    where  idx > v_skip;
+  end if;
+
+  update tournament_sessions set
+    move_history       = case when jsonb_array_length(v_to_append) > 0
+                              then move_history || v_to_append
+                              else move_history end,
+    score              = p_score,
+    score_boost_active = p_score_boost_active,
+    is_game_over       = p_is_game_over,
+    revive_count       = p_revive_count,
+    on_chain_game_id   = coalesce(nullif(p_on_chain_game_id, ''), on_chain_game_id),
+    on_chain_seed      = coalesce(p_on_chain_seed, on_chain_seed)
+  where id = v_id;
+end;
+$$;
+
+-- ── RLS for tournament_sessions ───────────────────────────────────────────────
+
+alter table tournament_sessions enable row level security;
+create policy "service role only" on tournament_sessions as restrictive using (false) with check (false);
+
+create or replace trigger tournament_sessions_updated_at
+  before update on tournament_sessions
+  for each row execute function set_updated_at();
+
 -- ── Atomic inventory increment RPC ───────────────────────────────────────────
 -- Called by /inventory/purchase to credit items without a read-modify-write race.
 
