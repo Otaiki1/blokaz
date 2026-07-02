@@ -834,7 +834,7 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
             <HeaderDivider />
 
-            {(IS_MINIPAY || isWebBrowser()) ? null : (
+            {IS_MINIPAY ? null : (
               <ConnectButton.Custom>
                 {({
                   account,

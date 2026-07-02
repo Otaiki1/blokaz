@@ -41,6 +41,7 @@ import {
   clearStoredGameSession,
 } from '../utils/gameSessionStorage'
 import { IS_MINIPAY, isWebBrowser, markTrialUsed, isWebTrialGated } from '../utils/miniPay'
+import { isWebWhitelisted } from '../utils/featureFlags'
 import { MiniPayGateModal } from './MiniPayGateModal'
 import { getScoreTier } from '../engine/scoring'
 import type { TierInfo } from '../engine/scoring'
@@ -751,8 +752,8 @@ const GameScreen: React.FC<GameScreenProps> = ({
   // 1. Handle Start
   const handleStartGame = () => {
     if (isPending || isConfirming) return // already has a tx in flight
-    // Mark free web trial as consumed (no-op inside MiniPay)
-    if (isWebBrowser()) markTrialUsed()
+    // Mark free web trial as consumed — skip for whitelisted dev address
+    if (isWebBrowser() && !isWebWhitelisted(address)) markTrialUsed()
     setSessionConflict(false)
     // Reset tier to T1 (PAPER) on new game
     const freshTier = getScoreTier(0)
@@ -861,10 +862,11 @@ const GameScreen: React.FC<GameScreenProps> = ({
   // MiniPayAutoConnect hasn't resolved yet. Without this guard the game
   // silently starts in practice mode and contractStartGame is never called.
   // Skip if reconnecting (wagmi transiently clears isConnected on page reload)
-  // or if the web trial is already gated — don't auto-start a blocked session.
+  // or if the web trial is gated and the address isn't whitelisted.
   useEffect(() => {
-    if (!isConnected && !isReconnecting && !gameSession && !IS_MINIPAY && !isWebTrialGated()) handleStartGame()
-  }, [isConnected, isReconnecting, gameSession])
+    const gated = isWebTrialGated() && !isWebWhitelisted(address)
+    if (!isConnected && !isReconnecting && !gameSession && !IS_MINIPAY && !gated) handleStartGame()
+  }, [isConnected, isReconnecting, gameSession, address])
 
   // 4. Start tx rejection → abandon session and go back to lobby
   useEffect(() => {
@@ -1626,7 +1628,7 @@ const GameScreen: React.FC<GameScreenProps> = ({
 
   // Show lobby gate immediately for web visitors who have used their trial
   // (and aren't currently in a game-over state, which has its own gate via CanvasArea)
-  if (isWebBrowser() && isWebTrialGated() && !gameSession) {
+  if (isWebBrowser() && isWebTrialGated() && !isWebWhitelisted(address) && !gameSession) {
     return <MiniPayGateModal />
   }
 
@@ -2167,7 +2169,7 @@ const CanvasArea: React.FC<CanvasAreaProps> = ({
           <ComboOverlay streak={comboStreak} trigger={comboTrigger} />
 
           {isGameOver && (
-            isWebBrowser()
+            (isWebBrowser() && !isWebWhitelisted(address))
               ? <MiniPayGateModal score={score} />
               : (
                 <GameOverModal

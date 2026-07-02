@@ -13,6 +13,7 @@ import { useTheme } from '../hooks/useTheme'
 import { BLOKZ_TOURNAMENT_ABI } from '../constants/abi'
 import contractInfo from '../contract.json'
 import { isWebBrowser, isWebTrialGated } from '../utils/miniPay'
+import { isWebWhitelisted } from '../utils/featureFlags'
 import { MiniPayGateModal } from './MiniPayGateModal'
 import UsernameSetupModal, {
   hasDismissedUsernamePrompt,
@@ -795,7 +796,7 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({
       {/* Play Classic */}
       <FadeUp delay={340}>
         <div className="relative">
-          {isWebBrowser() && (
+          {isWebBrowser() && !isWebWhitelisted(address) && (
             <div
               style={{
                 position: 'absolute',
@@ -844,7 +845,7 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({
                 PLAY CLASSIC <span className="text-2xl leading-none">→</span>
               </div>
               <div className="mt-1 font-display text-[10px] tracking-[0.1em]" style={{ color: '#FFFFFF' }}>
-                {isWebBrowser() ? 'Web trial · MiniPay required to compete' : 'Weekly leaderboard · Free'}
+                {isWebBrowser() && !isWebWhitelisted(address) ? 'Web trial · MiniPay required to compete' : 'Weekly leaderboard · Free'}
               </div>
             </div>
           </button>
@@ -1015,8 +1016,8 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({
     </>
   )
 
-  // Web users who have already used their trial — show gate immediately
-  if (isWebBrowser() && isWebTrialGated()) {
+  // Web users who have used their trial — show gate (whitelisted address bypasses)
+  if (isWebBrowser() && isWebTrialGated() && !isWebWhitelisted(address)) {
     return <MiniPayGateModal />
   }
 
