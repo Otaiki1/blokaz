@@ -627,10 +627,12 @@ const GameScreen: React.FC<GameScreenProps> = ({
   const isMobile = useIsMobile()
 
   // 0. Account Switch Protection
+  const hasAutoResumed = useRef(false)
   const lastAddressRef = useRef<`0x${string}` | undefined>(address)
   useEffect(() => {
     if (address !== lastAddressRef.current) {
       forceReset()
+      hasAutoResumed.current = false
       lastAddressRef.current = address
     }
   }, [address, forceReset])
@@ -674,7 +676,17 @@ const GameScreen: React.FC<GameScreenProps> = ({
         setSessionConflict(true)
       }
     } else {
-      if (storedSession) setOnChainData(0n, null, 'none')
+      if (storedSession?.seed && !storedSession.gameId) {
+        // storedSession exists with a seed but no confirmed gameId — the tx
+        // is still in-flight. Preserve the seed so continueGame/handleStartGame
+        // can retry the contract call instead of starting a brand-new game
+        // with a different seed (the double-start bug on MiniPay).
+        setOnChainData(0n, storedSession.seed as `0x${string}`, 'pending')
+      } else if (storedSession && storedSession.gameId) {
+        // Had a gameId that is no longer active on-chain (tx failed / game
+        // was already submitted). Clear stale local state.
+        setOnChainData(0n, null, 'none')
+      }
       setSessionConflict(false)
     }
     setIsSyncingContract(false)
@@ -757,6 +769,20 @@ const GameScreen: React.FC<GameScreenProps> = ({
       setOnChainData(0n, seed, 'none')
     }
   }
+
+  // 1.5 Auto-Resume after hydration
+  // When the user returns to MiniPay after signing startGame, the on-chain game
+  // is already confirmed but gameSession is null (in-memory state was lost on
+  // app close). Detect this after hydration completes and resume automatically
+  // so the user is not presented with the start-game dialog again.
+  useEffect(() => {
+    if (isSyncingContract || gameSession || hasAutoResumed.current) return
+    const { onChainSeed, onChainGameId } = useGameStore.getState()
+    if (onChainSeed && onChainGameId && onChainGameId !== 0n && isConnected && address) {
+      hasAutoResumed.current = true
+      setTimeout(() => handleStartGame(), 0)
+    }
+  }, [isSyncingContract, gameSession, isConnected, address])
 
   // 2. Background Sync
   useEffect(() => {
@@ -1167,10 +1193,12 @@ const GameScreen: React.FC<GameScreenProps> = ({
 
   const handlePlayAgain = () => handleStartGame()
 
-  // Detect a saved game the user can resume (snapshot in localStorage)
-  const hasStoredGame = !gameSession && !!address && !!(
-    readStoredGameSession(CLASSIC_SESSION_STORAGE_KEY, address, GAME_ADDRESS)?.snapshot?.moveHistory?.length
-  )
+  // Detect a saved game the user can resume — either moves in snapshot OR a
+  // stored seed (game was registered on-chain but player closed before playing).
+  const hasStoredGame = !gameSession && !!address && (() => {
+    const stored = readStoredGameSession(CLASSIC_SESSION_STORAGE_KEY, address, GAME_ADDRESS)
+    return !!(stored?.snapshot?.moveHistory?.length || stored?.seed)
+  })()
 
   const continueGame = async () => {
     if (!address || isContinuing) return
