@@ -345,6 +345,10 @@ contract BlokzTournament is
 
     // ────────────────────────────────────────────────────── View Helpers ──
 
+    function getTournamentRewardsBps(uint256 tid) external view returns (uint16[] memory) {
+        return tournaments[tid].rewardsBps;
+    }
+
     function domainSeparator() external view returns (bytes32) {
         return _domainSeparatorV4();
     }

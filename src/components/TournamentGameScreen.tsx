@@ -14,6 +14,8 @@ import { ComboOverlay } from './ComboOverlay'
 import { BrutalIcon } from './BrutalIcon'
 import HowToPlayModal from './HowToPlayModal'
 import FAQSheet from './FAQSheet'
+import { PowerUpBar } from './PowerUpBar'
+import { ShopModal } from './ShopModal'
 import {
   hapticImpact,
   hapticNotification,
@@ -34,6 +36,10 @@ import {
   writeStoredGameSession,
 } from '../utils/gameSessionStorage'
 import { IS_MINIPAY } from '../utils/miniPay'
+import { usePowerUpStore } from '../stores/powerUpStore'
+import { isShopLotteryEnabled } from '../utils/featureFlags'
+import { useNotifications, ToastContainer } from './GameNotification'
+import { useTournamentMoveSync } from '../hooks/useMoveSync'
 
 const TOURNAMENT_ADDRESS = contractInfo.tournament as `0x${string}`
 const GAS_THRESHOLD = 5_000_000_000_000_000n
@@ -69,7 +75,7 @@ const TournamentGameScreen: React.FC<TournamentGameScreenProps> = ({
     gameSession,
     score,
     comboStreak,
-    isGameOver,
+    isGameOver: isGameOverStore,
     startGame,
     setOnChainData,
     forceReset,
@@ -77,6 +83,10 @@ const TournamentGameScreen: React.FC<TournamentGameScreenProps> = ({
     tournamentId,
     setTournamentId,
   } = useGameStore()
+
+  // Belt-and-suspenders: read from both the store field and the live session
+  // so the modal is never suppressed if the store update lags by a commit cycle
+  const isGameOver = (gameSession?.isGameOver ?? false) || isGameOverStore
 
   const { address, isConnected } = useAccount()
 
@@ -108,6 +118,31 @@ const TournamentGameScreen: React.FC<TournamentGameScreenProps> = ({
     isSuccess,
     error: contractError,
   } = useStartTournamentGame()
+
+  // ── Power-ups ────────────────────────────────────────────────────────────────
+  const [showShop, setShowShop] = useState(false)
+  const isWhitelisted = isShopLotteryEnabled(address)
+  const { toasts, dismissToast } = useNotifications()
+  const {
+    loadForAddress,
+    active: activePowerUps,
+    bombModeActive,
+    consumeBomb,
+  } = usePowerUpStore()
+
+  // Load power-up inventory when wallet connects/changes
+  useEffect(() => {
+    if (address) loadForAddress(address)
+  }, [address, loadForAddress])
+
+  // Sync score-boost flag onto the live GameSession
+  useEffect(() => {
+    const session = useGameStore.getState().gameSession
+    if (session) session.scoreBoostActive = activePowerUps.scoreBoost
+  }, [activePowerUps.scoreBoost])
+
+  // ── Supabase move sync ────────────────────────────────────────────────────────
+  useTournamentMoveSync(tournamentId)
 
   const [currentSeed, setCurrentSeed] = useState<{
     seed: `0x${string}`
@@ -184,13 +219,13 @@ const TournamentGameScreen: React.FC<TournamentGameScreenProps> = ({
         (storedSession.gameId === contractActiveId.toString() ||
           !storedSession.gameId)
       ) {
-        setOnChainData(contractActiveId, storedSession.seed, 'none')
+        setOnChainData(contractActiveId, storedSession.seed as `0x${string}`)
         setSessionConflict(false)
       } else {
         setSessionConflict(true)
       }
     } else {
-      if (storedSession) setOnChainData(0n, null, 'none')
+      if (storedSession) useGameStore.setState({ onChainGameId: 0n, onChainSeed: null, onChainStatus: 'none' })
       setSessionConflict(false)
     }
 
@@ -306,6 +341,106 @@ const TournamentGameScreen: React.FC<TournamentGameScreenProps> = ({
         'Could not reach signing server. Check your connection and try again.'
       )
     }
+  }
+
+  // ── Snapshot persistence — mirrors classic GameScreen ────────────────────────
+
+  // Persist snapshot on every score change so the session survives a crash
+  const reviveCount = useGameStore((s) => s.reviveCount)
+  useEffect(() => {
+    if (!score) return
+    const session = useGameStore.getState().gameSession
+    if (!session || !session.moveHistory.length) return
+    const raw = localStorage.getItem(TOURNAMENT_SESSION_STORAGE_KEY)
+    if (!raw) return
+    try {
+      const entry = JSON.parse(raw)
+      entry.snapshot = { moveHistory: session.moveHistory, scoreBoostActive: session.scoreBoostActive }
+      localStorage.setItem(TOURNAMENT_SESSION_STORAGE_KEY, JSON.stringify(entry))
+    } catch {}
+  }, [score])
+
+  // Persist after every revival so the revive marker is durable
+  useEffect(() => {
+    if (reviveCount === 0) return
+    const session = useGameStore.getState().gameSession
+    if (!session?.moveHistory.length) return
+    const raw = localStorage.getItem(TOURNAMENT_SESSION_STORAGE_KEY)
+    if (!raw) return
+    try {
+      const entry = JSON.parse(raw)
+      entry.snapshot = { moveHistory: session.moveHistory, scoreBoostActive: session.scoreBoostActive }
+      localStorage.setItem(TOURNAMENT_SESSION_STORAGE_KEY, JSON.stringify(entry))
+    } catch {}
+  }, [reviveCount])
+
+  // Persist when app is hidden (MiniPay pause / system multitask)
+  useEffect(() => {
+    const saveOnHide = () => {
+      if (!document.hidden) return
+      const session = useGameStore.getState().gameSession
+      if (!session?.moveHistory.length) return
+      const raw = localStorage.getItem(TOURNAMENT_SESSION_STORAGE_KEY)
+      if (!raw) return
+      try {
+        const entry = JSON.parse(raw)
+        entry.snapshot = { moveHistory: session.moveHistory, scoreBoostActive: session.scoreBoostActive }
+        localStorage.setItem(TOURNAMENT_SESSION_STORAGE_KEY, JSON.stringify(entry))
+      } catch {}
+    }
+    document.addEventListener('visibilitychange', saveOnHide)
+    return () => document.removeEventListener('visibilitychange', saveOnHide)
+  }, [])
+
+  // ── Power-up handlers ─────────────────────────────────────────────────────────
+
+  const handleBombTap = (row: number, col: number) => {
+    const session = useGameStore.getState().gameSession
+    if (!session) return
+    const pts = session.bombZone(row, col)
+    session.moveHistory.push({
+      pieceIndex: -1,
+      shapeId: '',
+      row: 0,
+      col: 0,
+      bomb: { row, col },
+      scoreEvent: {
+        basePoints: pts,
+        linePoints: 0,
+        comboBonus: 0,
+        totalPoints: pts,
+        linesCleared: 0,
+        newComboStreak: session.comboStreak,
+        comboMultiplier: 1.0,
+        isMilestone: false,
+        multiLineFactor: 1.0,
+      },
+    })
+    consumeBomb()
+    useGameStore.setState({ score: session.score })
+    if (pts > 0) {
+      animManagerRef.current.trigger('SCORE', {
+        x: (canvasDims?.gridSize ?? 200) * 0.5,
+        y: (canvasDims?.gridSize ?? 200) * 0.45,
+        score: pts,
+      })
+      hapticNotification()
+    } else {
+      hapticError()
+    }
+  }
+
+  const handleRotatePiece = (pieceIndex: number) => {
+    const session = useGameStore.getState().gameSession
+    if (!session) return
+    const { consumeCharge, getCharges, exitRotateMode } = usePowerUpStore.getState()
+    if (!consumeCharge('rotatePass')) { exitRotateMode(); return }
+    const ok = session.rotatePiece(pieceIndex)
+    if (ok) {
+      useGameStore.setState({ currentPieces: [...session.currentPieces] })
+      hapticImpact()
+    }
+    if (getCharges('rotatePass') <= 0) exitRotateMode()
   }
 
   // ── Background sync for game ID ──────────────────────────────────────────────
@@ -477,6 +612,11 @@ const TournamentGameScreen: React.FC<TournamentGameScreenProps> = ({
       const currentSession = useGameStore.getState().gameSession
       if (!currentSession) return
 
+      // Safety net: force-sync isGameOver to the store if the engine is ahead
+      if (currentSession.isGameOver && !useGameStore.getState().isGameOver) {
+        useGameStore.setState({ isGameOver: true })
+      }
+
       const ghost = (window as any).activeGhost as {
         row: number
         col: number
@@ -626,6 +766,41 @@ const TournamentGameScreen: React.FC<TournamentGameScreenProps> = ({
           <div className="pointer-events-none absolute right-2 top-2 z-30">
             {syncChip}
           </div>
+
+          {/* Bomb targeting overlay */}
+          {bombModeActive && canvasDims && (
+            <div
+              onClick={e => {
+                const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+                const x = e.clientX - rect.left
+                const y = e.clientY - rect.top
+                const cellSize = canvasDims.gridSize / 9
+                const col = Math.floor(x / cellSize)
+                const row = Math.floor(y / cellSize)
+                if (row >= 0 && row < 9 && col >= 0 && col < 9) handleBombTap(row, col)
+              }}
+              style={{
+                position: 'absolute', top: 0, left: 0, zIndex: 40,
+                width: canvasDims.gridSize, height: canvasDims.gridSize,
+                cursor: 'crosshair',
+                background: 'rgba(229,62,62,0.08)',
+                border: '3px solid rgba(229,62,62,0.6)',
+                boxSizing: 'border-box',
+              }}
+            >
+              <div style={{
+                position: 'absolute', top: '50%', left: '50%',
+                transform: 'translate(-50%,-50%)',
+                fontFamily: '"Archivo Black", sans-serif',
+                fontSize: 11, letterSpacing: '0.16em',
+                color: 'rgba(229,62,62,0.8)',
+                textAlign: 'center', pointerEvents: 'none',
+              }}>
+                💣 TAP A ZONE
+              </div>
+            </div>
+          )}
+
           <ComboOverlay streak={comboStreak} trigger={comboTrigger} />
           {isGameOver && (
             <GameOverModal
@@ -822,6 +997,7 @@ const TournamentGameScreen: React.FC<TournamentGameScreenProps> = ({
   // ── Mobile layout (same structure as classic MobileLayout) ──────────────────
   if (isMobile) {
     return (
+      <>
       <div className="brutal-grid-bg flex h-screen select-none flex-col overflow-hidden bg-paper text-ink">
         {sharedModals}
 
@@ -870,6 +1046,17 @@ const TournamentGameScreen: React.FC<TournamentGameScreenProps> = ({
                 compact
               />
             </div>
+
+            {/* Power-up bar */}
+            {!isGameOver && isWhitelisted && (
+              <div className="shrink-0">
+                <PowerUpBar
+                  onOpenShop={() => setShowShop(true)}
+                  onRotatePiece={handleRotatePiece}
+                  activePieceIndex={trayHoverIndexRef.current}
+                />
+              </div>
+            )}
           </>
         )}
 
@@ -963,6 +1150,19 @@ const TournamentGameScreen: React.FC<TournamentGameScreenProps> = ({
                   <span style={{ color: 'var(--ink-soft)' }}>→</span>
                 </button>
 
+                {isWhitelisted && (
+                  <button
+                    onClick={() => { setIsPaused(false); setShowShop(true) }}
+                    className="brutal-btn flex items-center justify-between border-b-4 border-ink px-6 py-4 font-display text-[12px] uppercase tracking-[0.14em]"
+                    style={{ background: 'var(--accent-yellow)', color: 'var(--ink-fixed)' }}
+                  >
+                    <span className="flex items-center gap-3">
+                      🛒 BLOKAZ SHOP
+                    </span>
+                    <span>→</span>
+                  </button>
+                )}
+
                 <button
                   onClick={onBackToHall}
                   className="brutal-btn flex items-center justify-between px-6 py-4 font-display text-[12px] uppercase tracking-[0.14em]"
@@ -979,6 +1179,9 @@ const TournamentGameScreen: React.FC<TournamentGameScreenProps> = ({
           )}
         </div>
       </div>
+      {isWhitelisted && <ShopModal isOpen={showShop} onClose={() => setShowShop(false)} />}
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} position="bottom-center" />
+      </>
     )
   }
 
@@ -1049,13 +1252,30 @@ const TournamentGameScreen: React.FC<TournamentGameScreenProps> = ({
         </div>
       </div>
 
+      {/* Power-up bar — pinned below the top bar when a game is active */}
+      {gameSession && !isGameOver && isWhitelisted && (
+        <div
+          className="fixed inset-x-0 z-30 border-b-4 border-ink bg-paper"
+          style={{ top: 64 }}
+        >
+          <PowerUpBar
+            onOpenShop={() => setShowShop(true)}
+            onRotatePiece={handleRotatePiece}
+            activePieceIndex={trayHoverIndexRef.current}
+          />
+        </div>
+      )}
+
       {/* Main content */}
       <div
         className="mx-auto flex w-full max-w-3xl flex-col items-center justify-center"
-        style={{ paddingTop: 80, minHeight: '100vh' }}
+        style={{ paddingTop: gameSession && !isGameOver && isWhitelisted ? 148 : 80, minHeight: '100vh' }}
       >
         {gameSession ? boardArea : startCard}
       </div>
+
+      {isWhitelisted && <ShopModal isOpen={showShop} onClose={() => setShowShop(false)} />}
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} position="bottom-center" />
     </div>
   )
 }

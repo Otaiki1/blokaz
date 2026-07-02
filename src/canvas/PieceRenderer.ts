@@ -2,17 +2,23 @@ import type { ShapeDefinition } from '../engine/shapes'
 import { COLOR_PALETTE, TOURNAMENT_PALETTE } from './GridRenderer'
 import type { TierInfo } from '../engine/scoring'
 
-const getThemeColor = (name: string) =>
-  getComputedStyle(document.documentElement).getPropertyValue(name).trim()
+const PIXEL_FACES: [number, number][][] = [
+  [[2,2],[2,3],[5,2],[5,3],[2,5],[5,5],[3,6],[4,6]],
+  [[2,3],[5,2],[5,3],[2,5],[3,6],[4,6],[5,5]],
+  [[2,2],[2,3],[5,2],[5,3],[3,5],[4,5],[3,6],[4,6]],
+  [[2,3],[5,3],[2,5],[3,5],[4,5]],
+  [[2,3],[3,3],[4,3],[5,3],[3,5],[4,5]],
+]
 
 export class PieceRenderer {
   private ctx: CanvasRenderingContext2D
   private trayY: number
   private cellSize: number
   private canvasWidth: number
-  private tierId: number = 0
-  private tierAccent: string = '#ffd51f'
-  private time: number = 0
+  private tier: TierInfo | null = null
+  private t: number = 0
+  /** Piece-tray background colour, refreshed each drawTray() for theme sync */
+  private trayBg: string = '#000000'
 
   constructor(canvas: HTMLCanvasElement, trayY: number, cellSize: number) {
     this.ctx = canvas.getContext('2d')!
@@ -21,13 +27,12 @@ export class PieceRenderer {
     this.canvasWidth = canvas.width
   }
 
-  setTier(tier: TierInfo): void {
-    this.tierId = tier.id
-    this.tierAccent = tier.accent
+  setTier(tier: TierInfo | null): void {
+    this.tier = tier
   }
 
   setTime(t: number): void {
-    this.time = t
+    this.t = t
   }
 
   drawTray(
@@ -39,15 +44,17 @@ export class PieceRenderer {
   ): void {
     const slotWidth = this.canvasWidth / 3
     const palette = isTournament ? TOURNAMENT_PALETTE : COLOR_PALETTE
+    const tierId = this.tier?.id ?? 0
+    // Cache tray bg for tier cell renderers so they use the CSS-resolved colour
+    this.trayBg = getComputedStyle(document.documentElement)
+      .getPropertyValue('--piece-tray-bg').trim() || '#000000'
 
     pieces.forEach((shape, index) => {
-      // Draw slot divider (except before the first slot).
-      // Use a dark semi-transparent line so it stays subtle on both the
-      // yellow light-theme tray and the coloured dark-theme tray (where
-      // --ink is light and would appear as a harsh white stripe).
+      // Draw slot divider
       if (index > 0) {
         this.ctx.strokeStyle = 'rgba(0,0,0,0.28)'
         this.ctx.lineWidth = 3
+        this.ctx.setLineDash([])
         this.ctx.beginPath()
         this.ctx.moveTo(index * slotWidth, this.trayY)
         this.ctx.lineTo(index * slotWidth, this.trayY + slotWidth)
@@ -57,21 +64,21 @@ export class PieceRenderer {
       const isSelected = index === selectedIndex
       const isDragging = index === activeIndex
 
-      // Draw selection highlight behind the piece (uses tier accent)
+      // Draw selection highlight behind the piece
       if (isSelected) {
+        const accent = this.tier?.accent ?? '#b7ff3b'
+        const r = parseInt(accent.slice(1, 3), 16)
+        const g = parseInt(accent.slice(3, 5), 16)
+        const b = parseInt(accent.slice(5, 7), 16)
         const pad = 6
-        const acc = this.tierAccent
-        const rr = parseInt(acc.slice(1, 3), 16)
-        const gg = parseInt(acc.slice(3, 5), 16)
-        const bb = parseInt(acc.slice(5, 7), 16)
-        this.ctx.fillStyle = `rgba(${rr},${gg},${bb},0.18)`
+        this.ctx.fillStyle = `rgba(${r},${g},${b},0.18)`
         this.ctx.fillRect(
           index * slotWidth + pad,
           this.trayY + pad,
           slotWidth - pad * 2,
           slotWidth - pad * 2
         )
-        this.ctx.strokeStyle = `rgba(${rr},${gg},${bb},0.9)`
+        this.ctx.strokeStyle = `rgba(${r},${g},${b},0.95)`
         this.ctx.lineWidth = 3
         this.ctx.setLineDash([])
         this.ctx.strokeRect(
@@ -82,10 +89,7 @@ export class PieceRenderer {
         )
       }
 
-      if (!shape || isDragging) {
-        // Empty slot or actively dragging — transparent so tray bg shows through
-        return
-      }
+      if (!shape) return
 
       const color = palette[shape.colorId as keyof typeof palette]
       const baseScale = isSelected ? 0.65 : 0.6
@@ -96,25 +100,62 @@ export class PieceRenderer {
       const x = index * slotWidth + (slotWidth - pieceWidth) / 2
       const y = this.trayY + (slotWidth - pieceHeight) / 2
 
+      // When dragging, dim the piece in the tray (shows it's been "lifted")
+      // instead of hiding it entirely — keeps the slot readable.
+      if (isDragging) this.ctx.globalAlpha = 0.28
+
       this.ctx.save()
-      const acc = this.tierAccent
-      const selR = parseInt(acc.slice(1, 3), 16)
-      const selG = parseInt(acc.slice(3, 5), 16)
-      const selB = parseInt(acc.slice(5, 7), 16)
-      this.ctx.shadowColor = isSelected ? `rgba(${selR},${selG},${selB},0.5)` : 'rgba(0,0,0,0.15)'
+      const accent = this.tier?.accent ?? '#b7ff3b'
+      this.ctx.shadowColor = isSelected ? `${accent}66` : 'rgba(0,0,0,0.15)'
       this.ctx.shadowOffsetX = isSelected ? 0 : 2
       this.ctx.shadowOffsetY = isSelected ? 0 : 2
       this.ctx.shadowBlur = isSelected ? 10 : 0
-      this.drawShapeForTier(shape, x, y, displayCellSize, color, this.tierId)
+      this.drawShapeForTier(shape, x, y, displayCellSize, color, tierId)
       this.ctx.restore()
+
+      if (isDragging) this.ctx.globalAlpha = 1.0
     })
   }
 
-  drawDragging(shape: ShapeDefinition, x: number, y: number, cellSize: number, isTournament: boolean = false): void {
+  drawDragging(
+    shape: ShapeDefinition,
+    x: number,
+    y: number,
+    cellSize: number,
+    isTournament: boolean = false
+  ): void {
     const palette = isTournament ? TOURNAMENT_PALETTE : COLOR_PALETTE
     const color = palette[shape.colorId as keyof typeof palette]
-    const dragY = y - 40
-    this.drawShapeForTier(shape, x - (shape.width * cellSize) / 2, dragY - (shape.height * cellSize) / 2, cellSize, color, this.tierId)
+    const tierId = this.tier?.id ?? 0
+    const originX = x - (shape.width  * cellSize) / 2
+    const originY = y - (shape.height * cellSize) / 2
+
+    // ── Soft drop shadow ─────────────────────────────────────────────────────
+    // Blurred dark cells offset below the piece — gives a physical "lifted"
+    // feel and lets the player track the piece's position over the board.
+    const blurPx = Math.max(2, Math.ceil(cellSize * 0.3))
+    const sdx = cellSize * 0.05
+    const sdy = cellSize * 0.35
+
+    this.ctx.save()
+    this.ctx.globalAlpha = 0.28
+    this.ctx.filter = `blur(${blurPx}px)`
+    this.ctx.fillStyle = '#000'
+    for (const [dr, dc] of shape.cells as [number, number][]) {
+      this.ctx.fillRect(
+        originX + dc * cellSize + sdx,
+        originY + dr * cellSize + sdy,
+        cellSize - 1,
+        cellSize - 1
+      )
+    }
+    this.ctx.restore() // also resets filter
+
+    // ── Piece itself ─────────────────────────────────────────────────────────
+    this.ctx.save()
+    this.ctx.globalAlpha = 0.92
+    this.drawShapeForTier(shape, originX, originY, cellSize, color, tierId)
+    this.ctx.restore()
   }
 
   resize(trayY: number, cellSize: number, canvasWidth: number): void {
@@ -131,183 +172,291 @@ export class PieceRenderer {
     return null
   }
 
-  // ── Tier dispatcher ──────────────────────────────────────────────────────
-  private drawShapeForTier(shape: ShapeDefinition, x: number, y: number, cellSize: number, color: string, tier: number): void {
-    for (const [dr, dc] of shape.cells) {
+  // ─────────────────────────────────────────────────────────────
+  // TIER-AWARE SHAPE DRAWING
+  // ─────────────────────────────────────────────────────────────
+
+  private drawShapeForTier(
+    shape: ShapeDefinition,
+    x: number,
+    y: number,
+    cellSize: number,
+    color: string,
+    tierId: number
+  ): void {
+    for (let i = 0; i < shape.cells.length; i++) {
+      const [dr, dc] = shape.cells[i]
       const cx = x + dc * cellSize + 1.2
       const cy = y + dr * cellSize + 1.2
       const size = cellSize - 2.4
       if (size <= 0) continue
-      switch (tier) {
-        case 1: this.drawPieceSticker(cx, cy, size, color); break
-        case 2: this.drawPieceStriped(cx, cy, size, color); break
-        case 3: this.drawPiecePixel(cx, cy, size, color); break
-        case 4: this.drawPieceNeon(cx, cy, size, color); break
-        case 5: this.drawPieceCosmic(cx, cy, size, color, dr, dc); break
-        case 6: this.drawPieceLiquid(cx, cy, size, color); break
-        case 7: this.drawPieceGlitch(cx, cy, size, color); break
-        default: this.drawPieceDefault(cx, cy, size, color); break
+
+      switch (tierId) {
+        case 1: this.drawCellSticker(cx, cy, size, color); break
+        case 2: this.drawCellStriped(cx, cy, size, color); break
+        case 3: this.drawCellPixel(cx, cy, size, color, i); break
+        case 4: this.drawCellNeon(cx, cy, size, color, i, dr, dc); break
+        case 5: this.drawCellCosmic(cx, cy, size, color, i); break
+        case 6: this.drawCellLiquid(cx, cy, size, color, i, dr, dc); break
+        case 7: this.drawCellGlitch(cx, cy, size, color, i); break
+        default: this.drawCellPaper(cx, cy, size, color); break
       }
     }
   }
 
-  private drawPieceDefault(cx: number, cy: number, size: number, color: string): void {
+  private drawCellPaper(x: number, y: number, size: number, color: string): void {
     this.ctx.fillStyle = color
-    this.ctx.fillRect(cx, cy, size, size)
+    this.ctx.fillRect(x, y, size, size)
     this.ctx.fillStyle = 'rgba(255,255,255,0.18)'
-    this.ctx.fillRect(cx, cy, size, Math.floor(size * 0.26))
+    this.ctx.fillRect(x, y, size, Math.floor(size * 0.26))
     const sh = Math.floor(size * 0.26)
     this.ctx.fillStyle = 'rgba(0,0,0,0.14)'
-    this.ctx.fillRect(cx, cy + size - sh, size, sh)
+    this.ctx.fillRect(x, y + size - sh, size, sh)
     this.ctx.strokeStyle = 'rgba(0,0,0,0.4)'
     this.ctx.lineWidth = 2
-    this.ctx.strokeRect(cx, cy, size, size)
+    this.ctx.setLineDash([])
+    this.ctx.strokeRect(x, y, size, size)
   }
 
-  private drawPieceSticker(cx: number, cy: number, size: number, color: string): void {
+  private drawCellSticker(x: number, y: number, size: number, color: string): void {
     this.ctx.fillStyle = color
-    this.ctx.fillRect(cx, cy, size, size)
-    const grd = this.ctx.createLinearGradient(cx, cy, cx, cy + size * 0.4)
-    grd.addColorStop(0, 'rgba(255,255,255,0.50)')
-    grd.addColorStop(1, 'rgba(255,255,255,0)')
-    this.ctx.fillStyle = grd
-    this.ctx.fillRect(cx + 1, cy + 1, size - 2, size * 0.38)
-    this.ctx.fillStyle = '#ff3bbd'
-    this.ctx.fillRect(cx + size - 5, cy + 1, 3, 3)
-    this.ctx.strokeStyle = 'rgba(0,0,0,0.5)'
+    this.ctx.fillRect(x, y, size, size)
+    this.ctx.strokeStyle = 'rgba(0,0,0,0.4)'
     this.ctx.lineWidth = 2
-    this.ctx.strokeRect(cx, cy, size, size)
-  }
-
-  private drawPieceStriped(cx: number, cy: number, size: number, color: string): void {
+    this.ctx.setLineDash([])
+    this.ctx.strokeRect(x, y, size, size)
     this.ctx.save()
     this.ctx.beginPath()
-    this.ctx.rect(cx, cy, size, size)
+    this.ctx.rect(x, y, size, size)
     this.ctx.clip()
+    this.ctx.fillStyle = 'rgba(255,255,255,0.55)'
+    this.ctx.save()
+    this.ctx.transform(1, 0, -0.32, 1, x + size * 0.08, y + size * 0.08)
+    this.ctx.fillRect(0, 0, size * 0.32, size * 0.18)
+    this.ctx.restore()
+    this.ctx.fillStyle = 'rgba(255,255,255,0.35)'
+    this.ctx.save()
+    this.ctx.transform(1, 0, -0.32, 1, x + size * 0.08, y + size * 0.32)
+    this.ctx.fillRect(0, 0, size * 0.16, size * 0.08)
+    this.ctx.restore()
+    this.ctx.restore()
+  }
+
+  private drawCellStriped(x: number, y: number, size: number, color: string): void {
     this.ctx.fillStyle = color
-    this.ctx.fillRect(cx, cy, size, size)
-    this.ctx.strokeStyle = 'rgba(255,255,255,0.22)'
-    this.ctx.lineWidth = 2.5
-    for (let i = -size; i < size * 2; i += 7) {
+    this.ctx.fillRect(x, y, size, size)
+    this.ctx.save()
+    this.ctx.beginPath()
+    this.ctx.rect(x + 1, y + 1, size - 2, size - 2)
+    this.ctx.clip()
+    this.ctx.strokeStyle = 'rgba(0,0,0,0.3)'
+    this.ctx.lineWidth = Math.max(1, size * 0.05)
+    const stride = size * 0.22
+    for (let i = -size; i < size * 2; i += stride) {
       this.ctx.beginPath()
-      this.ctx.moveTo(cx + i, cy)
-      this.ctx.lineTo(cx + i + size, cy + size)
+      this.ctx.moveTo(x + i, y)
+      this.ctx.lineTo(x + i + size, y + size)
       this.ctx.stroke()
     }
     this.ctx.restore()
     this.ctx.strokeStyle = 'rgba(0,0,0,0.4)'
     this.ctx.lineWidth = 2
-    this.ctx.strokeRect(cx, cy, size, size)
+    this.ctx.setLineDash([])
+    this.ctx.strokeRect(x, y, size, size)
   }
 
-  private drawPiecePixel(cx: number, cy: number, size: number, color: string): void {
-    const h = Math.floor(size / 2)
+  private drawCellPixel(x: number, y: number, size: number, color: string, idx: number): void {
     this.ctx.fillStyle = color
-    this.ctx.fillRect(cx, cy, size, size)
-    const shades = ['rgba(255,255,255,0.18)','rgba(0,0,0,0.12)','rgba(0,0,0,0.12)','rgba(255,255,255,0.08)']
-    const pos = [[0,0],[1,0],[0,1],[1,1]]
-    for (let i = 0; i < 4; i++) {
-      const [dc2, dr2] = pos[i]
-      this.ctx.fillStyle = shades[i]
-      this.ctx.fillRect(cx + dc2 * h, cy + dr2 * h, h, h)
+    this.ctx.fillRect(x, y, size, size)
+    const px = size / 8
+    const face = PIXEL_FACES[idx % 5]
+    this.ctx.fillStyle = 'rgba(255,255,255,0.7)'
+    this.ctx.fillRect(x + px, y + px, px, px)
+    this.ctx.fillStyle = 'rgba(0,0,0,0.65)'
+    for (const [fx, fy] of face) {
+      this.ctx.fillRect(x + fx * px, y + fy * px, px, px)
     }
-    this.ctx.strokeStyle = 'rgba(0,0,0,0.5)'
-    this.ctx.lineWidth = 1.5
-    this.ctx.strokeRect(cx, cy, size, size)
+    this.ctx.strokeStyle = 'rgba(0,0,0,0.4)'
+    this.ctx.lineWidth = 2
+    this.ctx.setLineDash([])
+    this.ctx.strokeRect(x, y, size, size)
   }
 
-  private drawPieceNeon(cx: number, cy: number, size: number, color: string): void {
+  private drawCellNeon(
+    x: number, y: number, size: number, color: string,
+    idx: number, dr: number, dc: number
+  ): void {
+    const pulse = 0.5 + 0.5 * Math.sin(this.t * 1.4 + dr * 0.7 + dc * 0.5)
+    const r = parseInt(color.slice(1, 3), 16)
+    const g = parseInt(color.slice(3, 5), 16)
+    const b = parseInt(color.slice(5, 7), 16)
+    // Near-black base so glow reads cleanly
+    this.ctx.fillStyle = '#080c12'
+    this.ctx.fillRect(x, y, size, size)
+    // Faint inner fill
+    const ip = size * 0.18
+    this.ctx.fillStyle = `rgba(${r},${g},${b},0.08)`
+    this.ctx.fillRect(x + ip, y + ip, size - ip * 2, size - ip * 2)
+    // Glowing inner ring
     this.ctx.save()
-    this.ctx.shadowColor = this.tierAccent
-    this.ctx.shadowBlur = 8
-    this.ctx.fillStyle = 'rgba(0,20,26,0.85)'
-    this.ctx.fillRect(cx, cy, size, size)
-    this.ctx.restore()
+    this.ctx.shadowColor = color
+    this.ctx.shadowBlur = size * (0.14 + pulse * 0.1)
     this.ctx.strokeStyle = color
+    this.ctx.lineWidth = Math.max(1.5, size * 0.07)
+    this.ctx.setLineDash([])
+    this.ctx.strokeRect(x + size * 0.15, y + size * 0.15, size * 0.7, size * 0.7)
+    this.ctx.restore()
+    // Center dot
+    const dotSize = size * (0.17 + pulse * 0.09)
+    this.ctx.save()
+    this.ctx.shadowColor = color
+    this.ctx.shadowBlur = size * 0.14
+    this.ctx.fillStyle = color
+    this.ctx.globalAlpha = 0.58 + pulse * 0.2
+    this.ctx.fillRect(x + (size - dotSize) / 2, y + (size - dotSize) / 2, dotSize, dotSize)
+    this.ctx.restore()
+    // Dark outer border
+    this.ctx.strokeStyle = 'rgba(0,0,0,0.5)'
     this.ctx.lineWidth = 2
-    this.ctx.strokeRect(cx + 1, cy + 1, size - 2, size - 2)
-    this.ctx.fillStyle = 'rgba(255,255,255,0.55)'
-    const ds = Math.max(2, size * 0.15)
-    this.ctx.fillRect(cx + size / 2 - ds / 2, cy + size / 2 - ds / 2, ds, ds)
+    this.ctx.setLineDash([])
+    this.ctx.strokeRect(x, y, size, size)
   }
 
-  private drawPieceCosmic(cx: number, cy: number, size: number, color: string, dr: number, dc: number): void {
-    this.ctx.save()
-    this.ctx.beginPath()
-    this.ctx.rect(cx, cy, size, size)
-    this.ctx.clip()
-    const grd = this.ctx.createRadialGradient(cx + size * 0.35, cy + size * 0.3, 0, cx + size / 2, cy + size / 2, size)
-    grd.addColorStop(0, color)
-    grd.addColorStop(1, 'rgba(0,0,0,0.8)')
-    this.ctx.fillStyle = grd
-    this.ctx.fillRect(cx, cy, size, size)
-    const seed = dr * 9 + dc
-    this.ctx.fillStyle = 'rgba(255,255,255,0.9)'
-    for (let i = 0; i < 2; i++) {
-      const sx = cx + ((seed * 17 + i * 37) % 100) / 100 * size
-      const sy = cy + ((seed * 31 + i * 53) % 100) / 100 * size
-      this.ctx.fillRect(sx, sy, 1, 1)
+  private drawCellCosmic(x: number, y: number, size: number, color: string, idx: number): void {
+    const breath = 1 + 0.025 * Math.sin(this.t * 1.2 + idx)
+    // Theme-synced background (--piece-tray-bg) instead of hardcoded near-black
+    this.ctx.fillStyle = this.trayBg
+    this.ctx.fillRect(x, y, size, size)
+    const r = parseInt(color.slice(1, 3), 16)
+    const g = parseInt(color.slice(3, 5), 16)
+    const b = parseInt(color.slice(5, 7), 16)
+    const gx = x + size * (0.4 + Math.sin(this.t * 0.5 + idx) * 0.2)
+    const gy = y + size * (0.5 + Math.cos(this.t * 0.4 + idx) * 0.2)
+    const grad = this.ctx.createRadialGradient(gx, gy, 0, gx, gy, size * 0.7)
+    // Reduced nebula opacity
+    grad.addColorStop(0, `rgba(${r},${g},${b},0.58)`)
+    grad.addColorStop(0.4, `rgba(${r},${g},${b},0.16)`)
+    grad.addColorStop(1, 'transparent')
+    this.ctx.fillStyle = grad
+    this.ctx.fillRect(x, y, size, size)
+    const seed = (idx + 1) * 9301
+    const rand = (n: number) => {
+      const v = Math.sin(seed + n * 12.9898) * 43758.5453
+      return v - Math.floor(v)
     }
+    // Slower twinkle, halved alpha ceiling
+    for (let i = 0; i < 5; i++) {
+      const sx = x + rand(i * 2) * size
+      const sy = y + rand(i * 2 + 1) * size
+      const tw = 0.35 + 0.65 * (Math.sin(this.t * 1.0 + rand(i * 5) * 6.28) * 0.5 + 0.5)
+      const sp = Math.max(1, size * 0.04 * (0.5 + rand(i * 3) * 1.4))
+      const isTinted = rand(i * 7) > 0.55
+      this.ctx.fillStyle = isTinted ? color : '#ffffff'
+      this.ctx.globalAlpha = tw * (isTinted ? 0.5 : 0.42)
+      this.ctx.fillRect(sx - sp / 2, sy - sp / 2, sp, sp)
+    }
+    this.ctx.globalAlpha = 1
+    // Anchor star — reduced glow
+    this.ctx.save()
+    this.ctx.shadowColor = color
+    this.ctx.shadowBlur = size * 0.1
+    const starSz = size * 0.07 * breath
+    this.ctx.fillStyle = '#ffffff'
+    this.ctx.fillRect(x + (size - starSz) / 2, y + (size - starSz) / 2, starSz, starSz)
     this.ctx.restore()
-    this.ctx.strokeStyle = 'rgba(138,61,255,0.6)'
+    // Border — calmer glow
+    this.ctx.save()
+    this.ctx.shadowColor = `rgba(${r},${g},${b},0.6)`
+    this.ctx.shadowBlur = size * 0.16
+    this.ctx.strokeStyle = `rgba(${r},${g},${b},0.85)`
     this.ctx.lineWidth = 2
-    this.ctx.strokeRect(cx, cy, size, size)
+    this.ctx.setLineDash([])
+    this.ctx.strokeRect(x, y, size, size)
+    this.ctx.restore()
   }
 
-  private drawPieceLiquid(cx: number, cy: number, size: number, color: string): void {
-    const t = this.time * 0.001
-    const wave = Math.sin(t * 2 + cx * 0.1) * 0.5 + 0.5
+  private drawCellLiquid(
+    x: number, y: number, size: number, color: string,
+    idx: number, dr: number, dc: number
+  ): void {
+    this.ctx.fillStyle = '#0c0c10'
+    this.ctx.fillRect(x, y, size, size)
     this.ctx.save()
     this.ctx.beginPath()
-    this.ctx.rect(cx, cy, size, size)
+    this.ctx.rect(x, y, size, size)
     this.ctx.clip()
-    this.ctx.fillStyle = color
-    this.ctx.fillRect(cx, cy, size, size)
-    const grd = this.ctx.createLinearGradient(cx, cy, cx + size, cy + size)
-    grd.addColorStop(0, `rgba(41,230,230,${0.2 + wave * 0.25})`)
-    grd.addColorStop(1, `rgba(255,59,189,${0.2 + (1 - wave) * 0.25})`)
-    this.ctx.fillStyle = grd
-    this.ctx.fillRect(cx, cy, size, size)
+    const phase = this.t * 1.1 + dr * 0.7 + dc * 0.5
+    const waveH = size * (0.42 + Math.sin(phase) * 0.06)
+    const waveTop = y + waveH
+    const r = parseInt(color.slice(1, 3), 16)
+    const g = parseInt(color.slice(3, 5), 16)
+    const b = parseInt(color.slice(5, 7), 16)
+    const fillGrad = this.ctx.createLinearGradient(x, waveTop, x, y + size)
+    fillGrad.addColorStop(0, `rgba(${r},${g},${b},0.85)`)
+    fillGrad.addColorStop(1, `rgba(${r},${g},${b},1)`)
+    // waveOff slowed from 3→1.6 rad/s; meniscus 0.55→0.32
+    const waveX1 = size * 0.25
+    const waveOff = Math.sin(this.t * 0.8 + dc * 0.8) * size * 0.05
+    this.ctx.beginPath()
+    this.ctx.moveTo(x, waveTop)
+    this.ctx.quadraticCurveTo(x + waveX1, waveTop - waveOff, x + size / 2, waveTop)
+    this.ctx.quadraticCurveTo(x + size * 0.75, waveTop + waveOff, x + size, waveTop)
+    this.ctx.lineTo(x + size, y + size)
+    this.ctx.lineTo(x, y + size)
+    this.ctx.closePath()
+    this.ctx.fillStyle = fillGrad
+    this.ctx.fill()
+    this.ctx.strokeStyle = 'rgba(255,255,255,0.32)'
+    this.ctx.lineWidth = Math.max(1, size * 0.04)
+    this.ctx.setLineDash([])
+    this.ctx.beginPath()
+    this.ctx.moveTo(x, waveTop + 3)
+    this.ctx.quadraticCurveTo(x + waveX1, waveTop + 3 - waveOff * 0.8, x + size / 2, waveTop + 3)
+    this.ctx.quadraticCurveTo(x + size * 0.75, waveTop + 3 + waveOff * 0.8, x + size, waveTop + 3)
+    this.ctx.stroke()
     this.ctx.restore()
-    this.ctx.strokeStyle = 'rgba(41,230,230,0.7)'
+    this.ctx.strokeStyle = 'rgba(0,0,0,0.4)'
     this.ctx.lineWidth = 2
-    this.ctx.strokeRect(cx, cy, size, size)
+    this.ctx.setLineDash([])
+    this.ctx.strokeRect(x, y, size, size)
   }
 
-  private drawPieceGlitch(cx: number, cy: number, size: number, color: string): void {
-    const t = this.time * 0.001
-    const glitchOffset = Math.sin(t * 8 + cx + cy) > 0.7 ? Math.floor(Math.random() * 3) : 0
+  private drawCellGlitch(x: number, y: number, size: number, color: string, idx: number): void {
+    // Slip: 2.5→1.2 rad/s (~0.19 Hz)
+    const slip = Math.sin(this.t * 1.2 + idx) > 0.88 ? size * 0.08 : 0
+    this.ctx.fillStyle = '#0c0c10'
+    this.ctx.fillRect(x, y, size, size)
     this.ctx.save()
     this.ctx.beginPath()
-    this.ctx.rect(cx, cy, size, size)
+    this.ctx.rect(x, y, size, size)
     this.ctx.clip()
     this.ctx.fillStyle = color
-    this.ctx.fillRect(cx, cy, size, size)
-    this.ctx.globalCompositeOperation = 'screen'
-    this.ctx.fillStyle = 'rgba(255,0,0,0.3)'
-    this.ctx.fillRect(cx - glitchOffset, cy, size, size)
-    this.ctx.fillStyle = 'rgba(0,255,255,0.3)'
-    this.ctx.fillRect(cx + glitchOffset, cy, size, size)
+    this.ctx.fillRect(x + slip * 0.3, y, size, size)
+    // Pink: difference→source-over, alpha 0.45→0.22
     this.ctx.globalCompositeOperation = 'source-over'
-    this.ctx.fillStyle = 'rgba(0,0,0,0.2)'
-    for (let sy = cy; sy < cy + size; sy += 3) {
-      this.ctx.fillRect(cx, sy, size, 1)
+    this.ctx.fillStyle = 'rgba(255,59,189,0.22)'
+    this.ctx.fillRect(x - slip * 0.6, y, size, size)
+    // Cyan: alpha 0.35→0.18
+    this.ctx.globalCompositeOperation = 'screen'
+    this.ctx.fillStyle = 'rgba(41,230,230,0.18)'
+    this.ctx.fillRect(x + slip * 0.6, y, size, size)
+    this.ctx.globalCompositeOperation = 'source-over'
+    const lineH = Math.max(1, size * 0.05)
+    const stride = Math.max(2, size * 0.1)
+    this.ctx.fillStyle = 'rgba(0,0,0,0.35)'
+    for (let ly = y; ly < y + size; ly += stride) {
+      this.ctx.fillRect(x, ly, size, lineH)
     }
+    // Data band: 2→1 rad/s (~0.16 Hz)
+    if (Math.sin(this.t * 1 + idx * 2) > 0.9) {
+      this.ctx.fillStyle = 'rgba(255,255,255,0.10)'
+      this.ctx.fillRect(x, y + size * 0.4, size, size * 0.08)
+    }
+    this.ctx.globalCompositeOperation = 'source-over'
     this.ctx.restore()
-    this.ctx.strokeStyle = '#ff3bbd'
+    this.ctx.strokeStyle = 'rgba(0,0,0,0.4)'
     this.ctx.lineWidth = 2
-    this.ctx.strokeRect(cx, cy, size, size)
-  }
-
-  private drawShape(shape: ShapeDefinition, x: number, y: number, cellSize: number, color: string): void {
-    this.drawShapeForTier(shape, x, y, cellSize, color, 0)
-  }
-
-  private roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, _r: number) {
-    ctx.moveTo(x, y)
-    ctx.lineTo(x + w, y)
-    ctx.lineTo(x + w, y + h)
-    ctx.lineTo(x, y + h)
-    ctx.closePath()
+    this.ctx.setLineDash([])
+    this.ctx.strokeRect(x, y, size, size)
   }
 }

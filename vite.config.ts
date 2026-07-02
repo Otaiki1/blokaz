@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'path'
+import { writeFileSync } from 'fs'
 import { nodePolyfills } from 'vite-plugin-node-polyfills'
 
 // Vite plugin: make the generated CSS bundle non-blocking.
@@ -20,10 +21,21 @@ const deferCssPlugin = {
   },
 }
 
+// Writes public/version.json with the build timestamp on every production
+// build. The app polls this file every 2 minutes and reloads when it detects
+// a new version — auto-updating players in the lobby, notifying mid-game.
+const versionPlugin = {
+  name: 'version',
+  buildStart() {
+    writeFileSync('public/version.json', JSON.stringify({ v: Date.now() }))
+  },
+}
+
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [
     react(),
+    versionPlugin,
     // Required for @web3auth/modal and its dependencies which use Node.js
     // globals (Buffer, process, global) in the browser bundle.
     // protocolImports: false prevents the plugin from stubbing node: imports
@@ -44,7 +56,7 @@ export default defineConfig({
     allowedHosts: [
       'aptly-letter-rocklike.ngrok-free.dev',
       'd6c4-102-91-103-49.ngrok-free.app',
-      '2042-2c0f-f5c0-802-19f2-b1a7-2247-709b-4484.ngrok-free.app',
+      '8d70-102-91-96-170.ngrok-free.app',
       'all',
     ],
   },

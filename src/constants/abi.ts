@@ -1275,6 +1275,25 @@ export const BLOKZ_TOURNAMENT_ABI = [
   },
   {
     "type": "function",
+    "name": "getTournamentRewardsBps",
+    "inputs": [
+      {
+        "name": "tid",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint16[]",
+        "internalType": "uint16[]"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "getTournamentLeaderboard",
     "inputs": [
       {

@@ -173,6 +173,22 @@ export function useTournament(tournamentId: bigint) {
 }
 
 /**
+ * Hook to read rewardsBps[] for a tournament.
+ * rewardsBps is a dynamic array inside the Tournament struct and is not exposed
+ * by the auto-generated tournaments() getter — requires the dedicated view function.
+ */
+export function useTournamentRewardsBps(tournamentId?: bigint) {
+  const { data: rewardsBps, isLoading } = useReadContract({
+    address: TOURNAMENT_ADDRESS,
+    abi: BLOKZ_TOURNAMENT_ABI,
+    functionName: 'getTournamentRewardsBps',
+    args: tournamentId !== undefined ? [tournamentId] : undefined,
+    query: { enabled: tournamentId !== undefined },
+  })
+  return { rewardsBps: rewardsBps as readonly number[] | undefined, isLoading }
+}
+
+/**
  * Hook to get the leaderboard for a specific tournament.
  */
 export function useTournamentLeaderboard(tournamentId?: bigint) {
@@ -604,3 +620,4 @@ export function useProtocolFeeBps() {
   })
   return { bps: bps as bigint | undefined, isLoading, refetch }
 }
+

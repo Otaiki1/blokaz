@@ -1,7 +1,7 @@
 import React, { useRef, useState, useEffect } from 'react'
 import { ConnectButton } from '@rainbow-me/rainbowkit'
 import { useAccount, useConnect } from 'wagmi'
-import { useOwner } from '../hooks/useBlokzGame'
+import { useOwner, useUsername } from '../hooks/useBlokzGame'
 import { useTheme } from '../hooks/useTheme'
 import { BrutalIcon } from './BrutalIcon'
 import ThemeToggle from './ThemeToggle'
@@ -10,6 +10,7 @@ import { useThemeStore, type UserTheme, type ThemeName } from '../stores/themeSt
 import LegalModal, { type LegalModalType } from './LegalModal'
 import FAQSheet from './FAQSheet'
 import HowToPlayModal from './HowToPlayModal'
+import { usePlayerRewards, getRewardUrl } from '../hooks/useRewards'
 
 type HeaderView = 'lobby' | 'classic' | 'tournaments' | 'tournament-play' | 'admin'
 
@@ -169,6 +170,75 @@ const SettingsSheet: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     userTheme: s.userTheme,
     setUserTheme: s.setUserTheme,
   }))
+  const [themeOpen, setThemeOpen] = React.useState(false)
+  const themeRef = React.useRef<HTMLDivElement>(null)
+  const { address } = useAccount()
+  const { username } = useUsername(address)
+  const { rewards, isLoading: isLoadingRewards } = usePlayerRewards(address)
+
+  // Close theme dropdown on outside click
+  React.useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (themeRef.current && !themeRef.current.contains(e.target as Node)) setThemeOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  // Derive a 9-cell block pattern from wallet address for decorative avatar accent
+  const blockPattern = React.useMemo(() => {
+    const palette = [
+      'var(--accent-yellow)',
+      'var(--accent-pink)',
+      'var(--accent-lime)',
+      'var(--accent)',
+      'var(--paper-2)',
+    ]
+    return Array.from({ length: 9 }, (_, i) => {
+      if (!address) return palette[4]
+      const char = address.replace('0x', '')[i * 2] ?? '0'
+      const v = parseInt(char, 16)
+      if (v < 3) return palette[4]
+      if (v < 7) return palette[0]
+      if (v < 10) return palette[2]
+      if (v < 13) return palette[1]
+      return palette[3]
+    })
+  }, [address])
+  const [claimingId, setClaimingId] = React.useState<string | null>(null)
+  const [claimErr, setClaimErr] = React.useState<string | null>(null)
+
+  // Load locally saved cash link URLs so claimed rewards can still be opened
+  const savedLinks: Record<string, string> = React.useMemo(() => {
+    if (!address) return {}
+    try {
+      const raw = JSON.parse(localStorage.getItem(`blokaz_claimed_${address.toLowerCase()}`) ?? '{}')
+      const result: Record<string, string> = {}
+      for (const [id, entry] of Object.entries(raw)) {
+        result[id] = (entry as any).cashLinkUrl
+      }
+      return result
+    } catch { return {} }
+  }, [address])
+
+  const handleSettingsClaim = async (rewardId: string, label: string, amount: string, token: string) => {
+    if (!address) return
+    setClaimingId(rewardId)
+    setClaimErr(null)
+    const result = await getRewardUrl(address, rewardId)
+    setClaimingId(null)
+    if (result.ok && result.cashLinkUrl) {
+      // Save pending claim — confirmation modal will appear when user returns
+      const pending = { rewardId, cashLinkUrl: result.cashLinkUrl, label, amount, token }
+      localStorage.setItem(`blokaz_pending_claim_${address.toLowerCase()}`, JSON.stringify(pending))
+      window.location.href = result.cashLinkUrl
+    } else {
+      setClaimErr(result.error ?? 'Failed to get reward')
+    }
+  }
+
+  const claimed   = rewards.filter(r => r.claimed_at)
+  const unclaimed = rewards.filter(r => !r.claimed_at)
 
   return (
     <div className="fixed inset-0 z-[200] flex flex-col lg:hidden">
@@ -213,40 +283,101 @@ const SettingsSheet: React.FC<{ onClose: () => void }> = ({ onClose }) => {
           className="flex-1 overflow-y-auto overscroll-contain"
           style={{ WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
         >
-          <div className="px-6 py-6 space-y-8" style={{ paddingBottom: 'max(32px, env(safe-area-inset-bottom))' }}>
+          <div className="px-6 py-5 space-y-6" style={{ paddingBottom: 'max(32px, env(safe-area-inset-bottom))' }}>
 
-            {/* ── Theme ── */}
+            {/* ── User profile card ── */}
             <section>
               <div
-                className="mb-4 border-l-4 border-ink pl-3 font-display text-[11px] uppercase tracking-[0.2em]"
-                style={{ color: 'var(--ink-soft)' }}
+                className="flex items-center gap-3 border-[3px] border-ink px-4 py-4"
+                style={{ background: 'var(--paper-2)', boxShadow: '4px 4px 0 var(--shadow)' }}
               >
+                {/* Avatar */}
+                <div
+                  className="flex h-12 w-12 shrink-0 items-center justify-center border-[3px] border-ink font-display text-[14px] leading-none"
+                  style={{ background: 'var(--accent-yellow)', color: 'var(--ink-fixed)' }}
+                >
+                  {address ? address.slice(-2).toUpperCase() : 'GS'}
+                </div>
+                {/* Identity */}
+                <div className="min-w-0 flex-1">
+                  <div className="truncate font-display text-[14px] uppercase tracking-[0.08em]">
+                    {username || (address ? truncateAddress(address) : 'GUEST')}
+                  </div>
+                  <div
+                    className="mt-0.5 truncate font-body text-[10px]"
+                    style={{ color: 'var(--ink-soft)' }}
+                  >
+                    {address ? truncateAddress(address) : 'NOT CONNECTED'}
+                  </div>
+                </div>
+                {/* Decorative block pattern derived from wallet address */}
+                <div
+                  className="grid shrink-0 gap-[3px] border-[3px] border-ink p-[5px]"
+                  style={{
+                    gridTemplateColumns: 'repeat(3, 10px)',
+                    gridTemplateRows: 'repeat(3, 10px)',
+                    background: 'var(--paper-2)',
+                    boxShadow: '3px 3px 0 var(--shadow)',
+                  }}
+                >
+                  {blockPattern.map((color, i) => (
+                    <div key={i} style={{ background: color, width: 10, height: 10 }} />
+                  ))}
+                </div>
+              </div>
+            </section>
+
+            {/* ── Appearance ── */}
+            <section>
+              <div className="mb-2 border-l-4 border-ink pl-3 font-display text-[11px] uppercase tracking-[0.2em]" style={{ color: 'var(--ink-soft)' }}>
                 APPEARANCE
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                {THEME_OPTIONS.map((opt) => {
-                  const isActive = userTheme === opt.value
-                  return (
-                    <button
-                      key={opt.value}
-                      onClick={() => setUserTheme(opt.value)}
-                      className="brutal-btn flex items-center gap-4 border-[3px] border-ink px-5 py-4 font-display"
-                      style={{
-                        background: isActive ? 'var(--accent-yellow)' : 'var(--paper-2)',
-                        color: isActive ? 'var(--ink-fixed)' : 'var(--ink)',
-                        boxShadow: isActive ? '4px 4px 0 var(--shadow)' : '3px 3px 0 var(--shadow)',
-                      }}
-                    >
-                      <span className="text-2xl leading-none">{opt.icon}</span>
-                      <div className="text-left">
-                        <div className="text-[12px] uppercase tracking-[0.14em]">{opt.label}</div>
-                        {isActive && (
-                          <div className="mt-0.5 text-[9px] tracking-widest opacity-60">ACTIVE</div>
-                        )}
-                      </div>
-                    </button>
-                  )
-                })}
+              {/* Brutalist theme dropdown */}
+              <div ref={themeRef} className="relative">
+                <button
+                  onClick={() => setThemeOpen(v => !v)}
+                  className="flex w-full items-center justify-between border-[3px] border-ink px-4 py-3 font-display text-[11px] uppercase tracking-[0.12em]"
+                  style={{
+                    background: 'var(--accent-yellow)',
+                    color: 'var(--ink-fixed)',
+                    boxShadow: '4px 4px 0 var(--shadow)',
+                  }}
+                >
+                  <span className="flex items-center gap-2">
+                    <span className="text-[15px] leading-none">
+                      {THEME_OPTIONS.find(o => o.value === userTheme)?.icon}
+                    </span>
+                    {THEME_OPTIONS.find(o => o.value === userTheme)?.label}
+                  </span>
+                  <span className="text-[10px] leading-none">{themeOpen ? '▴' : '▾'}</span>
+                </button>
+
+                {themeOpen && (
+                  <div
+                    className="absolute left-0 right-0 top-[calc(100%+4px)] z-10 border-[3px] border-ink"
+                    style={{ background: 'var(--paper)', boxShadow: '4px 4px 0 var(--shadow)' }}
+                  >
+                    {THEME_OPTIONS.map((opt, i) => {
+                      const isActive = userTheme === opt.value
+                      return (
+                        <button
+                          key={opt.value}
+                          onClick={() => { setUserTheme(opt.value); setThemeOpen(false) }}
+                          className="flex w-full items-center gap-2.5 px-4 py-3 font-display text-[11px] uppercase tracking-[0.12em] transition-colors"
+                          style={{
+                            background: isActive ? 'var(--paper-2)' : 'transparent',
+                            color: isActive ? 'var(--accent-yellow)' : 'var(--ink)',
+                            borderTop: i > 0 ? '2px solid var(--ink)' : 'none',
+                          }}
+                        >
+                          <span className="text-[15px] leading-none">{opt.icon}</span>
+                          <span className="flex-1 text-left">{opt.label}</span>
+                          {isActive && <span className="text-[10px] opacity-60">✓</span>}
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
               </div>
             </section>
 
@@ -338,6 +469,104 @@ const SettingsSheet: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                 </a>
               </div>
             </section>
+
+            {/* ── Rewards ── */}
+            {address && (
+              <section>
+                <div className="mb-4 border-l-4 border-ink pl-3 font-display text-[11px] uppercase tracking-[0.2em]" style={{ color: 'var(--ink-soft)' }}>
+                  REWARDS
+                </div>
+
+                {isLoadingRewards ? (
+                  <div className="space-y-2">
+                    {[1, 2].map(i => (
+                      <div key={i} className="h-14 animate-pulse border-[3px] border-ink" style={{ background: 'var(--paper-2)' }} />
+                    ))}
+                  </div>
+                ) : rewards.length === 0 ? (
+                  <div
+                    className="border-[3px] border-ink px-5 py-5 text-center font-display text-[11px] uppercase tracking-widest"
+                    style={{ background: 'var(--paper-2)', color: 'var(--ink-soft)' }}
+                  >
+                    No rewards yet
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-3">
+                    {/* Unclaimed */}
+                    {unclaimed.map(r => (
+                      <div
+                        key={r.id}
+                        className="flex items-center justify-between border-[3px] border-ink px-5 py-4"
+                        style={{ background: 'var(--accent-yellow)', boxShadow: '4px 4px 0 var(--shadow)' }}
+                      >
+                        <div>
+                          <div className="font-display text-[11px] uppercase tracking-[0.1em]" style={{ color: 'var(--ink-fixed)' }}>
+                            {r.label}
+                          </div>
+                          <div className="mt-0.5 font-display text-[18px] leading-none" style={{ letterSpacing: '-0.02em', color: 'var(--ink-fixed)' }}>
+                            {r.amount} <span className="text-[11px] opacity-60">{r.token}</span>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => handleSettingsClaim(r.id, r.label, r.amount, r.token)}
+                          disabled={claimingId === r.id}
+                          className="brutal-btn border-2 border-ink bg-ink px-4 py-2 font-display text-[10px] uppercase tracking-wider text-paper disabled:opacity-50"
+                          style={{ boxShadow: '3px 3px 0 var(--shadow)' }}
+                        >
+                          {claimingId === r.id ? '...' : 'CLAIM'}
+                        </button>
+                      </div>
+                    ))}
+
+                    {/* Claimed history */}
+                    {claimed.map(r => (
+                      <div
+                        key={r.id}
+                        className="flex items-center justify-between border-[3px] border-ink px-5 py-4"
+                        style={{ background: 'var(--paper-2)', boxShadow: '4px 4px 0 var(--shadow)' }}
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="font-display text-[11px] uppercase tracking-[0.1em]">
+                            {r.label}
+                          </div>
+                          <div className="mt-0.5 font-display text-[18px] leading-none" style={{ letterSpacing: '-0.02em' }}>
+                            {r.amount} <span className="text-[11px] opacity-60">{r.token}</span>
+                          </div>
+                          <div className="mt-1 font-display text-[9px] uppercase tracking-wider" style={{ color: 'var(--ink-soft)' }}>
+                            {new Date(r.claimed_at!).toLocaleDateString()}
+                          </div>
+                        </div>
+                        <div className="ml-3 flex shrink-0 flex-col items-end gap-1">
+                          <span
+                            className="border-2 border-ink px-2 py-0.5 font-display text-[9px] uppercase tracking-wider"
+                            style={{ background: 'var(--accent-lime)', color: 'var(--ink-fixed)' }}
+                          >
+                            ✓ DONE
+                          </span>
+                          {savedLinks[r.id] && (
+                            <button
+                              onClick={() => { window.location.href = savedLinks[r.id] }}
+                              className="brutal-btn border-2 border-ink px-2 py-0.5 font-display text-[9px] uppercase tracking-wider"
+                              style={{ background: 'var(--accent-yellow)', color: 'var(--ink-fixed)' }}
+                            >
+                              OPEN LINK
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {claimErr && (
+                  <div className="mt-3 border-2 border-danger bg-danger px-4 py-3 font-display text-[10px] uppercase tracking-wider text-paper">
+                    {claimErr}
+                  </div>
+                )}
+              </section>
+            )}
+
+            <div className="border-t-[3px] border-ink border-dashed" />
 
             {/* ── Version stamp ── */}
             <div

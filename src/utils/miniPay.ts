@@ -17,20 +17,29 @@ export const IS_MINIPAY: boolean =
 export const isMiniPay = (): boolean =>
   typeof window !== 'undefined' && !!(window.ethereum as any)?.isMiniPay
 
-// True when the user is on a regular browser (not inside MiniPay)
+// Web browser = not running inside MiniPay
 export const isWebBrowser = (): boolean => !isMiniPay()
 
-const TRIAL_KEY = 'blokaz:trial_used'
+// ─── Free-trial gate (web-only) ───────────────────────────────────────────────
+const TRIAL_KEY = 'blokaz:web_trials_used'
+const MAX_TRIALS = 3
 
-// Whether the one free web trial has already been consumed
-export const hasUsedTrial = (): boolean => {
-  try { return localStorage.getItem(TRIAL_KEY) === '1' } catch { return false }
+function getTrialsUsed(): number {
+  try { return parseInt(localStorage.getItem(TRIAL_KEY) ?? '0', 10) || 0 } catch { return 0 }
 }
 
-// Mark the trial as consumed — call once when the first web game starts
-export const markTrialUsed = (): void => {
-  try { localStorage.setItem(TRIAL_KEY, '1') } catch {}
+export function getTrialsRemaining(): number {
+  return Math.max(0, MAX_TRIALS - getTrialsUsed())
 }
 
-// Gate condition: non-MiniPay browser that has already used the trial
-export const isWebTrialGated = (): boolean => isWebBrowser() && hasUsedTrial()
+export function markTrialUsed(): void {
+  try {
+    const used = getTrialsUsed()
+    localStorage.setItem(TRIAL_KEY, String(used + 1))
+  } catch {}
+}
+
+/** Returns true when the web user has used all free trials */
+export function isWebTrialGated(): boolean {
+  return isWebBrowser() && getTrialsUsed() >= MAX_TRIALS
+}

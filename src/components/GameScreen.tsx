@@ -4,6 +4,9 @@ import { GridRenderer } from '../canvas/GridRenderer'
 import { PieceRenderer } from '../canvas/PieceRenderer'
 import { TouchController } from '../canvas/TouchController'
 import { AnimationManager } from '../canvas/AnimationManager'
+import { PowerUpHintManager } from '../canvas/PowerUpHintManager'
+import type { HintType } from '../canvas/PowerUpHintManager'
+import { PowerUpHintOverlay } from './PowerUpHintOverlay'
 import { Grid } from '../engine/grid'
 import { SHAPES, TOTAL_WEIGHT } from '../engine/shapes'
 import type { ShapeDefinition } from '../engine/shapes'
@@ -29,7 +32,7 @@ import {
 import { useAccount, useBalance } from 'wagmi'
 import { keccak256, encodePacked } from 'viem'
 import contractInfo from '../contract.json'
-import { GameSession } from '../engine/game'
+import { GameSession, rotatePieceShape } from '../engine/game'
 import type { MoveRecord } from '../engine/game'
 import {
   CLASSIC_SESSION_STORAGE_KEY,
@@ -41,13 +44,56 @@ import { IS_MINIPAY, isWebBrowser, markTrialUsed, isWebTrialGated } from '../uti
 import { MiniPayGateModal } from './MiniPayGateModal'
 import { getScoreTier } from '../engine/scoring'
 import type { TierInfo } from '../engine/scoring'
+import { SocialNudgeModal, incrementGameCount, shouldShowNudge } from './SocialNudgeModal'
+import { LotteryModal } from './LotteryModal'
+import {
+  checkLotteryTrigger,
+  getRandomPrize,
+  markLotteryThreshold,
+  resetLotterySession,
+} from '../utils/lottery'
+import type { Prize } from '../utils/lottery'
+import { PowerUpBar } from './PowerUpBar'
+import { ShopModal } from './ShopModal'
+import { usePowerUpStore } from '../stores/powerUpStore'
+import { useNotifications, ToastContainer } from './GameNotification'
+import { useMoveSync, fetchServerSession, markSessionComplete } from '../hooks/useMoveSync'
 
 const GAME_ADDRESS = contractInfo.game as `0x${string}`
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
 
-function replayMoveHistory(seed: bigint, history: MoveRecord[]): GameSession {
+import { isShopLotteryEnabled } from '../utils/featureFlags'
+
+function replayMoveHistory(
+  seed: bigint,
+  history: MoveRecord[],
+  scoreBoostActive = false
+): GameSession {
   const session = new GameSession(seed)
+  session.scoreBoostActive = scoreBoostActive
   for (const move of history) {
+    if (move.revive) {
+      session.revive()
+      continue
+    }
+    if (move.bomb) {
+      session.bombZone(move.bomb.row, move.bomb.col)
+      continue
+    }
+    // Lottery ×2 multiplier activation — restore the counter so the next 3
+    // placePiece calls inside the engine double their score, matching the live run.
+    if (move.lotteryMultiplierStart) {
+      session.lotteryMultiplierMovesLeft = 3
+      continue
+    }
+    // Lottery flat bonus — add directly to session score, no piece placement.
+    if (move.lotteryBonus) {
+      session.score += move.lotteryBonus
+      continue
+    }
+    if (move.rotations) {
+      for (let i = 0; i < move.rotations; i++) session.rotatePiece(move.pieceIndex)
+    }
     session.placePiece(move.pieceIndex, move.row, move.col)
   }
   return session
@@ -417,6 +463,7 @@ const GameScreen: React.FC<GameScreenProps> = ({
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const boardContainerRef = useRef<HTMLDivElement>(null)
   const animManagerRef = useRef<AnimationManager>(new AnimationManager())
+  const powerUpHintRef = useRef<PowerUpHintManager>(new PowerUpHintManager())
   const lastTimeRef = useRef<number>(0)
   const trayHoverIndexRef = useRef<number | null>(null)
   const cellSizeRef = useRef<number>(0)
@@ -426,16 +473,45 @@ const GameScreen: React.FC<GameScreenProps> = ({
     gameSession,
     score,
     comboStreak,
-    isGameOver,
+    isGameOver: isGameOverStore,
     startGame,
     setOnChainData,
     forceReset,
+    reviveGame,
     onChainStatus,
     onChainSeed,
     onChainGameId,
+    reviveCount,
+    lotteryMultiplierMovesLeft,
   } = useGameStore()
 
-  const { address, isConnected } = useAccount()
+  const { toasts, dismissToast, showToast } = useNotifications()
+
+  // Sync every move to the server so the session is recoverable even if
+  // localStorage is cleared or the browser crashes.
+  useMoveSync()
+
+  // Derive the authoritative game-over flag from BOTH the store field AND the
+  // mutable session object. The store field can lag by one React commit cycle
+  // in certain iOS/React-18 batching scenarios; reading the session directly
+  // ensures the modal is never suppressed when the engine has already ended.
+  const isGameOver = (gameSession?.isGameOver ?? false) || isGameOverStore
+
+  const {
+    loadForAddress,
+    resetActive: resetActivePowerUps,
+    active: activePowerUps,
+    bombModeActive,
+    triggerShield,
+    consumeBomb,
+    addInventory,
+  } = usePowerUpStore()
+
+  const [showShop, setShowShop] = useState(false)
+  const [isContinuing, setIsContinuing] = useState(false)
+
+  const { address, isConnected, isReconnecting } = useAccount()
+  const isWhitelisted = isShopLotteryEnabled(address)
 
   // ── No-gas detection ──────────────────────────────────────────────────────
   // Threshold: 0.005 CELO — enough for ~3-5 typical contract writes.
@@ -455,6 +531,80 @@ const GameScreen: React.FC<GameScreenProps> = ({
   }, [hasNoGas])
 
   const showNoGasModal = hasNoGas && !noGasDismissed
+
+  // ─── Lottery ────────────────────────────────────────────────────────────
+  const [lotteryPrize, setLotteryPrize]       = useState<Prize | null>(null)
+  const [lotteryThreshold, setLotteryThreshold] = useState<number>(0)
+  const prevScoreRef = useRef<number>(0)
+
+  // ─── Social nudge ───────────────────────────────────────────────────────
+  const [showSocialNudge, setShowSocialNudge] = useState(false)
+
+  // ─── Power-up hint overlay (two-phase: DOM hand → canvas effect) ─────────
+  const [hintTrigger, setHintTrigger] = useState<{ type: HintType; id: number } | null>(null)
+
+  // Screen flash state for power-up activation (DOM-layer cinematic hit)
+  const [screenFlash, setScreenFlash] = useState<{ color: string; key: number } | null>(null)
+  const flashKeyRef = useRef(0)
+
+  // Register the auto-trigger callback once so the hint manager can fire the
+  // DOM hand animation at psychologically timed moments
+  useEffect(() => {
+    powerUpHintRef.current.setAutoTriggerCallback((type) => {
+      setHintTrigger(prev => ({ type, id: (prev?.id ?? 0) + 1 }))
+    })
+  }, [])
+
+  // Listen for power-up activations from PowerUpBar — trigger canvas animation + screen flash
+  useEffect(() => {
+    const FLASH_COLORS: Record<string, string> = {
+      scoreBoost: 'rgba(255,213,31,0.18)',
+      shield:     'rgba(59,130,246,0.18)',
+      bomb:       'rgba(255,87,34,0.22)',
+      rotatePass: 'rgba(56,189,248,0.15)',
+    }
+    const handler = (e: Event) => {
+      const type = (e as CustomEvent<{ type: string }>).detail.type
+      const cs = cellSizeRef.current
+      if (!cs) return
+      // Canvas burst animation
+      animManagerRef.current.trigger('POWER_UP', { subType: type })
+      // DOM screen flash
+      const color = FLASH_COLORS[type]
+      if (color) {
+        setScreenFlash({ color, key: ++flashKeyRef.current })
+        setTimeout(() => setScreenFlash(null), 350)
+      }
+    }
+    window.addEventListener('pu-activated', handler)
+    return () => window.removeEventListener('pu-activated', handler)
+  }, [])
+
+  // Load power-up inventory whenever the wallet changes
+  useEffect(() => {
+    if (address) loadForAddress(address)
+  }, [address, loadForAddress])
+
+  // Sync score-boost flag directly onto the mutable GameSession
+  useEffect(() => {
+    const session = useGameStore.getState().gameSession
+    if (session) session.scoreBoostActive = activePowerUps.scoreBoost
+  }, [activePowerUps.scoreBoost])
+
+  // Shield is now intercepted synchronously in gameStore.placePiece —
+  // no useEffect needed here. Kept as dead code guard (no-op since
+  // triggerShield returns false once the synchronous path consumed it).
+
+  // Count each completed game and show nudge on game-over when threshold is met
+  useEffect(() => {
+    if (!isGameOver) return
+    incrementGameCount()
+    if (shouldShowNudge()) {
+      // Small delay so game-over modal renders first
+      const t = setTimeout(() => setShowSocialNudge(true), 1800)
+      return () => clearTimeout(t)
+    }
+  }, [isGameOver])
   // ─────────────────────────────────────────────────────────────────────────
 
   const { leaderboard: lbData } = useLeaderboard()
@@ -475,6 +625,15 @@ const GameScreen: React.FC<GameScreenProps> = ({
       }
     }
   }, [isGameOver, score])
+
+  // Revert to default tier (PAPER) when game ends so the game-over screen
+  // and any subsequent lobby state always show the base cream/yellow look.
+  React.useEffect(() => {
+    if (isGameOver) {
+      currentTierRef.current = getScoreTier(0)
+      document.documentElement.setAttribute('data-tier', '0')
+    }
+  }, [isGameOver])
 
   const bestScore = React.useMemo(() => {
     const entries = (lbData ?? []) as readonly { player: `0x${string}`; score: number; gameId: bigint }[]
@@ -527,6 +686,11 @@ const GameScreen: React.FC<GameScreenProps> = ({
       if (!isConnected) setIsSyncingContract(false)
       return
     }
+    // If the RPC call came back undefined (network error / failed fetch), don't
+    // treat it as "no active game" — that would wipe out the in-memory gameId and
+    // make score submission impossible after a connectivity blip. Wait for a
+    // confirmed response before touching any on-chain state.
+    if (onChainActiveGameId === undefined) return
     const storedSession = readStoredGameSession(
       CLASSIC_SESSION_STORAGE_KEY,
       address,
@@ -572,6 +736,16 @@ const GameScreen: React.FC<GameScreenProps> = ({
     if (isPending || isConfirming) return // already has a tx in flight
     // Mark free web trial as consumed (no-op inside MiniPay)
     if (isWebBrowser()) markTrialUsed()
+    setSessionConflict(false)
+    // Reset tier to T1 (PAPER) on new game
+    const freshTier = getScoreTier(0)
+    currentTierRef.current = freshTier
+    document.documentElement.setAttribute('data-tier', '0')
+    // Reset lottery so each new game gets fresh threshold triggers
+    resetLotterySession()
+    prevScoreRef.current = 0
+    powerUpHintRef.current.notifyPiecePlaced(performance.now())
+    setLotteryPrize(null)
     const freshState = useGameStore.getState()
     const { onChainSeed: latestSeed, onChainGameId: latestGameId } = freshState
     if (
@@ -588,16 +762,26 @@ const GameScreen: React.FC<GameScreenProps> = ({
       )
       const stored = readStoredGameSession(CLASSIC_SESSION_STORAGE_KEY, address, GAME_ADDRESS)
       if (stored?.snapshot?.moveHistory?.length) {
-        const restoredSession = replayMoveHistory(localSeed, stored.snapshot.moveHistory)
+        const boost = !!(stored.snapshot as any).scoreBoostActive
+        const restoredSession = replayMoveHistory(localSeed, stored.snapshot.moveHistory, boost)
+        // Restore the original moveHistory so marker records (revive, bomb, lottery)
+        // are preserved. replayMoveHistory processes them without pushing them to
+        // the session's own moveHistory, which would corrupt future snapshots.
+        restoredSession.moveHistory = [...(stored.snapshot.moveHistory as MoveRecord[])]
         ;(window as any).currentPieces = restoredSession.currentPieces
+        currentTierRef.current = getScoreTier(restoredSession.score)
+        document.documentElement.setAttribute('data-tier', String(currentTierRef.current.id))
         useGameStore.setState({
           gameSession: restoredSession,
           score: restoredSession.score,
           comboStreak: restoredSession.comboStreak,
           currentPieces: [...restoredSession.currentPieces],
           isGameOver: restoredSession.isGameOver,
+          lotteryMultiplierMovesLeft: restoredSession.lotteryMultiplierMovesLeft,
+          reviveCount: (stored.snapshot.moveHistory as MoveRecord[]).filter(m => m.revive).length,
         })
       } else {
+        resetActivePowerUps()
         startGame(localSeed, true)
       }
       return
@@ -631,13 +815,23 @@ const GameScreen: React.FC<GameScreenProps> = ({
         const newGameId = res.data as bigint
         if (newGameId && newGameId !== 0n) {
           setOnChainData(newGameId, currentSeed.seed, 'registered')
-          writeStoredGameSession(CLASSIC_SESSION_STORAGE_KEY, {
+          // Preserve the in-progress snapshot so the player can resume after
+          // the WebView is recreated (MiniPay pause / background).
+          const existingRaw = localStorage.getItem(CLASSIC_SESSION_STORAGE_KEY)
+          const newEntry: any = {
             address,
             seed: currentSeed.seed,
             hash: currentSeed.hash,
             gameId: newGameId.toString(),
             contractAddress: GAME_ADDRESS,
-          })
+          }
+          if (existingRaw) {
+            try {
+              const existing = JSON.parse(existingRaw)
+              if (existing.snapshot) newEntry.snapshot = existing.snapshot
+            } catch {}
+          }
+          writeStoredGameSession(CLASSIC_SESSION_STORAGE_KEY, newEntry)
           clearInterval(timer)
         }
       }, 2000)
@@ -649,10 +843,11 @@ const GameScreen: React.FC<GameScreenProps> = ({
   // Skip in MiniPay: isConnected is always false on first render because
   // MiniPayAutoConnect hasn't resolved yet. Without this guard the game
   // silently starts in practice mode and contractStartGame is never called.
-  // Also skip if the web trial is already gated — don't auto-start a second game.
+  // Skip if reconnecting (wagmi transiently clears isConnected on page reload)
+  // or if the web trial is already gated — don't auto-start a blocked session.
   useEffect(() => {
-    if (!isConnected && !gameSession && !IS_MINIPAY && !isWebTrialGated()) handleStartGame()
-  }, [isConnected, gameSession])
+    if (!isConnected && !isReconnecting && !gameSession && !IS_MINIPAY && !isWebTrialGated()) handleStartGame()
+  }, [isConnected, isReconnecting, gameSession])
 
   // 4. Start tx rejection → abandon session and go back to lobby
   useEffect(() => {
@@ -669,6 +864,60 @@ const GameScreen: React.FC<GameScreenProps> = ({
     }
   }, [startGameError])
 
+  // Persist the move history immediately after every revival so the revive
+  // record is durable even if the app is killed before the next piece is placed.
+  // reviveCount increments on both manual revivals and shield auto-revivals.
+  useEffect(() => {
+    if (reviveCount === 0) return
+    const session = useGameStore.getState().gameSession
+    if (!session?.moveHistory.length) return
+    const raw = localStorage.getItem(CLASSIC_SESSION_STORAGE_KEY)
+    if (!raw) return
+    try {
+      const entry = JSON.parse(raw)
+      entry.snapshot = {
+        moveHistory: session.moveHistory,
+        scoreBoostActive: session.scoreBoostActive,
+      }
+      localStorage.setItem(CLASSIC_SESSION_STORAGE_KEY, JSON.stringify(entry))
+    } catch {}
+  }, [reviveCount])
+
+  // Save snapshot when app is hidden (MiniPay pause / system multitask switch)
+  useEffect(() => {
+    const saveOnHide = () => {
+      if (!document.hidden) return
+      const session = useGameStore.getState().gameSession
+      if (!session?.moveHistory.length) return
+      const raw = localStorage.getItem(CLASSIC_SESSION_STORAGE_KEY)
+      if (!raw) return
+      try {
+        const entry = JSON.parse(raw)
+        entry.snapshot = { moveHistory: session.moveHistory, scoreBoostActive: session.scoreBoostActive }
+        localStorage.setItem(CLASSIC_SESSION_STORAGE_KEY, JSON.stringify(entry))
+      } catch {}
+    }
+    document.addEventListener('visibilitychange', saveOnHide)
+    return () => document.removeEventListener('visibilitychange', saveOnHide)
+  }, [])
+
+  // Save snapshot on every score change — including the game-over move.
+  // Without saving on game-over, a single move that jumps score AND ends the
+  // game (e.g. 218 → 5k via a big combo clear) leaves localStorage at the
+  // pre-combo score; the player loses the session on navigation.
+  useEffect(() => {
+    if (!score) return
+    const session = useGameStore.getState().gameSession
+    if (!session || !session.moveHistory.length) return
+    const raw = localStorage.getItem(CLASSIC_SESSION_STORAGE_KEY)
+    if (!raw) return
+    try {
+      const entry = JSON.parse(raw)
+      entry.snapshot = { moveHistory: session.moveHistory, scoreBoostActive: session.scoreBoostActive }
+      localStorage.setItem(CLASSIC_SESSION_STORAGE_KEY, JSON.stringify(entry))
+    } catch {}
+  }, [score])
+
   // Canvas init
   useEffect(() => {
     if (!canvasRef.current || !gameSession) return
@@ -684,28 +933,32 @@ const GameScreen: React.FC<GameScreenProps> = ({
       Math.round(window.innerHeight * 0.58)
     )
 
-    const computeDims = (containerWidth: number, containerHeight = 0) => {
-      let gridSize = containerWidth > 0 ? containerWidth : vpFallback
-      if (containerHeight > 0) {
-        // totalCanvasH = gridSize + trayGap + trayH ≈ gridSize × 25/18
-        const maxByHeight = Math.floor((containerHeight * 18) / 25)
-        if (maxByHeight > 0 && maxByHeight < gridSize) gridSize = maxByHeight
+    const computeDims = (containerW: number, containerH: number) => {
+      const w = containerW > 0 ? containerW : vpFallback
+
+      // PieceRenderer draws each tray slot as (canvasWidth/3) × (canvasWidth/3).
+      // So trayHeight must equal gridSize/3. With no trayGap:
+      //   totalH = gridSize + gridSize/3 = gridSize * 4/3
+      //   → gridSize = containerH * 3/4  (to fit exactly)
+      let gridSize = w
+      if (containerH > 0) {
+        const maxByHeight = Math.floor(containerH * 3 / 4)
+        if (maxByHeight < gridSize) gridSize = maxByHeight
       }
-      const cellSize = gridSize / 9
-      const trayGap = Math.round(cellSize * 0.5)
+
       const trayHeight = Math.round(gridSize / 3)
-      const trayY = gridSize + trayGap
-      return { gridSize, cellSize, trayGap, trayHeight, trayY }
+      return { gridSize, cellSize: gridSize / 9, trayGap: 0, trayHeight, trayY: gridSize }
     }
 
-    const initialW = boardContainerRef.current?.clientWidth || 0
+    const initialW = boardContainerRef.current?.clientWidth  || 0
     const initialH = boardContainerRef.current?.clientHeight || 0
-    const init = computeDims(initialW, initialH)
+    const init     = computeDims(initialW, initialH)
+    const initTotalH = init.gridSize + init.trayHeight
 
-    canvas.width = init.gridSize
-    canvas.height = init.gridSize + init.trayGap + init.trayHeight
-    canvas.style.width = `${init.gridSize}px`
-    canvas.style.height = `${canvas.height}px`
+    canvas.width  = init.gridSize
+    canvas.height = initTotalH
+    canvas.style.width  = '100%'
+    canvas.style.height = `${initTotalH}px`
     canvas.style.background = 'transparent'
 
     setCanvasDims({
@@ -719,12 +972,12 @@ const GameScreen: React.FC<GameScreenProps> = ({
     const pieceRenderer = new PieceRenderer(canvas, init.trayY, init.cellSize)
     const animManager = animManagerRef.current
 
-    // Sync initial tier into renderers and CSS
-    const initTier = getScoreTier(useGameStore.getState().score ?? 0)
-    currentTierRef.current = initTier
-    gridRenderer.setTier(initTier)
-    pieceRenderer.setTier(initTier)
-    document.documentElement.setAttribute('data-tier', String(initTier.id))
+    // Apply initial tier
+    const initialTier = getScoreTier(useGameStore.getState().score ?? 0)
+    currentTierRef.current = initialTier
+    gridRenderer.setTier(initialTier)
+    pieceRenderer.setTier(initialTier)
+    document.documentElement.setAttribute('data-tier', String(initialTier.id))
 
     // ResizeObserver keeps canvas sized to container
     let ro: ResizeObserver | null = null
@@ -733,11 +986,11 @@ const GameScreen: React.FC<GameScreenProps> = ({
         const w = entry.contentRect.width
         const h = entry.contentRect.height
         if (w <= 0) return
-        const d = computeDims(w, h)
-        const totalH = d.gridSize + d.trayGap + d.trayHeight
-        canvas.width = d.gridSize
+        const d      = computeDims(w, h)
+        const totalH = d.gridSize + d.trayHeight
+        canvas.width  = d.gridSize
         canvas.height = totalH
-        canvas.style.width = `${d.gridSize}px`
+        canvas.style.width  = '100%'
         canvas.style.height = `${totalH}px`
         gridRenderer.resize(d.gridSize)
         pieceRenderer.resize(d.trayY, d.cellSize, d.gridSize)
@@ -764,6 +1017,7 @@ const GameScreen: React.FC<GameScreenProps> = ({
           return
         }
         hapticImpact()
+        powerUpHintRef.current.notifyPiecePlaced(performance.now())
         // Brief drop-flash on placed cells
         if (preShape) {
           const placedCells = (preShape.cells as [number, number][])
@@ -777,10 +1031,40 @@ const GameScreen: React.FC<GameScreenProps> = ({
           (linesCleared.rows.length > 0 || linesCleared.cols.length > 0)
         ) {
           hapticNotification()
+          powerUpHintRef.current.notifyLineClear(performance.now())
           animManager.trigger('LINE_CLEAR', {
             rows: linesCleared.rows,
             cols: linesCleared.cols,
+            accent: currentTierRef.current.accent,
           })
+
+          // Per-row/col floating score pops — positioned at the cleared line
+          if (result.scoreEvent && result.scoreEvent.linePoints > 0) {
+            const gs = gridRenderer.currentGridSize
+            const cs = gs / 9
+            const totalLines = linesCleared.rows.length + linesCleared.cols.length
+            const perLine = Math.round(result.scoreEvent.linePoints / totalLines)
+            linesCleared.rows.forEach((r) => {
+              animManager.trigger('SCORE', {
+                x: gs * 0.5, y: (r + 0.5) * cs,
+                score: perLine, small: true,
+              })
+            })
+            linesCleared.cols.forEach((c) => {
+              animManager.trigger('SCORE', {
+                x: (c + 0.5) * cs, y: gs * 0.5,
+                score: perLine, small: true,
+              })
+            })
+            // Multi-clear sticker for 2+ simultaneous lines
+            if (totalLines >= 2) {
+              animManager.trigger('MULTI_CLEAR', {
+                count: totalLines,
+                linePoints: result.scoreEvent.linePoints,
+              })
+            }
+          }
+
           if (result.scoreEvent && result.scoreEvent.newComboStreak > 0) {
             animManager.trigger('COMBO', {
               streak: result.scoreEvent.newComboStreak,
@@ -802,7 +1086,10 @@ const GameScreen: React.FC<GameScreenProps> = ({
           if (raw) {
             try {
               const entry = JSON.parse(raw)
-              entry.snapshot = { moveHistory: updatedSession.moveHistory }
+              entry.snapshot = {
+                moveHistory: updatedSession.moveHistory,
+                scoreBoostActive: updatedSession.scoreBoostActive,
+              }
               localStorage.setItem(CLASSIC_SESSION_STORAGE_KEY, JSON.stringify(entry))
             } catch {}
           }
@@ -826,9 +1113,10 @@ const GameScreen: React.FC<GameScreenProps> = ({
       lastTimeRef.current = timestamp
       animManager.update(delta)
 
-      // Feed current time (ms) into renderers for animated tier effects
-      gridRenderer.setTime(timestamp)
-      pieceRenderer.setTime(timestamp)
+      // Update time for animated tier effects (seconds, not ms)
+      const tSec = timestamp / 1000
+      gridRenderer.setTime(tSec)
+      pieceRenderer.setTime(tSec)
 
       const ctx = canvas.getContext('2d')!
       ctx.clearRect(0, 0, canvas.width, canvas.height)
@@ -836,19 +1124,52 @@ const GameScreen: React.FC<GameScreenProps> = ({
       const currentSession = useGameStore.getState().gameSession
       if (!currentSession) return
 
-      // Tier detection: use session.score (not store.score which lags on reset)
+      // Safety net: if the engine marks the game over but the store hasn't
+      // been updated yet (React-18 batching / iOS event-loop edge cases),
+      // force-sync so the modal is never permanently suppressed.
+      if (currentSession.isGameOver && !useGameStore.getState().isGameOver) {
+        useGameStore.setState({ isGameOver: true })
+      }
+
+      // Tier sync — use session.score, NOT store.score.
+      // store.score lags on game reset (still holds the previous game's value
+      // when a new session starts at 0), which caused the old tier to
+      // immediately re-apply at the start of every new game.
       if (!currentSession.isGameOver) {
         const newTier = getScoreTier(currentSession.score)
         if (newTier.id !== currentTierRef.current.id) {
           const prevTier = currentTierRef.current
           currentTierRef.current = newTier
           document.documentElement.setAttribute('data-tier', String(newTier.id))
+          // Only trigger TIER_UP banner when score genuinely increased
           if (newTier.id > prevTier.id) {
-            animManager.trigger('TIER_UP', { tierName: newTier.name, accent: newTier.accent })
+            animManager.trigger('TIER_UP', {
+              tierName: newTier.name,
+              accent: newTier.accent,
+            })
+            audioEngine.tierUp()
+          }
+        }
+
+        // ── Lottery threshold check (whitelisted addresses only) ────────
+        if (isWhitelisted) {
+          const currentScore = currentSession.score
+          const prevScore    = prevScoreRef.current
+          if (currentScore !== prevScore) {
+            const threshold = checkLotteryTrigger(currentScore, prevScore)
+            if (threshold !== null) {
+              markLotteryThreshold(threshold)
+              const prize = getRandomPrize()
+              setLotteryThreshold(threshold)
+              setLotteryPrize(prize)
+            }
+            prevScoreRef.current = currentScore
           }
         }
       }
-      // Always push tier into renderers so resets apply immediately
+      // Always push the current tier into renderers every frame so a reset
+      // (currentTierRef snapped to PAPER in handleStartGame / isGameOver effect)
+      // is reflected immediately without waiting for a score-change event.
       gridRenderer.setTier(currentTierRef.current)
       pieceRenderer.setTier(currentTierRef.current)
 
@@ -880,6 +1201,15 @@ const GameScreen: React.FC<GameScreenProps> = ({
       }
 
       gridRenderer.draw(currentSession.grid, ghostCells, false)
+
+      // Power-up ghost hint — overlaid after board, before score popups
+      const isInteracting = dragState.isDragging || !!ghost
+      powerUpHintRef.current.update(
+        timestamp, delta, currentSession.grid,
+        !isInteracting && !currentSession.isGameOver,
+      )
+      powerUpHintRef.current.draw(ctx, cellSizeRef.current)
+
       pieceRenderer.drawTray(
         currentSession.currentPieces,
         activeIdx ?? undefined,
@@ -890,14 +1220,23 @@ const GameScreen: React.FC<GameScreenProps> = ({
 
       if (dragState.isDragging && dragState.dragIndex !== null) {
         const shape = currentSession.currentPieces[dragState.dragIndex]
-        if (shape)
-          pieceRenderer.drawDragging(
-            shape,
-            dragState.dragPos.x,
-            dragState.dragPos.y,
-            cellSizeRef.current,
-            false
-          )
+        if (shape) {
+          const cs = cellSizeRef.current
+          // Ghost is positioned above the finger (touch) or at the cursor (mouse).
+          // Draw the floating piece exactly at the ghost bounding-box center so
+          // the piece and the board shadow always align.
+          // Without a ghost, centre the piece at the raw position; on touch lift
+          // it above the finger so the user can see what's being dragged.
+          const drawX = ghost
+            ? ghost.col * cs + (shape.width  * cs) / 2
+            : dragState.dragPos.x
+          const drawY = ghost
+            ? ghost.row * cs + (shape.height * cs) / 2
+            : dragState.isTouch
+              ? dragState.dragPos.y - cs * (shape.height * 0.5 + 1)
+              : dragState.dragPos.y
+          pieceRenderer.drawDragging(shape, drawX, drawY, cs, false)
+        }
       }
 
       animManager.draw(ctx, cellSizeRef.current, false)
@@ -920,26 +1259,252 @@ const GameScreen: React.FC<GameScreenProps> = ({
     readStoredGameSession(CLASSIC_SESSION_STORAGE_KEY, address, GAME_ADDRESS)?.snapshot?.moveHistory?.length
   )
 
-  const continueGame = () => {
-    if (!address) return
+  const continueGame = async () => {
+    if (!address || isContinuing) return
+    setIsContinuing(true)
+    try {
+
+    // Prefer the server session — it's always at least as fresh as localStorage
+    // and survives browser cache clears, crashes, and privacy-mode wipes.
+    const serverSession = await fetchServerSession(address)
+
+    // Fall back to localStorage if the server is unreachable or has no session
     const stored = readStoredGameSession(CLASSIC_SESSION_STORAGE_KEY, address, GAME_ADDRESS)
-    if (!stored?.snapshot?.moveHistory?.length || !stored.hash) return
-    const localSeed = BigInt(stored.hash.slice(0, 18))
-    const restoredSession = replayMoveHistory(localSeed, stored.snapshot.moveHistory)
+
+    // Pick the source with the most moves (server wins ties)
+    const serverMoves: MoveRecord[] = serverSession?.moveHistory ?? []
+    const localMoves: MoveRecord[] = (stored?.snapshot?.moveHistory as MoveRecord[]) ?? []
+    const moves = serverMoves.length >= localMoves.length ? serverMoves : localMoves
+
+    if (!moves.length) {
+      handleStartGame()
+      return
+    }
+
+    // Seed: server stores it directly; localStorage stores it inside hash
+    const seedStr = serverMoves.length >= localMoves.length
+      ? serverSession!.seed
+      : stored?.hash ?? serverSession?.seed
+    if (!seedStr) return
+
+    // The server stores the seed as a plain decimal string (bigint.toString()),
+    // e.g. "1587430469997234145" (can be 19–20 digits).
+    // localStorage stores the keccak256 hash as "0x…" (66 chars); the local
+    // seed is always the first 8 bytes → "0x" + 16 hex chars = exactly 18 chars.
+    // Applying slice(0,18) to a decimal string silently truncates it when it
+    // has more than 18 digits, producing a completely wrong seed and a broken
+    // replay — which is why the score would collapse to 99 after a lobby visit.
+    const localSeed = seedStr.startsWith('0x')
+      ? BigInt(seedStr.slice(0, 18))   // hex hash: take first 8 bytes
+      : BigInt(seedStr)                // decimal: use the exact value
+    const boost = serverMoves.length >= localMoves.length
+      ? !!serverSession!.scoreBoostActive
+      : !!(stored?.snapshot as any)?.scoreBoostActive
+
+    const restoredSession = replayMoveHistory(localSeed, moves, boost)
+    // Replace the replayed moveHistory with the original snapshot moveHistory.
+    // replayMoveHistory processes marker records (revive, bomb, lottery) without
+    // pushing them to the session's moveHistory, so the replayed history is
+    // missing those markers. If the restored session later saves its moveHistory
+    // to localStorage, those markers would be lost and the next restore would
+    // replay incorrectly (post-revival moves silently fail at game-over state).
+    restoredSession.moveHistory = [...moves]
     ;(window as any).currentPieces = restoredSession.currentPieces
+
+    // Snap tier to the restored score so the first score-change after restore
+    // doesn't spuriously fire a TIER_UP animation from PAPER.
+    currentTierRef.current = getScoreTier(restoredSession.score)
+    document.documentElement.setAttribute('data-tier', String(currentTierRef.current.id))
+
+    const onChainSeedVal = serverSession?.onChainSeed ?? stored?.seed ?? null
+    const onChainGameIdRaw = serverSession?.onChainGameId ?? stored?.gameId ?? null
+
     useGameStore.setState({
       gameSession: restoredSession,
       score: restoredSession.score,
       comboStreak: restoredSession.comboStreak,
       currentPieces: [...restoredSession.currentPieces],
       isGameOver: restoredSession.isGameOver,
+      lotteryMultiplierMovesLeft: restoredSession.lotteryMultiplierMovesLeft,
+      reviveCount: moves.filter(m => m.revive).length,
+      // Restore on-chain refs so the game-over modal can submit the score
+      // when the player continues into a finished-game state.
+      onChainSeed: onChainSeedVal,
+      onChainGameId: (onChainGameIdRaw && onChainGameIdRaw !== '0') ? BigInt(onChainGameIdRaw) : null,
+      onChainStatus: (onChainGameIdRaw && onChainGameIdRaw !== '0') ? 'registered' as const : 'none' as const,
     })
+
+    // If the game was never registered on-chain (user ignored/dismissed the
+    // wallet prompt at game start), re-trigger the contract call now so the
+    // score can be submitted when the game ends. The background sync effect
+    // already polls for the new game ID and updates localStorage once confirmed.
+    // Note: treat "0" (string) the same as null/missing — the DB stores "0"
+    // when the on-chain game ID was never confirmed.
+    const gameIdMissing = !onChainGameIdRaw || onChainGameIdRaw === '0'
+    if (gameIdMissing && onChainSeedVal && isConnected && address) {
+      const hash = (stored?.hash ?? stored?.seed ?? onChainSeedVal) as `0x${string}`
+      setCurrentSeed({ seed: onChainSeedVal as `0x${string}`, hash })
+      contractStartGame(hash)
+    }
+
+    } finally {
+      setIsContinuing(false)
+    }
   }
 
   const startNewGame = () => {
     clearStoredGameSession(CLASSIC_SESSION_STORAGE_KEY)
+    resetActivePowerUps()
     forceReset()
     handleStartGame()
+  }
+
+  // Bomb: fire bombZone on the session, update score + combo, consume the charge
+  const handleBombTap = (row: number, col: number) => {
+    const session = useGameStore.getState().gameSession
+    if (!session) return
+    const bombEvent = session.bombZone(row, col)
+    session.moveHistory.push({
+      pieceIndex: -1,
+      shapeId: '',
+      row: 0,
+      col: 0,
+      bomb: { row, col },
+      scoreEvent: bombEvent,
+    })
+    consumeBomb()
+    useGameStore.setState({ score: session.score, comboStreak: bombEvent.newComboStreak })
+    prevScoreRef.current = session.score
+    if (bombEvent.totalPoints > 0) {
+      animManagerRef.current.trigger('SCORE', {
+        x: (canvasDims?.gridSize ?? 200) * 0.5,
+        y: (canvasDims?.gridSize ?? 200) * 0.45,
+        score: bombEvent.totalPoints,
+        label: bombEvent.newComboStreak >= 2
+          ? `BOMB ×${bombEvent.comboMultiplier}!`
+          : undefined,
+      })
+      // Explosion burst from the tapped cell
+      animManagerRef.current.trigger('POWER_UP', { subType: 'bomb', row, col })
+      setScreenFlash({ color: 'rgba(255,87,34,0.30)', key: ++flashKeyRef.current })
+      setTimeout(() => setScreenFlash(null), 280)
+      hapticNotification()
+    } else {
+      hapticError()
+    }
+  }
+
+  // Apply a lottery prize once the player dismisses the modal.
+  // Each case records a marker in moveHistory where needed so the effect
+  // is faithfully reproduced when the session is replayed from localStorage.
+  const handleLotteryPrize = (prize: Prize | null) => {
+    setLotteryPrize(null)
+    if (!prize) return
+
+    const session = useGameStore.getState().gameSession
+
+    const minimalEvent = {
+      basePoints: 0, linePoints: 0, comboBonus: 0, totalPoints: 0,
+      linesCleared: 0, newComboStreak: session?.comboStreak ?? 0,
+      comboMultiplier: 1.0 as const, isMilestone: false, multiLineFactor: 1.0 as const,
+    }
+
+    // Helper: persist the updated snapshot immediately so the prize survives
+    // an app kill before the next piece is placed.
+    const persistNow = (s: typeof session) => {
+      if (!s) return
+      const raw = localStorage.getItem(CLASSIC_SESSION_STORAGE_KEY)
+      if (!raw) return
+      try {
+        const entry = JSON.parse(raw)
+        entry.snapshot = { moveHistory: s.moveHistory, scoreBoostActive: s.scoreBoostActive }
+        localStorage.setItem(CLASSIC_SESSION_STORAGE_KEY, JSON.stringify(entry))
+      } catch {}
+    }
+
+    switch (prize.id) {
+      case 'multi': {
+        // Activate ×2 multiplier on the engine for the next 3 piece placements.
+        // Record a marker in moveHistory so replay restores the multiplier at
+        // the exact same position in the move sequence.
+        if (session) {
+          session.moveHistory.push({ pieceIndex: -1, shapeId: '', row: 0, col: 0, lotteryMultiplierStart: true, scoreEvent: minimalEvent })
+          session.lotteryMultiplierMovesLeft = 3
+          // Mirror into the store so the in-game badge renders immediately
+          useGameStore.setState({ lotteryMultiplierMovesLeft: 3 })
+          persistNow(session)
+        }
+        showToast({
+          variant: 'toast', tone: 'reward', icon: '×2',
+          title: '×2 MULTIPLIER ON!',
+          body: 'Next 3 placements score double.',
+          autoDismissMs: 5000,
+        })
+        break
+      }
+      case 'revival': {
+        // Credit one free revival to the player's inventory.
+        if (address) addInventory('revivalBundle', 1)
+        showToast({
+          variant: 'toast', tone: 'success', icon: '↻',
+          title: 'FREE SPIN ADDED',
+          body: '+1 extra life stored in your inventory.',
+          autoDismissMs: 4000,
+        })
+        break
+      }
+      case 'bonus': {
+        // Drop +500 pts onto the score right now. Record in moveHistory so a
+        // session restore adds the same bonus at the same point in the replay.
+        if (session) {
+          const pts = 500
+          session.score += pts
+          useGameStore.setState({ score: session.score })
+          prevScoreRef.current = session.score
+          session.moveHistory.push({
+            pieceIndex: -1, shapeId: '', row: 0, col: 0,
+            lotteryBonus: pts,
+            scoreEvent: { ...minimalEvent, basePoints: pts, totalPoints: pts },
+          })
+          persistNow(session)
+          // Show the floating score animation over the board
+          animManagerRef.current?.trigger('SCORE', {
+            x: (canvasDims?.gridSize ?? 200) * 0.5,
+            y: (canvasDims?.gridSize ?? 200) * 0.45,
+            score: pts,
+          })
+          hapticNotification()
+        }
+        showToast({
+          variant: 'toast', tone: 'reward', icon: '+',
+          title: '+500 PTS ADDED',
+          body: 'Score boosted right now.',
+          autoDismissMs: 3500,
+        })
+        break
+      }
+      case 'nothing':
+      default:
+        break
+    }
+  }
+
+  // Rotate: consume 1 charge, rotate the piece, close picker when charges run out
+  const handleRotatePiece = (pieceIndex: number) => {
+    const session = useGameStore.getState().gameSession
+    if (!session) return
+    const { consumeCharge, getCharges, exitRotateMode } = usePowerUpStore.getState()
+    if (!consumeCharge('rotatePass')) {
+      exitRotateMode()
+      return
+    }
+    const ok = session.rotatePiece(pieceIndex)
+    if (ok) {
+      useGameStore.setState({ currentPieces: [...session.currentPieces] })
+      ;(window as any).currentPieces = session.currentPieces
+      hapticImpact()
+    }
+    if (getCharges('rotatePass') <= 0) exitRotateMode()
   }
 
   const isMiniPayConnecting = IS_MINIPAY && !isConnected
@@ -968,13 +1533,61 @@ const GameScreen: React.FC<GameScreenProps> = ({
     startGameError,
     hasStoredGame,
     continueGame,
+    isContinuing,
     startNewGame,
+    bombModeActive,
+    onBombTap: handleBombTap,
+    onGoBack: () => forceReset(),
   }
 
   const canvasArea = (
-    <CanvasArea
-      {...commonCanvasProps}
-    />
+    // Wrapper must forward flex-1 / min-h-0 so CanvasArea's ResizeObserver
+    // measures a non-zero height. position:relative is needed for the badge.
+    <div
+      style={{
+        position: 'relative',
+        display: 'flex',
+        flexDirection: 'column',
+        flex: 1,
+        minHeight: 0,
+        width: '100%',
+      }}
+    >
+      <CanvasArea {...commonCanvasProps} />
+      {lotteryMultiplierMovesLeft > 0 && (
+        <div
+          style={{
+            position: 'absolute',
+            top: 8,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 50,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            background: '#FFD51F',
+            color: '#0C0C10',
+            border: '3px solid #0C0C10',
+            boxShadow: '4px 4px 0 #0C0C10',
+            padding: '5px 14px',
+            fontFamily: '"Archivo Black", sans-serif',
+            fontSize: 13,
+            letterSpacing: '0.06em',
+            pointerEvents: 'none',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          <span>×2</span>
+          <span style={{
+            background: '#0C0C10', color: '#FFD51F',
+            padding: '1px 6px', fontSize: 10, letterSpacing: '0.16em',
+          }}>
+            ACTIVE
+          </span>
+          <span>{lotteryMultiplierMovesLeft} LEFT</span>
+        </div>
+      )}
+    </div>
   )
 
   // Show lobby gate immediately for web visitors who have used their trial
@@ -991,11 +1604,45 @@ const GameScreen: React.FC<GameScreenProps> = ({
           comboStreak={comboStreak}
           bestScore={bestScore}
           gameSession={gameSession}
+          isGameOver={isGameOver}
           onOpenLeaderboard={onOpenLeaderboard}
           onBack={onBack}
           canvasArea={canvasArea}
+          onOpenShop={isWhitelisted ? () => setShowShop(true) : undefined}
+          onRotatePiece={handleRotatePiece}
+          activePieceIndex={trayHoverIndexRef.current}
         />
+        <PowerUpHintOverlay
+          hintTrigger={hintTrigger}
+          onBoardEffect={(type) => {
+            const grid = useGameStore.getState().gameSession?.grid
+            powerUpHintRef.current.commitCanvasHint(type, grid)
+          }}
+        />
+        {/* Screen flash — DOM-layer cinematic hit for power-up activations */}
+        {screenFlash && (
+          <div
+            key={screenFlash.key}
+            aria-hidden
+            style={{
+              position: 'fixed', inset: 0, zIndex: 8999,
+              background: screenFlash.color,
+              pointerEvents: 'none',
+              animation: 'pu-screen-flash 0.32s ease-out forwards',
+            }}
+          />
+        )}
         {showNoGasModal && <NoGasModal address={address} onDismiss={() => setNoGasDismissed(true)} />}
+        {showSocialNudge && <SocialNudgeModal onDismiss={() => setShowSocialNudge(false)} />}
+        {isWhitelisted && lotteryPrize && !isGameOver && (
+          <LotteryModal
+            prize={lotteryPrize}
+            threshold={lotteryThreshold}
+            onContinue={() => handleLotteryPrize(lotteryPrize)}
+          />
+        )}
+        <ToastContainer toasts={toasts} onDismiss={dismissToast} position="bottom-center" />
+        {isWhitelisted && <ShopModal isOpen={showShop} onClose={() => setShowShop(false)} />}
       </>
     )
   }
@@ -1011,6 +1658,16 @@ const GameScreen: React.FC<GameScreenProps> = ({
         canvasArea={canvasArea}
       />
       {showNoGasModal && <NoGasModal address={address} onDismiss={() => setNoGasDismissed(true)} />}
+      {showSocialNudge && <SocialNudgeModal onDismiss={() => setShowSocialNudge(false)} />}
+      {isWhitelisted && lotteryPrize && !isGameOver && (
+        <LotteryModal
+          prize={lotteryPrize}
+          threshold={lotteryThreshold}
+          onContinue={() => handleLotteryPrize(lotteryPrize)}
+        />
+      )}
+      {isWhitelisted && <ShopModal isOpen={showShop} onClose={() => setShowShop(false)} />}
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} position="bottom-center" />
     </>
   )
 }
@@ -1104,7 +1761,11 @@ interface CanvasAreaProps {
   startGameError?: Error | null
   hasStoredGame: boolean
   continueGame: () => void
+  isContinuing: boolean
   startNewGame: () => void
+  bombModeActive?: boolean
+  onBombTap?: (row: number, col: number) => void
+  onGoBack?: () => void
 }
 
 const ClassicStartCard: React.FC<{
@@ -1120,6 +1781,7 @@ const ClassicStartCard: React.FC<{
   startGameError?: Error | null
   hasStoredGame: boolean
   continueGame: () => void
+  isContinuing: boolean
   startNewGame: () => void
 }> = ({
   isConnected,
@@ -1134,6 +1796,7 @@ const ClassicStartCard: React.FC<{
   startGameError,
   hasStoredGame,
   continueGame,
+  isContinuing,
   startNewGame,
 }) => {
   const [showHowToPlay, setShowHowToPlay] = useState(!hasSeenOnboarding())
@@ -1190,11 +1853,15 @@ const ClassicStartCard: React.FC<{
     {hasStoredGame && (
       <button
         onClick={continueGame}
-        disabled={isPending || isConfirming || isSyncingContract || isMiniPayConnecting}
+        disabled={isPending || isConfirming || isSyncingContract || isMiniPayConnecting || isContinuing}
         className="brutal-btn flex w-full items-center justify-center gap-3 border-4 border-ink bg-accent-lime py-5 font-display text-sm uppercase tracking-[0.15em] shadow-[6px_6px_0_var(--shadow)] disabled:opacity-70"
         style={{ color: 'var(--ink-fixed)' }}
       >
-        ▶ CONTINUE GAME
+        {isContinuing ? (
+          <><div className="brutal-loader" /> LOADING...</>
+        ) : (
+          <>▶ CONTINUE GAME</>
+        )}
       </button>
     )}
 
@@ -1351,7 +2018,11 @@ const CanvasArea: React.FC<CanvasAreaProps> = ({
   startGameError,
   hasStoredGame,
   continueGame,
+  isContinuing,
   startNewGame,
+  bombModeActive,
+  onBombTap,
+  onGoBack,
 }) => {
   if (!gameSession) {
     return (
@@ -1368,6 +2039,7 @@ const CanvasArea: React.FC<CanvasAreaProps> = ({
         startGameError={startGameError}
         hasStoredGame={hasStoredGame}
         continueGame={continueGame}
+        isContinuing={isContinuing}
         startNewGame={startNewGame}
       />
     )
@@ -1376,27 +2048,22 @@ const CanvasArea: React.FC<CanvasAreaProps> = ({
   return (
     <div
       ref={boardContainerRef}
-      className="flex flex-1 min-h-0 w-full select-none items-center justify-center"
+      className="w-full flex-1 min-h-0 select-none overflow-hidden px-1.5"
     >
-      <div className="relative inline-flex flex-col">
+      <div className="relative w-full">
         {canvasDims && (
           <>
             <div
-              className="pointer-events-none absolute left-0 top-0 rounded-[6px] border-[4px] border-ink bg-paper-2"
-              style={{
-                width: canvasDims.gridSize,
-                height: canvasDims.gridSize,
-                boxShadow: '8px 8px 0 var(--shadow)',
-              }}
+              className="pointer-events-none absolute left-0 top-0 border-[3px] border-ink bg-paper-2"
+              style={{ width: '100%', height: canvasDims.gridSize }}
             />
             <div
               className="pointer-events-none absolute left-0 z-[1] grid grid-cols-3 border-[3px] border-ink p-3 sm:p-5"
               style={{
                 background: 'var(--piece-tray-bg)',
                 top: canvasDims.trayY,
-                width: canvasDims.gridSize,
+                width: '100%',
                 height: canvasDims.trayH,
-                boxShadow: '6px 6px 0 var(--shadow)',
               }}
             >
               {Array.from({ length: 3 }).map((_, index) => (
@@ -1409,11 +2076,47 @@ const CanvasArea: React.FC<CanvasAreaProps> = ({
           </>
         )}
 
-        <div className="relative z-[2]" style={{ display: 'inline-block' }}>
+        <div className="relative z-[2] w-full">
           <canvas
             ref={canvasRef}
             style={{ touchAction: 'none', display: 'block' }}
           />
+
+          {/* Bomb targeting overlay — intercepts grid taps when bomb mode active */}
+          {bombModeActive && canvasDims && (
+            <div
+              onClick={e => {
+                const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+                const x = e.clientX - rect.left
+                const y = e.clientY - rect.top
+                const cellSize = canvasDims.gridSize / 9
+                const col = Math.floor(x / cellSize)
+                const row = Math.floor(y / cellSize)
+                if (row >= 0 && row < 9 && col >= 0 && col < 9) {
+                  onBombTap?.(row, col)
+                }
+              }}
+              style={{
+                position: 'absolute', top: 0, left: 0, zIndex: 40,
+                width: canvasDims.gridSize, height: canvasDims.gridSize,
+                cursor: 'crosshair',
+                background: 'rgba(229,62,62,0.08)',
+                border: '3px solid rgba(229,62,62,0.6)',
+                boxSizing: 'border-box',
+              }}
+            >
+              <div style={{
+                position: 'absolute', top: '50%', left: '50%',
+                transform: 'translate(-50%,-50%)',
+                fontFamily: '"Archivo Black", sans-serif',
+                fontSize: 11, letterSpacing: '0.16em',
+                color: 'rgba(229,62,62,0.8)',
+                textAlign: 'center', pointerEvents: 'none',
+              }}>
+                💣 TAP A ZONE
+              </div>
+            </div>
+          )}
 
           {/* Sync chip */}
           <div className="pointer-events-none absolute right-2 top-2 z-30">
@@ -1436,6 +2139,7 @@ const CanvasArea: React.FC<CanvasAreaProps> = ({
                 <GameOverModal
                   score={score}
                   onPlayAgain={handleStartGame}
+                  onBack={onGoBack}
                   onOpenLeaderboard={onOpenLeaderboard}
                   mode="classic"
                 />
@@ -1452,9 +2156,13 @@ interface MobileLayoutProps {
   comboStreak: number
   bestScore?: number
   gameSession: any
+  isGameOver?: boolean
   onOpenLeaderboard?: () => void
   onBack?: () => void
   canvasArea: React.ReactNode
+  onOpenShop?: () => void
+  onRotatePiece?: (index: number) => void
+  activePieceIndex?: number | null
 }
 
 const ClassicTabStrip: React.FC<{
@@ -1699,9 +2407,13 @@ const MobileLayout: React.FC<MobileLayoutProps> = ({
   comboStreak,
   bestScore,
   gameSession,
+  isGameOver = false,
   onOpenLeaderboard,
   onBack,
   canvasArea,
+  onOpenShop,
+  onRotatePiece,
+  activePieceIndex,
 }) => {
   const [isPaused, setIsPaused] = useState(false)
   const [showFAQ, setShowFAQ] = useState(false)
@@ -1750,6 +2462,17 @@ const MobileLayout: React.FC<MobileLayoutProps> = ({
               compact
             />
           </div>
+
+          {/* ── Power-up bar — whitelisted addresses only ───────────── */}
+          {!isGameOver && !!onOpenShop && (
+            <div className="shrink-0">
+              <PowerUpBar
+                onOpenShop={onOpenShop}
+                onRotatePiece={onRotatePiece ?? (() => {})}
+                activePieceIndex={activePieceIndex ?? null}
+              />
+            </div>
+          )}
         </>
       )}
 
@@ -1828,6 +2551,18 @@ const MobileLayout: React.FC<MobileLayoutProps> = ({
                   HELP & FAQ
                 </span>
                 <span style={{ color: 'var(--ink-soft)' }}>→</span>
+              </button>
+
+              {/* Shop */}
+              <button
+                onClick={() => { setIsPaused(false); onOpenShop?.() }}
+                className="brutal-btn flex items-center justify-between border-b-4 border-ink px-6 py-4 font-display text-[12px] uppercase tracking-[0.14em]"
+                style={{ background: 'var(--accent-yellow)', color: 'var(--ink-fixed)' }}
+              >
+                <span className="flex items-center gap-3">
+                  🛒 BLOKAZ SHOP
+                </span>
+                <span>→</span>
               </button>
 
               {/* Quit */}

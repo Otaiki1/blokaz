@@ -1,6 +1,9 @@
 import { create } from 'zustand'
 import { GameSession } from '../engine/game'
 import type { ShapeDefinition } from '../engine/shapes'
+// Imported lazily to avoid circular deps — accessed via getState() at call time
+import { usePowerUpStore } from './powerUpStore'
+import { CLASSIC_SESSION_STORAGE_KEY } from '../utils/gameSessionStorage'
 
 interface GameState {
   gameSession: GameSession | null
@@ -13,6 +16,7 @@ interface GameState {
   onChainStatus: 'none' | 'pending' | 'syncing' | 'registered' | 'failed'
   tournamentId: bigint | null
   reviveCount: number
+  lotteryMultiplierMovesLeft: number
 
   startGame: (seed: bigint, preserveOnChain?: boolean) => void
   setOnChainData: (gameId: bigint, seed: `0x${string}`, status?: 'registered' | 'pending' | 'syncing' | 'failed') => void
@@ -36,6 +40,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   onChainStatus: 'none',
   tournamentId: null,
   reviveCount: 0,
+  lotteryMultiplierMovesLeft: 0,
 
   startGame: (seed, preserveOnChain = false) => {
     const session = new GameSession(seed)
@@ -49,6 +54,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       currentPieces: session.currentPieces,
       isGameOver: false,
       reviveCount: 0,
+      lotteryMultiplierMovesLeft: 0,
     }
 
     if (!preserveOnChain) {
@@ -69,20 +75,73 @@ export const useGameStore = create<GameState>((set, get) => ({
   setTournamentId: (id) => set({ tournamentId: id }),
 
   placePiece: (index, r, c) => {
-    const { gameSession } = get()
+    const { gameSession, reviveCount } = get()
     if (!gameSession) return null
-    
+
+    // Capture streak before placement — if shield fires we restore it so the
+    // player keeps their combo alive even though the fatal move cleared nothing.
+    const preComboStreak = gameSession.comboStreak
+
     const result = gameSession.placePiece(index, r, c)
-    if (result.success) {
-      set({
-        score: gameSession.score,
-        comboStreak: gameSession.comboStreak,
-        currentPieces: [...gameSession.currentPieces],
-        isGameOver: result.isGameOver
-      })
-      // @ts-ignore
-      window.currentPieces = gameSession.currentPieces
+    if (!result.success) return result
+
+    // Shield intercept: if this move triggers game-over, try to auto-save
+    // synchronously BEFORE committing isGameOver to the store so the
+    // game-over modal never flashes and timing/effect issues are eliminated.
+    if (result.isGameOver) {
+      const shielded = usePowerUpStore.getState().triggerShield()
+      if (shielded) {
+        // Restore the combo streak from before the fatal move — the shield
+        // preserves momentum so the player keeps their multiplier going.
+        gameSession.comboStreak = preComboStreak
+
+        // Record the shield-triggered revival so replayMoveHistory can call
+        // session.revive() at this exact position during session restore.
+        const minimalScoreEvent = {
+          basePoints: 0, linePoints: 0, comboBonus: 0, totalPoints: 0,
+          linesCleared: 0, newComboStreak: gameSession.comboStreak,
+          comboMultiplier: 1 as const, isMilestone: false, multiLineFactor: 1 as const,
+        }
+        gameSession.moveHistory.push({
+          pieceIndex: -1, shapeId: '', row: 0, col: 0,
+          revive: true,
+          scoreEvent: minimalScoreEvent,
+        })
+
+        gameSession.shieldRevive()
+        // @ts-ignore
+        window.currentPieces = gameSession.currentPieces
+        set({
+          score:                      gameSession.score,
+          comboStreak:                gameSession.comboStreak,
+          currentPieces:              [...gameSession.currentPieces],
+          isGameOver:                 gameSession.isGameOver,
+          reviveCount:                reviveCount + 1,
+          lotteryMultiplierMovesLeft: gameSession.lotteryMultiplierMovesLeft,
+        })
+        // Persist the shield-revival record synchronously so a crash between
+        // this set() and the next localStorage-write useEffect doesn't lose it.
+        try {
+          const raw = localStorage.getItem(CLASSIC_SESSION_STORAGE_KEY)
+          if (raw) {
+            const entry = JSON.parse(raw)
+            entry.snapshot = { moveHistory: gameSession.moveHistory, scoreBoostActive: gameSession.scoreBoostActive }
+            localStorage.setItem(CLASSIC_SESSION_STORAGE_KEY, JSON.stringify(entry))
+          }
+        } catch {}
+        return { ...result, isGameOver: gameSession.isGameOver }
+      }
     }
+
+    set({
+      score:                      gameSession.score,
+      comboStreak:                gameSession.comboStreak,
+      currentPieces:              [...gameSession.currentPieces],
+      isGameOver:                 result.isGameOver,
+      lotteryMultiplierMovesLeft: gameSession.lotteryMultiplierMovesLeft,
+    })
+    // @ts-ignore
+    window.currentPieces = gameSession.currentPieces
     return result
   },
 
@@ -93,14 +152,43 @@ export const useGameStore = create<GameState>((set, get) => ({
   reviveGame: () => {
     const { gameSession, reviveCount } = get()
     if (!gameSession) return
-    gameSession.revive()
-    set({
-      isGameOver: false,
-      currentPieces: [...gameSession.currentPieces],
-      reviveCount: reviveCount + 1,
+
+    // Record the revival in moveHistory BEFORE mutating session state so the
+    // record sits at the correct position for replayMoveHistory to call revive()
+    // at exactly the right point during session restore.
+    const minimalScoreEvent = {
+      basePoints: 0, linePoints: 0, comboBonus: 0, totalPoints: 0,
+      linesCleared: 0, newComboStreak: gameSession.comboStreak,
+      comboMultiplier: 1 as const, isMilestone: false, multiLineFactor: 1 as const,
+    }
+    gameSession.moveHistory.push({
+      pieceIndex: -1, shapeId: '', row: 0, col: 0,
+      revive: true,
+      scoreEvent: minimalScoreEvent,
     })
+
+    gameSession.revive()
     // @ts-ignore
     window.currentPieces = gameSession.currentPieces
+
+    set({
+      isGameOver:                 gameSession.isGameOver,
+      score:                      gameSession.score,
+      currentPieces:              [...gameSession.currentPieces],
+      reviveCount:                reviveCount + 1,
+      lotteryMultiplierMovesLeft: gameSession.lotteryMultiplierMovesLeft,
+    })
+
+    // Persist the revive record synchronously so navigating away immediately
+    // after tapping revival doesn't lose it before useEffect([reviveCount]) fires.
+    try {
+      const raw = localStorage.getItem(CLASSIC_SESSION_STORAGE_KEY)
+      if (raw) {
+        const entry = JSON.parse(raw)
+        entry.snapshot = { moveHistory: gameSession.moveHistory, scoreBoostActive: gameSession.scoreBoostActive }
+        localStorage.setItem(CLASSIC_SESSION_STORAGE_KEY, JSON.stringify(entry))
+      }
+    } catch {}
   },
 
   forceReset: (keepTournamentId = false) => {
@@ -115,6 +203,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       onChainStatus: 'none',
       tournamentId: keepTournamentId ? get().tournamentId : null,
       reviveCount: 0,
+      lotteryMultiplierMovesLeft: 0,
     })
   },
 

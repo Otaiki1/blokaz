@@ -12,6 +12,10 @@ export function packMoves(moves: MoveRecord[]): bigint[] {
   let movesInWord = 0
 
   for (const move of moves) {
+    // Skip marker records (revive, bomb, lottery) — pieceIndex is -1 for these.
+    // Negative BigInts corrupt the packed word; the contract only needs real placements.
+    if (move.pieceIndex < 0) continue
+
     if (movesInWord === 25) {
       packed.push(currentWord)
       currentWord = 0n
