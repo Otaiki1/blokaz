@@ -678,12 +678,10 @@ const GameScreen: React.FC<GameScreenProps> = ({
   const isMobile = useIsMobile()
 
   // 0. Account Switch Protection
-  const hasAutoResumed = useRef(false)
   const lastAddressRef = useRef<`0x${string}` | undefined>(address)
   useEffect(() => {
     if (address !== lastAddressRef.current) {
       forceReset()
-      hasAutoResumed.current = false
       lastAddressRef.current = address
     }
   }, [address, forceReset])
@@ -1372,21 +1370,6 @@ const GameScreen: React.FC<GameScreenProps> = ({
       setIsContinuing(false)
     }
   }
-
-  // 1.5 Auto-Resume after hydration
-  // When the user returns to MiniPay after signing startGame, the on-chain game
-  // is already confirmed but gameSession is null (in-memory state was lost on
-  // app close). Use continueGame() (not handleStartGame) so the server session
-  // is fetched first — handleStartGame only checks localStorage and would
-  // abandon a server-side session that has progress if localStorage was cleared.
-  useEffect(() => {
-    if (isSyncingContract || gameSession || hasAutoResumed.current) return
-    const { onChainSeed, onChainGameId } = useGameStore.getState()
-    if (onChainSeed && onChainGameId && onChainGameId !== 0n && isConnected && address) {
-      hasAutoResumed.current = true
-      setTimeout(() => continueGame(), 0)
-    }
-  }, [isSyncingContract, gameSession, isConnected, address])
 
   const startNewGame = () => {
     clearStoredGameSession(CLASSIC_SESSION_STORAGE_KEY)
