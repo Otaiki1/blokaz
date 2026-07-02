@@ -770,20 +770,6 @@ const GameScreen: React.FC<GameScreenProps> = ({
     }
   }
 
-  // 1.5 Auto-Resume after hydration
-  // When the user returns to MiniPay after signing startGame, the on-chain game
-  // is already confirmed but gameSession is null (in-memory state was lost on
-  // app close). Detect this after hydration completes and resume automatically
-  // so the user is not presented with the start-game dialog again.
-  useEffect(() => {
-    if (isSyncingContract || gameSession || hasAutoResumed.current) return
-    const { onChainSeed, onChainGameId } = useGameStore.getState()
-    if (onChainSeed && onChainGameId && onChainGameId !== 0n && isConnected && address) {
-      hasAutoResumed.current = true
-      setTimeout(() => handleStartGame(), 0)
-    }
-  }, [isSyncingContract, gameSession, isConnected, address])
-
   // 2. Background Sync
   useEffect(() => {
     if (isSuccess && currentSeed && address) {
@@ -1292,6 +1278,21 @@ const GameScreen: React.FC<GameScreenProps> = ({
       setIsContinuing(false)
     }
   }
+
+  // 1.5 Auto-Resume after hydration
+  // When the user returns to MiniPay after signing startGame, the on-chain game
+  // is already confirmed but gameSession is null (in-memory state was lost on
+  // app close). Use continueGame() (not handleStartGame) so the server session
+  // is fetched first — handleStartGame only checks localStorage and would
+  // abandon a server-side session that has progress if localStorage was cleared.
+  useEffect(() => {
+    if (isSyncingContract || gameSession || hasAutoResumed.current) return
+    const { onChainSeed, onChainGameId } = useGameStore.getState()
+    if (onChainSeed && onChainGameId && onChainGameId !== 0n && isConnected && address) {
+      hasAutoResumed.current = true
+      setTimeout(() => continueGame(), 0)
+    }
+  }, [isSyncingContract, gameSession, isConnected, address])
 
   const startNewGame = () => {
     clearStoredGameSession(CLASSIC_SESSION_STORAGE_KEY)

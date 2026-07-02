@@ -131,7 +131,12 @@ begin
     move_history       = case when jsonb_array_length(v_to_append) > 0
                               then move_history || v_to_append
                               else move_history end,
-    score              = p_score,
+    -- GREATEST prevents an out-of-order delayed sync from reducing the score.
+    -- Syncs can arrive at the server out of order when the network is flaky;
+    -- moves are safely deduplicated above but without GREATEST the lower
+    -- score from the older sync would silently overwrite the higher score
+    -- that a newer sync already committed.
+    score              = GREATEST(score, p_score),
     score_boost_active = p_score_boost_active,
     is_game_over       = p_is_game_over,
     revive_count       = p_revive_count,
@@ -229,7 +234,7 @@ begin
     move_history       = case when jsonb_array_length(v_to_append) > 0
                               then move_history || v_to_append
                               else move_history end,
-    score              = p_score,
+    score              = GREATEST(score, p_score),
     score_boost_active = p_score_boost_active,
     is_game_over       = p_is_game_over,
     revive_count       = p_revive_count,
