@@ -50,6 +50,14 @@ export class PieceRenderer {
       .getPropertyValue('--piece-tray-bg').trim() || '#000000'
 
     pieces.forEach((shape, index) => {
+      // Solid slot background — establishes an opaque surface so that animations
+      // composited after drawTray() can't make pieces disappear. The dark overlay
+      // ensures all piece colors (some of which equal --piece-tray-bg) are readable.
+      this.ctx.fillStyle = this.trayBg
+      this.ctx.fillRect(index * slotWidth, this.trayY, slotWidth, slotWidth)
+      this.ctx.fillStyle = 'rgba(0,0,0,0.30)'
+      this.ctx.fillRect(index * slotWidth, this.trayY, slotWidth, slotWidth)
+
       // Draw slot divider
       if (index > 0) {
         this.ctx.strokeStyle = 'rgba(0,0,0,0.28)'

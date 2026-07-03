@@ -179,6 +179,14 @@ export class AnimationManager {
         ctx.restore()
 
       } else if (anim.type === 'COMBO') {
+        // Clip to grid area — the expanding circle is centered at canvas.height/2
+        // (grid+tray midpoint) and grows to radius 800, bleeding into the tray.
+        // For tiers 0-3 the accent color equals --piece-tray-bg, making pieces
+        // invisible behind the same-color overlay.
+        ctx.beginPath()
+        ctx.rect(0, 0, boardW, 9 * cellSize)
+        ctx.clip()
+
         const { streak } = anim.params
         const center = boardW / 2
         const accentColor = getThemeColor('--accent')
@@ -216,6 +224,13 @@ export class AnimationManager {
       } else if (anim.type === 'TIER_UP') {
         // ─── TIER UP REVEAL ───────────────────────────────────────
         // 3 phases: 0-0.25 sunburst in, 0.25-0.75 hold, 0.75-1 fade out
+        // Clip to grid area — sunburst rays have radius 8.1×cs and would
+        // otherwise bleed into the tray (y > 9×cs), overlaying piece renders
+        // with the same accent color as --piece-tray-bg and making them blank.
+        ctx.beginPath()
+        ctx.rect(0, 0, boardW, 9 * cellSize)
+        ctx.clip()
+
         const { tierName, accent } = anim.params as { tierName: string; accent: string }
         const p = anim.progress
 
@@ -228,8 +243,8 @@ export class AnimationManager {
         const center = boardW / 2
         const midY   = 9 * cellSize / 2
 
-        // Dark overlay with blur-like feel
-        ctx.globalAlpha = alpha * 0.82
+        // Subtle dark vignette — keep blocks visible through the overlay
+        ctx.globalAlpha = alpha * 0.45
         ctx.fillStyle = '#0c0c10'
         ctx.fillRect(0, 0, boardW, 9 * cellSize)
 

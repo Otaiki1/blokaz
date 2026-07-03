@@ -58,6 +58,7 @@ import { PowerUpBar } from './PowerUpBar'
 import { ShopModal } from './ShopModal'
 import { usePowerUpStore } from '../stores/powerUpStore'
 import { useNotifications, ToastContainer } from './GameNotification'
+import { audioEngine } from '../audio/AudioEngine'
 import { useMoveSync, fetchServerSession, markSessionComplete } from '../hooks/useMoveSync'
 
 const GAME_ADDRESS = contractInfo.game as `0x${string}`
@@ -1164,7 +1165,7 @@ const GameScreen: React.FC<GameScreenProps> = ({
               tierName: newTier.name,
               accent: newTier.accent,
             })
-            audioEngine.tierUp()
+            try { audioEngine.tierUp() } catch {}
           }
         }
 
