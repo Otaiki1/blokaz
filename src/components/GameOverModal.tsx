@@ -97,16 +97,47 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
   const { inventory, consumeCharge } = usePowerUpStore()
   const bundleCredits = inventory.revivalBundle
 
+  // Synchronous mutual-exclusion guard — prevents both revival paths from
+  // firing before React can disable the buttons via a re-render. A ref is
+  // used so the guard is set immediately (no batching delay).
+  const isRevivingRef = React.useRef(false)
+  const [isReviving, setIsReviving] = React.useState(false)
+
   const handleBundleRevive = () => {
+    if (isRevivingRef.current) return
+    isRevivingRef.current = true
+    setIsReviving(true)
     setCountdown(null)
     autoSubmitTriggeredRef.current = true
-    if (consumeCharge('revivalBundle')) reviveGame()
+    if (consumeCharge('revivalBundle')) {
+      reviveGame()
+      // revive() deals a fresh trio without clearing the board — if none of
+      // the new pieces fit, the game is immediately over again and the modal
+      // stays mounted. Release the lock so the buttons aren't stuck disabled.
+      if (useGameStore.getState().isGameOver) {
+        isRevivingRef.current = false
+        setIsReviving(false)
+      }
+    } else {
+      // No credits left — release the lock so the player can try another path
+      isRevivingRef.current = false
+      setIsReviving(false)
+    }
   }
 
   const handleStableRevive = async () => {
+    if (isRevivingRef.current) return
+    isRevivingRef.current = true
+    setIsReviving(true)
     setCountdown(null)
-    autoSubmitTriggeredRef.current = true // prevent auto-submit after revival
-    await payForRevive(selectedToken)
+    autoSubmitTriggeredRef.current = true
+    const success = await payForRevive(selectedToken)
+    // Release on payment failure, or when the revive dealt an unplayable trio
+    // and the game is immediately over again (modal stays mounted either way).
+    if (!success || useGameStore.getState().isGameOver) {
+      isRevivingRef.current = false
+      setIsReviving(false)
+    }
   }
 
   const [showShareSheet, setShowShareSheet] = React.useState(false)
@@ -708,7 +739,8 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
               {bundleCredits > 0 && !isAllSuccess && (mode === 'classic' || mode === 'tournament') && (
                 <button
                   onClick={handleBundleRevive}
-                  className="brutal-btn flex w-full items-center justify-center gap-2 border-[3px] border-ink py-3 font-display text-[11px] uppercase tracking-wider shadow-[3px_3px_0_var(--shadow)]"
+                  disabled={isReviving}
+                  className="brutal-btn flex w-full items-center justify-center gap-2 border-[3px] border-ink py-3 font-display text-[11px] uppercase tracking-wider shadow-[3px_3px_0_var(--shadow)] disabled:opacity-50"
                   style={{ background: 'var(--accent-lime)', color: 'var(--ink-fixed)' }}
                 >
                   USE REVIVAL BUNDLE
@@ -815,6 +847,7 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
                             : undefined
                       }
                       disabled={
+                        isReviving ||
                         isStablePaying ||
                         (!canAfford(selectedToken) && !IS_MINIPAY)
                       }
