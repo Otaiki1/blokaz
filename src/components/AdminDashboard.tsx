@@ -12,7 +12,7 @@ import {
   USDC_DECIMALS,
 } from '../hooks/useBlokzGame'
 import { parseUnits, formatUnits } from 'viem'
-import { useChainId, useWaitForTransactionReceipt, useAccount } from 'wagmi'
+import { useChainId, useWaitForTransactionReceipt, useAccount, usePublicClient } from 'wagmi'
 import { celo } from 'wagmi/chains'
 import {
   useAdminRewards,
@@ -54,9 +54,11 @@ const AdminDashboard: React.FC = () => {
   const chainId = useChainId()
   const isWrongChain = chainId !== celo.id
 
+  const publicClient = usePublicClient()
   const [fee, setFee] = useState('0.1')
   const [duration, setDuration] = useState('24') // hours
   const [maxPlayers, setMaxPlayers] = useState('100')
+  const [createValidationError, setCreateValidationError] = useState<string | null>(null)
   const [protocolFeeInput, setProtocolFeeInput] = useState('10') // %
   const [newSigner, setNewSigner] = useState('')
 
@@ -113,12 +115,43 @@ const AdminDashboard: React.FC = () => {
     refetchRevenue()
   }
 
-  const handleCreate = () => {
-    const feeWei = parseUnits(fee, USDC_DECIMALS)
-    const start = BigInt(Math.floor(Date.now() / 1000) + 60) // 60 seconds from now
-    const end = start + BigInt(Number(duration) * 3600)
+  const handleCreate = async () => {
+    setCreateValidationError(null)
+
+    // Mirror the contract's createTournament checks so bad params fail here
+    // with a clear message instead of reverting on-chain and burning gas.
+    const max = Number(maxPlayers)
+    if (!Number.isInteger(max) || max < 2 || max > 100) {
+      setCreateValidationError('Max players must be between 2 and 100')
+      return
+    }
+    const durationHours = Number(duration)
+    if (!Number.isFinite(durationHours) || durationHours <= 0) {
+      setCreateValidationError('Duration must be greater than 0 hours')
+      return
+    }
+    let feeWei: bigint
+    try {
+      feeWei = parseUnits(fee, USDC_DECIMALS)
+      if (feeWei < 0n) throw new Error()
+    } catch {
+      setCreateValidationError('Entry fee is not a valid amount')
+      return
+    }
+
+    // Anchor the start time to the chain clock, not the device clock — a
+    // skewed device clock behind chain time makes start <= block.timestamp
+    // and the contract rejects it. Fall back to Date.now() if the read fails.
+    let chainNow = BigInt(Math.floor(Date.now() / 1000))
+    try {
+      const block = await publicClient?.getBlock()
+      if (block) chainNow = block.timestamp
+    } catch {}
+
+    const start = chainNow + 120n // 2 min from chain time
+    const end = start + BigInt(Math.round(durationHours * 3600))
     // Default rewards: 1st: 50%, 2nd: 30%, 3rd: 20% of prize pool (post-fee)
-    createTournament(feeWei, start, end, Number(maxPlayers), [5000, 3000, 2000])
+    createTournament(feeWei, start, end, max, [5000, 3000, 2000])
   }
 
   return (
@@ -200,11 +233,16 @@ const AdminDashboard: React.FC = () => {
               </label>
               <input
                 type="number"
+                min={2}
+                max={100}
                 value={maxPlayers}
                 onChange={(e) => setMaxPlayers(e.target.value)}
                 className="brutal-input w-full"
                 placeholder="100"
               />
+              <p className="mt-1 font-body text-[10px] text-ink/50">
+                2–100 players (contract limit)
+              </p>
             </div>
 
             <button
@@ -216,6 +254,11 @@ const AdminDashboard: React.FC = () => {
               {isCreating ? 'DEPLOYING...' : 'FIRE TOURNAMENT'}
             </button>
 
+            {createValidationError && (
+              <div className="mt-4 text-center font-display text-[10px] uppercase tracking-widest text-danger">
+                {createValidationError}
+              </div>
+            )}
             {isCreateSuccess && !isCreateReverted && (
               <div className="mt-4 text-center font-display text-[10px] uppercase tracking-widest text-accent-lime">
                 Tournament live on-chain
@@ -330,8 +373,8 @@ const AdminDashboard: React.FC = () => {
           </div>
 
           <button
-            onClick={() => withdraw()}
-            disabled={isWithdrawing}
+            onClick={() => address && withdraw(address)}
+            disabled={isWithdrawing || !address}
             className="brutal-btn w-full border-4 border-ink bg-accent-lime py-4 font-display text-[12px] tracking-[0.14em] text-ink disabled:opacity-50"
             style={{ boxShadow: '6px 6px 0 var(--shadow)' }}
           >

@@ -125,9 +125,21 @@ router.post('/sync', syncLimiter, async (req, res) => {
   }
 
   // ── Legacy full-history path ───────────────────────────────────────────────
+  // Clamp the score so a stale or out-of-order request can never lower a
+  // recorded score (the delta path clamps via GREATEST inside the RPC).
+  const { data: existingRow } = await supabase
+    .from('tournament_sessions')
+    .select('score')
+    .eq('address', addr)
+    .eq('tournament_id', tid)
+    .eq('seed', String(seed))
+    .eq('status', 'active')
+    .limit(1)
+    .maybeSingle()
+
   const patch = {
     move_history:       moveHistory,
-    score:              score ?? 0,
+    score:              Math.max(existingRow?.score ?? 0, score ?? 0),
     score_boost_active: !!scoreBoostActive,
     is_game_over:       !!isGameOver,
     revive_count:       reviveCount ?? 0,

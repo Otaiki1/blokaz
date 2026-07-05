@@ -34,6 +34,7 @@ import {
   TOURNAMENT_SESSION_STORAGE_KEY,
   readStoredGameSession,
   writeStoredGameSession,
+  readResumableTournamentRun,
 } from '../utils/gameSessionStorage'
 import { IS_MINIPAY } from '../utils/miniPay'
 import { usePowerUpStore } from '../stores/powerUpStore'
@@ -82,6 +83,7 @@ const TournamentGameScreen: React.FC<TournamentGameScreenProps> = ({
     setOnChainData,
     forceReset,
     onChainStatus,
+    onChainGameId,
     tournamentId,
     setTournamentId,
   } = useGameStore()
@@ -247,6 +249,18 @@ const TournamentGameScreen: React.FC<TournamentGameScreenProps> = ({
     }
   }, [isConnected, address, setTournamentId, tournamentId])
 
+  // ── Resumable run detection ──────────────────────────────────────────────────
+  // A saved snapshot for this tournament plus a registered on-chain game means
+  // handleStartGame will replay it — surface that as an explicit RESUME state
+  // so the player knows their score is safe.
+  const resumableRun = React.useMemo(() => {
+    if (!address || tournamentId === null || isSyncingContract) return null
+    const run = readResumableTournamentRun(address, TOURNAMENT_ADDRESS)
+    return run && run.tournamentId === tournamentId.toString() ? run : null
+  }, [address, tournamentId, isSyncingContract])
+  const showResume =
+    !!resumableRun && !!onChainGameId && onChainGameId !== 0n && !sessionConflict
+
   // ── Redirect if no tournament selected (only after hydration) ───────────────
   useEffect(() => {
     if (!isSyncingContract && tournamentId === null) {
@@ -288,8 +302,9 @@ const TournamentGameScreen: React.FC<TournamentGameScreenProps> = ({
 
       // Resuming an on-chain game after a crash/refresh: replay the saved move
       // history so the player keeps their score instead of restarting at 0.
-      // Local snapshot first; if the device lost localStorage, fall back to the
-      // server-side tournament session backup.
+      // Both backups are checked and the one with MORE progress wins — a stale
+      // local snapshot must never resume the player behind the server copy,
+      // and a missing local snapshot (new device) falls back to the server.
       let snapshot: { moveHistory: MoveRecord[]; scoreBoostActive?: boolean } | null = null
       const stored = readStoredGameSession(
         TOURNAMENT_SESSION_STORAGE_KEY,
@@ -298,9 +313,14 @@ const TournamentGameScreen: React.FC<TournamentGameScreenProps> = ({
       )
       if (stored?.snapshot?.moveHistory?.length) {
         snapshot = stored.snapshot as { moveHistory: MoveRecord[]; scoreBoostActive?: boolean }
-      } else if (tournamentId !== null) {
+      }
+      if (tournamentId !== null) {
         const server = await fetchTournamentServerSession(address, tournamentId.toString())
-        if (server?.moveHistory?.length && server.seed === localSeed.toString()) {
+        if (
+          server?.moveHistory?.length &&
+          server.seed === localSeed.toString() &&
+          server.moveHistory.length > (snapshot?.moveHistory.length ?? 0)
+        ) {
           snapshot = {
             moveHistory: server.moveHistory as MoveRecord[],
             scoreBoostActive: server.scoreBoostActive,
@@ -309,6 +329,17 @@ const TournamentGameScreen: React.FC<TournamentGameScreenProps> = ({
       }
 
       if (snapshot) {
+        // Persist the winning snapshot locally so per-move saves have a base
+        // entry to update — without this, a server-restored run on a fresh
+        // device would never write local backups for the rest of the game.
+        writeStoredGameSession(TOURNAMENT_SESSION_STORAGE_KEY, {
+          address,
+          seed: latestSeed,
+          gameId: latestGameId.toString(),
+          tournamentId: tournamentId?.toString(),
+          contractAddress: TOURNAMENT_ADDRESS,
+          snapshot,
+        })
         const restoredSession = replayMoveHistory(
           localSeed,
           snapshot.moveHistory,
@@ -870,28 +901,75 @@ const TournamentGameScreen: React.FC<TournamentGameScreenProps> = ({
             color: 'var(--ink-fixed)',
           }}
         >
-          TOURNAMENT MODE
+          {showResume ? 'MATCH IN PROGRESS' : 'TOURNAMENT MODE'}
         </div>
         <h2
           className="mb-2 font-display text-[42px] leading-[0.9]"
           style={{ letterSpacing: '-0.04em' }}
         >
-          READY FOR{' '}
-          <span
-            style={{
-              color: 'var(--danger)',
-              WebkitTextStroke: '1px var(--ink)',
-              display: 'inline-block',
-              transform: 'rotate(-2deg)',
-            }}
-          >
-            GLORY?
-          </span>
+          {showResume ? (
+            <>
+              WELCOME{' '}
+              <span
+                style={{
+                  color: 'var(--danger)',
+                  WebkitTextStroke: '1px var(--ink)',
+                  display: 'inline-block',
+                  transform: 'rotate(-2deg)',
+                }}
+              >
+                BACK!
+              </span>
+            </>
+          ) : (
+            <>
+              READY FOR{' '}
+              <span
+                style={{
+                  color: 'var(--danger)',
+                  WebkitTextStroke: '1px var(--ink)',
+                  display: 'inline-block',
+                  transform: 'rotate(-2deg)',
+                }}
+              >
+                GLORY?
+              </span>
+            </>
+          )}
         </h2>
-        <p className="mb-8 font-display text-[10px] uppercase leading-relaxed tracking-[0.16em] text-ink/60">
-          You are about to enter a competitive match. Your final score will be
-          recorded on the leaderboard.
-        </p>
+        {showResume && resumableRun ? (
+          <div
+            className="mb-6 border-[3px] border-ink px-4 py-3"
+            style={{ background: 'var(--paper-2)' }}
+          >
+            <div className="flex items-center justify-between">
+              <div className="text-left">
+                <div className="font-display text-[9px] uppercase tracking-[0.14em] text-ink/60">
+                  SAVED SCORE
+                </div>
+                <div className="font-display text-[26px] leading-none tabular-nums">
+                  {resumableRun.score.toLocaleString()}
+                </div>
+              </div>
+              <div className="text-right">
+                <div className="font-display text-[9px] uppercase tracking-[0.14em] text-ink/60">
+                  PIECES PLACED
+                </div>
+                <div className="font-display text-[26px] leading-none tabular-nums">
+                  {resumableRun.moves}
+                </div>
+              </div>
+            </div>
+            <p className="mt-2 text-left font-display text-[9px] uppercase leading-relaxed tracking-[0.14em] text-ink/60">
+              Your board and score are saved — pick up right where you left off.
+            </p>
+          </div>
+        ) : (
+          <p className="mb-8 font-display text-[10px] uppercase leading-relaxed tracking-[0.16em] text-ink/60">
+            You are about to enter a competitive match. Your final score will be
+            recorded on the leaderboard.
+          </p>
+        )}
 
         <button
           onClick={handleStartGame}
@@ -908,6 +986,8 @@ const TournamentGameScreen: React.FC<TournamentGameScreenProps> = ({
             'SESSION CONFLICT'
           ) : isPending || isConfirming ? (
             'PREPARING...'
+          ) : showResume ? (
+            'RESUME MATCH'
           ) : (
             'COMMENCE MATCH'
           )}

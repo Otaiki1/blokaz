@@ -15,11 +15,12 @@ import {
   useLeaderboard,
   useSubmitTournamentScore,
   useStartGame,
+  useStartTournamentGame,
 } from '../hooks/useBlokzGame'
 import { useAccount, useReadContract } from 'wagmi'
 import { BLOKZ_GAME_ABI, BLOKZ_TOURNAMENT_ABI } from '../constants/abi'
 import contractInfo from '../contract.json'
-import { requestSubmitSignature } from '../api/signer'
+import { requestSubmitSignature, requestStartSignature } from '../api/signer'
 import { markSessionComplete, markTournamentSessionComplete } from '../hooks/useMoveSync'
 import { keccak256, encodePacked } from 'viem'
 import {
@@ -61,6 +62,7 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
   const {
     gameId: tournamentActiveGameId,
     isLoading: isLoadingTournamentGameId,
+    refetch: refetchTournamentGameId,
   } = useActiveTournamentGame(mode === 'tournament' ? address : undefined)
   const activeGameId =
     mode === 'tournament' ? tournamentActiveGameId : classicActiveGameId
@@ -312,26 +314,75 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
     return null
   })()
 
+  // Tournament late-registration: when the start tx silently failed, the run
+  // has no on-chain game and the score can't be submitted. Re-committing the
+  // SAME seed via a fresh startTournamentGame creates a new game ID whose
+  // seedHash matches the recorded run, so the existing history validates and
+  // submits against it — the score is fully recoverable.
+  const {
+    startTournamentGame: contractStartTournamentGame,
+    isPending: isTourRegPending,
+    isConfirming: isTourRegConfirming,
+    isSuccess: isTourRegSuccess,
+    error: tourRegError,
+  } = useStartTournamentGame()
+  const [isPollingGameId, setIsPollingGameId] = React.useState(false)
+
   // True when the game was never registered on-chain — show a Register button
   // so the player can fix it without leaving the game-over screen.
-  const needsRegistration = !effectiveGameId && !!recoveredSeed && !!gameSession && mode === 'classic'
-  const isRegistering2 = isRegisterPending || isRegisterConfirming
+  const needsRegistration =
+    !effectiveGameId && !!recoveredSeed && !!gameSession && !isLoadingGameId &&
+    (mode === 'classic' || isTournamentMode)
+  const isRegistering2 =
+    isRegisterPending || isRegisterConfirming ||
+    isTourRegPending || isTourRegConfirming || isPollingGameId
 
-  const handleRegisterGame = () => {
-    if (!recoveredSeed) return
-    contractStartGame(recoveredSeed as `0x${string}`)
+  const handleRegisterGame = async () => {
+    if (!recoveredSeed || !address) return
+    if (isTournamentMode && tournamentId !== null) {
+      setSignerError(null)
+      try {
+        const seedHash = keccak256(
+          encodePacked(['bytes32', 'address'], [recoveredSeed as `0x${string}`, address])
+        )
+        const { signature, nonce, deadline } = await requestStartSignature(
+          tournamentId,
+          seedHash,
+          address
+        )
+        contractStartTournamentGame(tournamentId, seedHash, nonce, deadline, signature)
+        // Poll for the new game ID regardless of wagmi's isSuccess — MiniPay's
+        // provider may never emit it (same limitation as the match screen).
+        setIsPollingGameId(true)
+      } catch (err) {
+        console.error('Failed to get registration signature:', err)
+        setSignerError('Could not reach signing server — tap register to try again.')
+      }
+    } else {
+      contractStartGame(recoveredSeed as `0x${string}`)
+    }
   }
 
-  // When registration succeeds, refetch the active game ID so effectiveGameId
-  // updates and the submit button unlocks automatically.
+  // Poll the contract until the re-registered tournament game ID appears —
+  // effectiveGameId then unlocks the submit button (and its auto-countdown).
   React.useEffect(() => {
-    if (isRegisterSuccess) {
-      // Give the chain a moment to index then trigger a refetch via the
-      // useActiveGame hook — we achieve this by refreshing the page query.
-      // The effectiveGameId = onChainGameId || activeGameId line in the modal
-      // will pick up the new ID as soon as useActiveGame returns it.
+    if (!isPollingGameId) return
+    if (effectiveGameId && effectiveGameId !== 0n) {
+      setIsPollingGameId(false)
+      return
     }
-  }, [isRegisterSuccess])
+    let ticks = 0
+    const timer = setInterval(async () => {
+      ticks++
+      const res = await refetchTournamentGameId()
+      const gid = res.data as bigint | undefined
+      if ((gid && gid !== 0n) || ticks > 30) {
+        clearInterval(timer)
+        setIsPollingGameId(false)
+      }
+    }, 2000)
+    return () => clearInterval(timer)
+  }, [isPollingGameId, effectiveGameId, refetchTournamentGameId])
 
   // Total stablecoin balance across all tokens (USD value)
   const totalStableUsd = (Object.keys(STABLECOIN_TOKENS) as StablecoinSymbol[]).reduce((sum, sym) => {
@@ -1034,22 +1085,33 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
                     className="border-[3px] border-ink px-3 py-2 font-display text-[9px] uppercase tracking-[0.12em]"
                     style={{ background: 'var(--paper-2)', color: 'var(--ink-soft)' }}
                   >
-                    Game not registered on-chain — register it now to unlock score submission.
+                    {isTournamentMode
+                      ? 'Your run was never registered on-chain — register it now to save your score. Your run is safe.'
+                      : 'Game not registered on-chain — register it now to unlock score submission.'}
                   </div>
                   <button
                     onClick={handleRegisterGame}
-                    disabled={isRegistering2 || isRegisterSuccess}
+                    disabled={isRegistering2 || isRegisterSuccess || isTourRegSuccess}
                     className="brutal-btn flex w-full items-center justify-center gap-2 border-[3px] border-ink py-3 font-display text-[11px] uppercase tracking-wider shadow-[3px_3px_0_var(--shadow)] disabled:opacity-50"
                     style={{ background: 'var(--accent-yellow)', color: 'var(--ink-fixed)' }}
                   >
                     {isRegistering2 ? (
                       <><div className="brutal-loader" /> REGISTERING...</>
-                    ) : isRegisterSuccess ? (
+                    ) : isRegisterSuccess || isTourRegSuccess ? (
                       '✓ REGISTERED — SUBMIT NOW'
                     ) : (
                       'REGISTER GAME ON-CHAIN'
                     )}
                   </button>
+                  {tourRegError && !isRegistering2 && (
+                    <div className="text-center font-display text-[8px] uppercase tracking-[0.12em] text-danger">
+                      {/user rejected|denied/i.test((tourRegError as any)?.message ?? '')
+                        ? 'Transaction cancelled — tap register to try again.'
+                        : /ended/i.test((tourRegError as any)?.message ?? '')
+                          ? 'This tournament has already ended.'
+                          : 'Registration failed — tap register to try again.'}
+                    </div>
+                  )}
                 </div>
               )}
 

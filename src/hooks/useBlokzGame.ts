@@ -490,11 +490,14 @@ export function useWithdrawRevenue() {
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash })
   const getFreshNonce = useFreshNonce()
 
-  const withdraw = async () => {
+  // withdrawProtocolRevenue(address to) — the contract requires an explicit
+  // recipient; calling without args fails ABI encoding before the tx is sent.
+  const withdraw = async (to: `0x${string}`) => {
     writeContract({
       address: TOURNAMENT_ADDRESS,
       abi: BLOKZ_TOURNAMENT_ABI,
       functionName: 'withdrawProtocolRevenue',
+      args: [to],
       ...getTxOverrides(),
       ...await getFreshNonce(),
     })

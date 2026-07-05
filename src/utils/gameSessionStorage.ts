@@ -54,3 +54,34 @@ export function writeStoredGameSession(storageKey: string, session: StoredGameSe
 export function clearStoredGameSession(storageKey: string) {
   localStorage.removeItem(storageKey)
 }
+
+export interface ResumableTournamentRun {
+  tournamentId: string
+  score: number
+  moves: number
+}
+
+/**
+ * Returns the in-progress tournament run saved on this device, or null when
+ * there is nothing to resume. Score is derived from the recorded move totals —
+ * the same invariant the engine maintains (score ≡ Σ scoreEvent.totalPoints).
+ */
+export function readResumableTournamentRun(
+  address?: `0x${string}`,
+  contractAddress?: `0x${string}`
+): ResumableTournamentRun | null {
+  const stored = readStoredGameSession(
+    TOURNAMENT_SESSION_STORAGE_KEY,
+    address,
+    contractAddress
+  )
+  if (!stored?.tournamentId || !stored.snapshot?.moveHistory?.length) return null
+  return {
+    tournamentId: stored.tournamentId,
+    score: stored.snapshot.moveHistory.reduce(
+      (sum, m) => sum + (m.scoreEvent?.totalPoints ?? 0),
+      0
+    ),
+    moves: stored.snapshot.moveHistory.filter((m) => m.pieceIndex >= 0).length,
+  }
+}

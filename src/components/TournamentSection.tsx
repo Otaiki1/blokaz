@@ -14,6 +14,7 @@ import {
 import { useAccount, useReadContracts } from 'wagmi'
 import { formatUnits } from 'viem'
 import { useGameStore } from '../stores/gameStore'
+import { readResumableTournamentRun } from '../utils/gameSessionStorage'
 import { IS_MINIPAY } from '../utils/miniPay'
 import { BLOKZ_TOURNAMENT_ABI } from '../constants/abi'
 import contractInfo from '../contract.json'
@@ -90,6 +91,13 @@ const TournamentCard: React.FC<TournamentCardProps> = ({
 
   const [hover, setHover] = useState(false)
   const offset = hover ? 4 : 7
+
+  // In-progress run saved on this device for THIS tournament — lets the
+  // player resume with their score intact instead of a generic "start".
+  const resumableRun = useMemo(() => {
+    const run = readResumableTournamentRun(address, TOURNAMENT_ADDRESS)
+    return run && run.tournamentId === id.toString() ? run : null
+  }, [address, id])
 
   // After approve confirms, immediately allow the join button to show.
   // We don't auto-fire joinTournament — wallets require a direct user gesture
@@ -170,6 +178,21 @@ const TournamentCard: React.FC<TournamentCardProps> = ({
       minute: '2-digit',
     })
   const formatAmount = (amt: bigint) => formatUnits(amt, USDC_DECIMALS)
+  // Live countdown, coarsest-two-units: "2D 04H", "3H 12M", "12M 05S"
+  const formatCountdown = (secondsLeft: bigint): string => {
+    const s = Number(secondsLeft)
+    if (s <= 0) return 'ENDED'
+    const pad = (n: number) => String(n).padStart(2, '0')
+    const days = Math.floor(s / 86400)
+    const hours = Math.floor((s % 86400) / 3600)
+    const mins = Math.floor((s % 3600) / 60)
+    const secs = s % 60
+    if (days > 0) return `${days}D ${pad(hours)}H`
+    if (hours > 0) return `${hours}H ${pad(mins)}M`
+    return `${mins}M ${pad(secs)}S`
+  }
+  const secondsToEnd = endTime - now
+  const endingSoon = isStarted && !isEnded && secondsToEnd < 600n
 
   const rowBg = ROW_COLORS[index % 4]
   const tagStyle = TAG_STYLES[index % 4]
@@ -301,13 +324,20 @@ const TournamentCard: React.FC<TournamentCardProps> = ({
             label: 'PLAYERS',
             value: `${playerCount}/${maxPlayers === 0n ? '∞' : maxPlayers}`,
           },
-          { label: 'ENDS', value: formatTime(endTime) },
-        ].map((m) => (
+          // Live tournaments count down to the second so players know exactly
+          // how long they have; upcoming ones show the start date instead.
+          isEnded
+            ? { label: 'STATUS', value: 'ENDED' }
+            : isStarted
+              ? { label: 'ENDS IN', value: formatCountdown(secondsToEnd), urgent: endingSoon }
+              : { label: 'STARTS', value: formatTime(startTime) },
+        ].map((m: { label: string; value: string; urgent?: boolean }) => (
           <div
             key={m.label}
             style={{
               flex: 1,
-              background: 'rgba(255,255,255,0.25)',
+              background: m.urgent ? 'var(--danger)' : 'rgba(255,255,255,0.25)',
+              color: m.urgent ? '#fff' : undefined,
               border: '2px solid var(--ink)',
               padding: '4px 6px',
               textAlign: 'center',
@@ -336,8 +366,8 @@ const TournamentCard: React.FC<TournamentCardProps> = ({
                 className="brutal-btn font-display"
                 style={{
                   flex: 2,
-                  background: 'var(--ink)',
-                  color: 'var(--paper)',
+                  background: resumableRun ? 'var(--accent-yellow)' : 'var(--ink)',
+                  color: resumableRun ? 'var(--ink-fixed)' : 'var(--paper)',
                   border: '4px solid var(--ink)',
                   padding: '10px 0',
                   fontSize: 12,
@@ -345,7 +375,9 @@ const TournamentCard: React.FC<TournamentCardProps> = ({
                   boxShadow: '4px 4px 0 var(--shadow)',
                 }}
               >
-                START MATCH
+                {resumableRun
+                  ? `RESUME — ${resumableRun.score.toLocaleString()} PTS`
+                  : 'START MATCH'}
               </button>
               <button
                 onClick={() => onViewRankings(id, prizePool)}
@@ -425,8 +457,8 @@ const TournamentCard: React.FC<TournamentCardProps> = ({
                 letterSpacing: '0.12em',
               }}
             >
-              {startTime - now < 3600n
-                ? `STARTS IN ${Math.floor(Number(startTime - now) / 60)}M ${Number(startTime - now) % 60}S`
+              {startTime - now < 86400n
+                ? `STARTS IN ${formatCountdown(startTime - now)}`
                 : `STARTS ${formatTime(startTime)} @ ${formatDateTime(startTime)}`}
             </div>
           )}
