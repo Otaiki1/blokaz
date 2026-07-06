@@ -83,7 +83,6 @@ const TournamentGameScreen: React.FC<TournamentGameScreenProps> = ({
     setOnChainData,
     forceReset,
     onChainStatus,
-    onChainGameId,
     tournamentId,
     setTournamentId,
   } = useGameStore()
@@ -250,16 +249,16 @@ const TournamentGameScreen: React.FC<TournamentGameScreenProps> = ({
   }, [isConnected, address, setTournamentId, tournamentId])
 
   // ── Resumable run detection ──────────────────────────────────────────────────
-  // A saved snapshot for this tournament plus a registered on-chain game means
-  // handleStartGame will replay it — surface that as an explicit RESUME state
-  // so the player knows their score is safe.
+  // A saved snapshot for this tournament means handleStartGame will replay it —
+  // surface that as an explicit CONTINUE state so the player knows their score
+  // is safe. Deliberately independent of the on-chain game read: even an
+  // unregistered run continues, and the game-over recovery registers it later.
   const resumableRun = React.useMemo(() => {
     if (!address || tournamentId === null || isSyncingContract) return null
     const run = readResumableTournamentRun(address, TOURNAMENT_ADDRESS)
     return run && run.tournamentId === tournamentId.toString() ? run : null
   }, [address, tournamentId, isSyncingContract])
-  const showResume =
-    !!resumableRun && !!onChainGameId && onChainGameId !== 0n && !sessionConflict
+  const showResume = !!resumableRun && !sessionConflict
 
   // ── Redirect if no tournament selected (only after hydration) ───────────────
   useEffect(() => {
@@ -293,25 +292,37 @@ const TournamentGameScreen: React.FC<TournamentGameScreenProps> = ({
     const freshState = useGameStore.getState()
     const { onChainSeed: latestSeed, onChainGameId: latestGameId } = freshState
 
-    if (latestSeed && latestGameId && latestGameId !== 0n) {
+    // Resuming after a crash/refresh must NOT depend on the on-chain game read:
+    // the stored entry for this tournament carries the seed and the snapshot,
+    // which is all a continue needs. If the run was never registered on-chain
+    // (silent start-tx failure), the game-over screen's late-registration
+    // recovery re-commits the same seed and the score still submits.
+    const stored = readStoredGameSession(
+      TOURNAMENT_SESSION_STORAGE_KEY,
+      address,
+      TOURNAMENT_ADDRESS
+    )
+    const storedMatches =
+      !!stored?.seed && stored.tournamentId === tournamentId?.toString()
+    const registered = !!latestSeed && !!latestGameId && latestGameId !== 0n
+    const resumeSeed = (latestSeed ?? (storedMatches ? stored!.seed : null)) as
+      | `0x${string}`
+      | null
+
+    if (resumeSeed && (registered || (storedMatches && stored?.snapshot?.moveHistory?.length))) {
       const localSeed = BigInt(
         keccak256(
-          encodePacked(['bytes32', 'address'], [latestSeed, address])
+          encodePacked(['bytes32', 'address'], [resumeSeed, address])
         ).slice(0, 18)
       )
 
-      // Resuming an on-chain game after a crash/refresh: replay the saved move
-      // history so the player keeps their score instead of restarting at 0.
-      // Both backups are checked and the one with MORE progress wins — a stale
-      // local snapshot must never resume the player behind the server copy,
-      // and a missing local snapshot (new device) falls back to the server.
+      // Replay the saved move history so the player keeps their score instead
+      // of restarting at 0. Both backups are checked and the one with MORE
+      // progress wins — a stale local snapshot must never resume the player
+      // behind the server copy, and a missing local snapshot (new device)
+      // falls back to the server.
       let snapshot: { moveHistory: MoveRecord[]; scoreBoostActive?: boolean } | null = null
-      const stored = readStoredGameSession(
-        TOURNAMENT_SESSION_STORAGE_KEY,
-        address,
-        TOURNAMENT_ADDRESS
-      )
-      if (stored?.snapshot?.moveHistory?.length) {
+      if (storedMatches && stored?.snapshot?.moveHistory?.length) {
         snapshot = stored.snapshot as { moveHistory: MoveRecord[]; scoreBoostActive?: boolean }
       }
       if (tournamentId !== null) {
@@ -334,12 +345,15 @@ const TournamentGameScreen: React.FC<TournamentGameScreenProps> = ({
         // device would never write local backups for the rest of the game.
         writeStoredGameSession(TOURNAMENT_SESSION_STORAGE_KEY, {
           address,
-          seed: latestSeed,
-          gameId: latestGameId.toString(),
+          seed: resumeSeed,
+          gameId: registered ? latestGameId!.toString() : (stored?.gameId ?? null),
           tournamentId: tournamentId?.toString(),
           contractAddress: TOURNAMENT_ADDRESS,
           snapshot,
         })
+        // Keep the seed in the store even when the on-chain game is missing —
+        // the game-over screen needs it both to submit and to re-register.
+        if (!registered) setOnChainData(0n, resumeSeed, 'pending')
         const restoredSession = replayMoveHistory(
           localSeed,
           snapshot.moveHistory,
@@ -359,10 +373,15 @@ const TournamentGameScreen: React.FC<TournamentGameScreenProps> = ({
           lotteryMultiplierMovesLeft: restoredSession.lotteryMultiplierMovesLeft,
           reviveCount: snapshot.moveHistory.filter((m) => m.revive).length,
         })
-      } else {
-        startGame(localSeed, true)
+        return
       }
-      return
+      if (registered) {
+        // Active on-chain game but no snapshot anywhere — fresh board on the
+        // committed seed so the game stays submittable.
+        startGame(localSeed, true)
+        return
+      }
+      // No snapshot and no on-chain game: fall through and start a new game.
     }
 
     // Use pre-fetched signature if still valid (deadline > now + 60s) — fires wallet instantly
@@ -987,7 +1006,7 @@ const TournamentGameScreen: React.FC<TournamentGameScreenProps> = ({
           ) : isPending || isConfirming ? (
             'PREPARING...'
           ) : showResume ? (
-            'RESUME MATCH'
+            'CONTINUE GAME'
           ) : (
             'COMMENCE MATCH'
           )}

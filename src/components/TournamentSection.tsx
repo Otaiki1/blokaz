@@ -376,7 +376,7 @@ const TournamentCard: React.FC<TournamentCardProps> = ({
                 }}
               >
                 {resumableRun
-                  ? `RESUME — ${resumableRun.score.toLocaleString()} PTS`
+                  ? `CONTINUE — ${resumableRun.score.toLocaleString()} PTS`
                   : 'START MATCH'}
               </button>
               <button
