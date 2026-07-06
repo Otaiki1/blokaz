@@ -27,8 +27,9 @@ import {
   useActiveTournamentGame,
 } from '../hooks/useBlokzGame'
 import { requestStartSignature } from '../api/signer'
-import { useAccount, useBalance } from 'wagmi'
+import { useAccount, useBalance, usePublicClient } from 'wagmi'
 import { keccak256, encodePacked } from 'viem'
+import { BLOKZ_TOURNAMENT_ABI } from '../constants/abi'
 import contractInfo from '../contract.json'
 import {
   TOURNAMENT_SESSION_STORAGE_KEY,
@@ -532,6 +533,59 @@ const TournamentGameScreen: React.FC<TournamentGameScreenProps> = ({
     }
     if (getCharges('rotatePass') <= 0) exitRotateMode()
   }
+
+  // ── Registration reconciliation ──────────────────────────────────────────────
+  // While a live session still shows REGISTERING, poll the contract until the
+  // game appears, confirm it matches this run's seed commitment, then flip the
+  // chip to VERIFIED and persist the game ID. Covers resumed runs and MiniPay
+  // starts, where wagmi's isSuccess never fires so the background sync below
+  // would otherwise never run.
+  const publicClient = usePublicClient()
+  useEffect(() => {
+    if (!gameSession || !address || onChainStatus !== 'pending') return
+    let cancelled = false
+    let ticks = 0
+    const timer = setInterval(async () => {
+      if (++ticks > 60) {
+        clearInterval(timer)
+        return
+      }
+      try {
+        const res = await refetchActiveGame()
+        const gid = res.data as bigint | undefined
+        if (cancelled || !gid || gid === 0n) return
+        const seed = useGameStore.getState().onChainSeed
+        if (!seed) return
+        // A stale game from an older session must not pass as verified —
+        // check the on-chain seed commitment against this run's seed.
+        const game = (await publicClient?.readContract({
+          address: TOURNAMENT_ADDRESS,
+          abi: BLOKZ_TOURNAMENT_ABI,
+          functionName: 'games',
+          args: [gid],
+        })) as readonly unknown[] | undefined
+        const seedHash = game?.[2] as `0x${string}` | undefined
+        const expected = keccak256(
+          encodePacked(['bytes32', 'address'], [seed, address])
+        )
+        if (cancelled || !seedHash || seedHash !== expected) return
+        setOnChainData(gid, seed, 'registered')
+        const raw = localStorage.getItem(TOURNAMENT_SESSION_STORAGE_KEY)
+        if (raw) {
+          try {
+            const entry = JSON.parse(raw)
+            entry.gameId = gid.toString()
+            localStorage.setItem(TOURNAMENT_SESSION_STORAGE_KEY, JSON.stringify(entry))
+          } catch {}
+        }
+        clearInterval(timer)
+      } catch {}
+    }, 3000)
+    return () => {
+      cancelled = true
+      clearInterval(timer)
+    }
+  }, [!!gameSession, address, onChainStatus, refetchActiveGame, setOnChainData, publicClient])
 
   // ── Background sync for game ID ──────────────────────────────────────────────
   useEffect(() => {
