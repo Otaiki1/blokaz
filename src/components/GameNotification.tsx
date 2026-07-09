@@ -653,9 +653,11 @@ const TAG_ICON: Record<string, string> = {
 
 interface NewsNudgeProps {
   newsItems: NewsItem[]
+  /** When set, TOURNAMENT items route the CTA here (in-app) instead of a link. */
+  onNavigateTournaments?: () => void
 }
 
-export const NewsNudge: React.FC<NewsNudgeProps> = ({ newsItems }) => {
+export const NewsNudge: React.FC<NewsNudgeProps> = ({ newsItems, onNavigateTournaments }) => {
   const [current, setCurrent] = useState<NewsItem | null>(null)
   const [open, setOpen] = useState(false)
 
@@ -689,6 +691,12 @@ export const NewsNudge: React.FC<NewsNudgeProps> = ({ newsItems }) => {
 
   const tone = TAG_TONE[current.tag] ?? 'info'
   const icon = TAG_ICON[current.tag] ?? '!'
+  const routeToTournaments = current.tag === 'TOURNAMENT' && !!onNavigateTournaments
+  const action = routeToTournaments
+    ? 'GO TO TOURNAMENTS'
+    : current.link
+      ? 'LEARN MORE'
+      : undefined
 
   return (
     <NotifModal
@@ -700,10 +708,14 @@ export const NewsNudge: React.FC<NewsNudgeProps> = ({ newsItems }) => {
       badge={current.tag}
       title={current.headline}
       body={current.body}
-      action={current.link ? 'LEARN MORE' : undefined}
+      action={action}
       secondary="GOT IT"
       onAction={() => {
-        if (current.link) window.open(current.link, '_blank', 'noopener,noreferrer')
+        if (routeToTournaments) {
+          onNavigateTournaments!()
+        } else if (current.link) {
+          window.open(current.link, '_blank', 'noopener,noreferrer')
+        }
         setOpen(false)
       }}
       onSecondary={() => setOpen(false)}

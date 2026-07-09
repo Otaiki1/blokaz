@@ -81,43 +81,29 @@ export interface NewsItem {
   headline: string
   body: string
   link?: string
+  /** Epoch ms before which this item stays hidden everywhere. Omit to show immediately. */
+  publishAt?: number
 }
+
+// Tournaments go live at 16:00 GMT+1 (== 15:00 UTC). Change this to reschedule.
+export const TOURNAMENT_LAUNCH_MS = Date.parse('2026-07-09T16:00:00+01:00')
 
 // ✏️  Edit this array to publish new news items — newest first
 export const NEWS_ITEMS: NewsItem[] = [
   {
-    id: 'campaign-02',
-    tag: 'CAMPAIGN',
-    date: '28 MAY 2026',
-    headline: 'The Monthly Campaign is LIVE — Top 10 win real USDT prizes. Get the details in our community and on X!',
-    body: 'The Blokaz monthly campaign has officially started. Stack your best score every week — top 10 players at the end of the month win real USDT prizes. Follow @playblokaz on X and join our Telegram for full details and weekly leaderboard updates.',
-    link: 'https://x.com/playblokaz',
-  },
-  {
-    id: 'launch-01',
-    tag: 'NEW',
-    date: '22 MAY 2026',
-    headline: 'Blokaz is live on MiniPay!',
-    body: 'The first on-chain block-stacking game is now playable inside MiniPay. Stack, smash, and compete for USDT prizes every month.',
-    link: 'https://minipay.to',
-  },
-  {
-    id: 'tournament-01',
+    id: 'tournaments-live',
     tag: 'TOURNAMENT',
-    date: '22 MAY 2026',
-    headline: 'Weekly prize tournaments coming soon',
-    body: 'Monthly and weekly tournaments with real USDT prize pools are on the way. Follow us on Twitter to hear about this updates first.',
-    link: 'https://x.com/playblokaz',
-  },
-  {
-    id: 'community-01',
-    tag: 'COMMUNITY',
-    date: '22 MAY 2026',
-    headline: 'Join the Blokaz Telegram community',
-    body: "Get early access drops, tournament announcements, and alpha straight from the team. The community is growing fast — don't miss out.",
-    link: 'https://t.me/tweetlegg',
+    date: '9 JUL 2026',
+    headline: 'Tournaments are LIVE — head to the Tournament section and compete now!',
+    body: 'Blokaz tournaments are officially open. Open the Tournament section, join a tournament, and stack your best score to compete for the prize pool. Good luck!',
+    publishAt: TOURNAMENT_LAUNCH_MS,
   },
 ]
+
+// Only items whose publish time has passed — use this everywhere news renders.
+export function getLiveNewsItems(now: number = Date.now()): NewsItem[] {
+  return NEWS_ITEMS.filter((n) => n.publishAt == null || now >= n.publishAt)
+}
 
 const TAG_COLORS: Record<NewsItem['tag'], { bg: string; color: string }> = {
   NEW: { bg: '#ffd51f', color: '#0c0c10' },
@@ -129,7 +115,9 @@ const TAG_COLORS: Record<NewsItem['tag'], { bg: string; color: string }> = {
 
 // ─── Marquee ticker — pulls headlines from NEWS_ITEMS ────────────────────────
 const Ticker: React.FC = () => {
-  const rawItems = NEWS_ITEMS.map((n, i) => ({
+  const live = getLiveNewsItems()
+  if (live.length === 0) return null
+  const rawItems = live.map((n, i) => ({
     text: `${n.tag} — ${n.headline}`,
     highlight: i === 0,
   }))
@@ -721,10 +709,12 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({
         </div>
       </FadeUp>
 
-      {/* Ticker strip — news headlines */}
-      <FadeUp delay={180}>
-        <Ticker />
-      </FadeUp>
+      {/* Ticker strip — news headlines (only once an item is live) */}
+      {getLiveNewsItems().length > 0 && (
+        <FadeUp delay={180}>
+          <Ticker />
+        </FadeUp>
+      )}
 
       {/* Stats row — only rendered when there's at least one real value */}
       {(shareScore > 0 || playerStats) && (
@@ -1343,7 +1333,10 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({
         <UsernameSetupModal onDismiss={() => setShowUsernameModal(false)} />
       )}
 
-      <NewsNudge newsItems={NEWS_ITEMS} />
+      <NewsNudge
+        newsItems={getLiveNewsItems()}
+        onNavigateTournaments={onPlayTournaments}
+      />
       <CampaignReminderModal />
       <WinnerClaimModal />
     </>
