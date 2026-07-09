@@ -83,6 +83,8 @@ export interface NewsItem {
   link?: string
   /** Epoch ms before which this item stays hidden everywhere. Omit to show immediately. */
   publishAt?: number
+  /** If true, the nudge modal keeps re-showing on a cooldown instead of once ever. */
+  recurring?: boolean
 }
 
 // Tournaments go live at 16:00 GMT+1 (== 15:00 UTC). Change this to reschedule.
@@ -97,6 +99,7 @@ export const NEWS_ITEMS: NewsItem[] = [
     headline: 'Tournaments are LIVE — head to the Tournament section and compete now!',
     body: 'Blokaz tournaments are officially open. Open the Tournament section, join a tournament, and stack your best score to compete for the prize pool. Good luck!',
     publishAt: TOURNAMENT_LAUNCH_MS,
+    recurring: true,
   },
 ]
 

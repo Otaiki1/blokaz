@@ -608,12 +608,15 @@ export function useNotifications() {
 }
 
 // ─── News nudge system ────────────────────────────────────────────────────────
-// Periodically shows a NEWS_ITEM as a modal notification.
-// Each item shown at most once per session; a random one is picked each time.
+// Periodically shows a NEWS_ITEM as a modal notification. One-time items show once
+// ever (per browser); items flagged `recurring` re-show on a cooldown so a live
+// announcement keeps reminding players. A random eligible item is picked each time.
 
 const NEWS_NOTIF_KEY = 'blokaz:news_notif_seen'
+const NEWS_RECUR_KEY = 'blokaz:news_notif_recurring' // { [id]: lastShownMs }
 const NEWS_NOTIF_INTERVAL_MS = 12 * 60 * 1000 // 12 minutes between nudges
 const NEWS_NOTIF_INITIAL_DELAY_MS = 5 * 60 * 1000 // first one after 5 min
+const NEWS_RECUR_COOLDOWN_MS = 60 * 60 * 1000 // recurring items re-show after 1 hour
 
 function getSeenIds(): string[] {
   try { return JSON.parse(localStorage.getItem(NEWS_NOTIF_KEY) ?? '[]') } catch { return [] }
@@ -627,12 +630,26 @@ function markSeen(id: string) {
   } catch {}
 }
 
+// Recurring items track a per-id "last shown" time instead of a permanent seen flag.
+function getRecurShownAt(): Record<string, number> {
+  try { return JSON.parse(localStorage.getItem(NEWS_RECUR_KEY) ?? '{}') } catch { return {} }
+}
+function markRecurShown(id: string) {
+  try {
+    const map = getRecurShownAt()
+    map[id] = Date.now()
+    localStorage.setItem(NEWS_RECUR_KEY, JSON.stringify(map))
+  } catch {}
+}
+
 interface NewsItem {
   id: string
   tag: string
   headline: string
   body: string
   link?: string
+  /** If true, re-show on a cooldown instead of once ever. */
+  recurring?: boolean
 }
 
 const TAG_TONE: Record<string, NotifTone> = {
@@ -663,9 +680,15 @@ export const NewsNudge: React.FC<NewsNudgeProps> = ({ newsItems, onNavigateTourn
 
   const pick = useCallback(() => {
     const seen = getSeenIds()
-    const unseen = newsItems.filter(n => !seen.includes(n.id))
-    if (unseen.length === 0) return null
-    return unseen[Math.floor(Math.random() * unseen.length)]
+    const recurShownAt = getRecurShownAt()
+    const now = Date.now()
+    const eligible = newsItems.filter(n =>
+      n.recurring
+        ? now - (recurShownAt[n.id] ?? 0) >= NEWS_RECUR_COOLDOWN_MS // re-show once cooled down
+        : !seen.includes(n.id) // one-time items: only if never seen
+    )
+    if (eligible.length === 0) return null
+    return eligible[Math.floor(Math.random() * eligible.length)]
   }, [newsItems])
 
   const showNext = useCallback(() => {
@@ -673,19 +696,23 @@ export const NewsNudge: React.FC<NewsNudgeProps> = ({ newsItems, onNavigateTourn
     if (!item) return
     setCurrent(item)
     setOpen(true)
-    markSeen(item.id)
+    if (item.recurring) markRecurShown(item.id)
+    else markSeen(item.id)
   }, [pick])
 
   useEffect(() => {
-    const isFirstVisit = getSeenIds().length === 0
-    const delay = isFirstVisit ? 1500 : NEWS_NOTIF_INITIAL_DELAY_MS
+    // Show promptly if something is already eligible; otherwise wait, then re-check.
+    const delay = pick() ? 1500 : NEWS_NOTIF_INITIAL_DELAY_MS
+    let interval: ReturnType<typeof setInterval> | undefined
     const initial = setTimeout(() => {
       showNext()
-      const interval = setInterval(showNext, NEWS_NOTIF_INTERVAL_MS)
-      return () => clearInterval(interval)
+      interval = setInterval(showNext, NEWS_NOTIF_INTERVAL_MS)
     }, delay)
-    return () => clearTimeout(initial)
-  }, [showNext])
+    return () => {
+      clearTimeout(initial)
+      if (interval) clearInterval(interval)
+    }
+  }, [showNext, pick])
 
   if (!current) return null
 
