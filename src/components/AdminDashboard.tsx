@@ -220,11 +220,44 @@ const AdminDashboard: React.FC = () => {
               </label>
               <input
                 type="number"
+                min={1}
                 value={duration}
                 onChange={(e) => setDuration(e.target.value)}
                 className="brutal-input w-full"
                 placeholder="24"
               />
+              {/* Quick presets — the contract accepts any end > start, so a
+                  tournament can run for hours, days, or weeks */}
+              <div className="mt-2 flex flex-wrap gap-2">
+                {[
+                  { label: '6H', hours: 6 },
+                  { label: '24H', hours: 24 },
+                  { label: '3 DAYS', hours: 72 },
+                  { label: '1 WEEK', hours: 168 },
+                  { label: '2 WEEKS', hours: 336 },
+                  { label: '1 MONTH', hours: 720 },
+                ].map((p) => (
+                  <button
+                    key={p.label}
+                    type="button"
+                    onClick={() => setDuration(String(p.hours))}
+                    className="brutal-btn border-2 border-ink px-3 py-1 font-display text-[9px] uppercase tracking-[0.12em]"
+                    style={{
+                      background:
+                        Number(duration) === p.hours ? 'var(--ink)' : 'var(--paper)',
+                      color:
+                        Number(duration) === p.hours ? 'var(--paper)' : 'var(--ink)',
+                    }}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-1 font-body text-[10px] text-ink/50">
+                {Number(duration) >= 24 && Number.isFinite(Number(duration))
+                  ? `≈ ${(Number(duration) / 24).toLocaleString(undefined, { maximumFractionDigits: 1 })} day(s)`
+                  : 'Any duration works — hours, days, or weeks'}
+              </p>
             </div>
 
             <div>
