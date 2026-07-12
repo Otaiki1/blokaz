@@ -20,7 +20,7 @@ import {
 import { useAccount, useReadContract } from 'wagmi'
 import { BLOKZ_GAME_ABI, BLOKZ_TOURNAMENT_ABI } from '../constants/abi'
 import contractInfo from '../contract.json'
-import { requestSubmitSignature, requestStartSignature } from '../api/signer'
+import { requestSubmitSignature, requestStartSignature, SignerRejectionError } from '../api/signer'
 import { markSessionComplete, markTournamentSessionComplete } from '../hooks/useMoveSync'
 import { keccak256, encodePacked } from 'viem'
 import {
@@ -311,7 +311,9 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
       } catch (err) {
         console.error('Failed to get submission signature:', err)
         setSignerError(
-          'Could not reach signing server — tap retry to try again.'
+          err instanceof SignerRejectionError
+            ? `Submission rejected: ${err.message}`
+            : 'Could not reach signing server — tap retry to try again.'
         )
       }
     } else {
@@ -391,7 +393,11 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
         setIsPollingGameId(true)
       } catch (err) {
         console.error('Failed to get registration signature:', err)
-        setSignerError('Could not reach signing server — tap register to try again.')
+        setSignerError(
+          err instanceof SignerRejectionError
+            ? `Registration rejected: ${err.message}`
+            : 'Could not reach signing server — tap register to try again.'
+        )
       }
     } else {
       contractStartGame(recoveredSeed as `0x${string}`)

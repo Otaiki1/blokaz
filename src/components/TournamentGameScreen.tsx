@@ -27,7 +27,7 @@ import {
   useActiveTournamentGame,
   useTournament,
 } from '../hooks/useBlokzGame'
-import { requestStartSignature } from '../api/signer'
+import { requestStartSignature, SignerRejectionError } from '../api/signer'
 import { useAccount, useBalance, usePublicClient } from 'wagmi'
 import { keccak256, encodePacked } from 'viem'
 import { BLOKZ_TOURNAMENT_ABI } from '../constants/abi'
@@ -496,7 +496,9 @@ const TournamentGameScreen: React.FC<TournamentGameScreenProps> = ({
       console.error('Failed to get start signature:', err)
       hapticError()
       setSignerError(
-        'Could not reach signing server. Check your connection and try again.'
+        err instanceof SignerRejectionError
+          ? `Could not start game: ${err.message}`
+          : 'Could not reach signing server. Check your connection and try again.'
       )
     }
   }

@@ -49,7 +49,9 @@ app.use(cors({
 app.use(compression())
 
 // ── Body parsing ─────────────────────────────────────────────────────────────
-app.use(express.json({ limit: '256kb' }))
+// /sign-submit carries the full move history: up to MAX_MOVES (5000) records
+// at ~300 bytes of JSON each ≈ 1.6MB worst case, so 256kb rejected long games.
+app.use(express.json({ limit: '2mb' }))
 
 // ── Global rate limit ────────────────────────────────────────────────────────
 app.use(globalLimiter)
@@ -78,6 +80,11 @@ app.use((_req, res) => res.status(404).json({ error: 'Not found' }))
 // ── Global error handler ──────────────────────────────────────────────────────
 app.use((err, _req, res, _next) => {
   console.error('Unhandled error:', err.message)
+  // body-parser rejection — tell the client the real reason (413) instead of
+  // a generic 500 so it doesn't retry an unretryable request
+  if (err.type === 'entity.too.large') {
+    return res.status(413).json({ error: 'Request body too large' })
+  }
   res.status(500).json({ error: 'Internal server error' })
 })
 

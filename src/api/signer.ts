@@ -1,21 +1,46 @@
 const SIGNER_API_BASE =
   (import.meta.env.VITE_SIGNER_URL as string | undefined) ?? 'http://localhost:3001'
 
-// Retry up to `attempts` times. Waits 2s between each try so a cold-started
-// Render server has time to wake up before the next attempt.
+// The server understood the request and refused it (4xx) — retrying the same
+// payload cannot succeed. Carries the server's reason so the UI can show it
+// instead of a misleading "could not reach server".
+export class SignerRejectionError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message)
+    this.name = 'SignerRejectionError'
+  }
+}
+
+async function readErrorMessage(res: Response): Promise<string> {
+  try {
+    const data = await res.json()
+    if (typeof data?.error === 'string') return data.error
+  } catch {
+    // body wasn't JSON
+  }
+  return `Signing server error (HTTP ${res.status})`
+}
+
+// Retry up to `attempts` times. A cold-started Render server can take
+// 30–60s to wake, so the total window (attempts × 20s timeout + 2s waits)
+// must comfortably exceed that — 3 attempts (~64s) was too tight.
 async function fetchWithRetry(
   url: string,
   options: RequestInit,
-  attempts = 3
+  attempts = 5
 ): Promise<Response> {
   let lastErr: unknown
   for (let i = 0; i < attempts; i++) {
     try {
       const res = await fetch(url, { ...options, signal: AbortSignal.timeout(20_000) })
       if (res.ok) return res
-      // 4xx errors are not retryable (bad request, not server fault)
-      if (res.status >= 400 && res.status < 500) return res
+      // 4xx = deliberate rejection, not a server fault — never retry
+      if (res.status >= 400 && res.status < 500) {
+        throw new SignerRejectionError(await readErrorMessage(res), res.status)
+      }
+      lastErr = new Error(`Signing server error (HTTP ${res.status})`)
     } catch (err) {
+      if (err instanceof SignerRejectionError) throw err
       lastErr = err
     }
     if (i < attempts - 1) {
@@ -35,10 +60,6 @@ export async function requestStartSignature(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ tid: tid.toString(), seedHash, player }),
   })
-
-  if (!res.ok) {
-    throw new Error('Failed to get start signature')
-  }
 
   const data = await res.json()
   return {
@@ -68,10 +89,6 @@ export async function requestSubmitSignature(
       player,
     }),
   })
-
-  if (!res.ok) {
-    throw new Error('Failed to get submit signature')
-  }
 
   const data = await res.json()
   return {
