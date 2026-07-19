@@ -1350,7 +1350,15 @@ const GameScreen: React.FC<GameScreenProps> = ({
     // when the on-chain game ID was never confirmed.
     const gameIdMissing = !onChainGameIdRaw || onChainGameIdRaw === '0'
     if (gameIdMissing && onChainSeedVal && isConnected && address) {
-      const hash = (stored?.hash ?? stored?.seed ?? onChainSeedVal) as `0x${string}`
+      // stored.hash is already the seedHash; a raw seed (stored.seed or the
+      // server's onChainSeed) must be hashed with the player address exactly the
+      // way startGame → submitScore expects. Committing the raw seed verbatim as
+      // the seedHash makes keccak256(seed ++ player) never match at submit time,
+      // permanently stranding the score.
+      const hash = (stored?.hash as `0x${string}` | undefined)
+        ?? keccak256(
+          encodePacked(['bytes32', 'address'], [onChainSeedVal as `0x${string}`, address])
+        )
       setCurrentSeed({ seed: onChainSeedVal as `0x${string}`, hash })
       contractStartGame(hash)
     }
