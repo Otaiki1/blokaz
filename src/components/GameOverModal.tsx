@@ -21,7 +21,7 @@ import { useAccount, useReadContract } from 'wagmi'
 import { BLOKZ_GAME_ABI, BLOKZ_TOURNAMENT_ABI } from '../constants/abi'
 import contractInfo from '../contract.json'
 import { requestSubmitSignature, requestStartSignature, SignerRejectionError } from '../api/signer'
-import { markSessionComplete, markTournamentSessionComplete } from '../hooks/useMoveSync'
+import { markSessionComplete, markTournamentSessionComplete, fetchServerSession, fetchTournamentServerSession } from '../hooks/useMoveSync'
 import { keccak256, encodePacked } from 'viem'
 import {
   CLASSIC_SESSION_STORAGE_KEY,
@@ -218,15 +218,46 @@ const GameOverModal: React.FC<GameOverModalProps> = ({
       ? isLoadingTournamentContract
       : isLoadingClassicContract
 
+  // Last-resort seed recovery. A run that was synced to the server but whose
+  // on-chain start never confirmed keeps its raw seed only in the server
+  // session; if this device also lost its localStorage copy, the store holds no
+  // seed and the run can be neither registered nor submitted ("Game seed
+  // unavailable"). Pull the seed back from the correct server session (classic
+  // or per-tournament) so the Register → submit flow can complete and the score
+  // isn't stranded.
+  const [serverSeed, setServerSeed] = React.useState<`0x${string}` | null>(null)
+  React.useEffect(() => {
+    if (!address) return
+    if (onChainSeed) return
+    // Tournament restore is keyed by tournamentId — wait until we have one.
+    if (mode === 'tournament' && tournamentId === null) return
+    const contractAddr = mode === 'tournament' ? TOURNAMENT_ADDRESS : GAME_ADDRESS
+    if (readStoredGameSession(storageKey, address, contractAddr)?.seed) return
+    let cancelled = false
+    const request = mode === 'tournament'
+      ? fetchTournamentServerSession(address, tournamentId!.toString())
+      : fetchServerSession(address)
+    request.then((s) => {
+      const seed = s?.onChainSeed
+      if (!cancelled && typeof seed === 'string' && /^0x[0-9a-fA-F]{64}$/.test(seed)) {
+        setServerSeed(seed as `0x${string}`)
+        // Mirror into the store so the rest of the submit flow (and any
+        // re-mount) sees it without re-fetching.
+        useGameStore.setState({ onChainSeed: seed as `0x${string}` })
+      }
+    })
+    return () => { cancelled = true }
+  }, [mode, tournamentId, address, onChainSeed, storageKey])
+
   const recoveredSeed = useMemo(() => {
     if (onChainSeed) return onChainSeed
     if (!address) return null
     const contractAddr =
       mode === 'tournament' ? TOURNAMENT_ADDRESS : GAME_ADDRESS
     return (
-      readStoredGameSession(storageKey, address, contractAddr)?.seed ?? null
+      readStoredGameSession(storageKey, address, contractAddr)?.seed ?? serverSeed ?? null
     )
-  }, [address, onChainSeed, storageKey, mode])
+  }, [address, onChainSeed, storageKey, mode, serverSeed])
 
   const onChainHash = useMemo(() => {
     if (!gameData) return null
