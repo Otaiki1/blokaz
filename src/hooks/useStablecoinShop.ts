@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAccount, useBalance, usePublicClient, useWalletClient } from 'wagmi'
-import { encodeFunctionData } from 'viem'
+import { encodeFunctionData, concat } from 'viem'
 import {
   GAME_TREASURY,
   STABLECOIN_TOKENS,
@@ -8,6 +8,7 @@ import {
 } from '../constants/contracts'
 import { usePowerUpStore, type PowerUpId } from '../stores/powerUpStore'
 import { isMiniPay } from '../utils/miniPay'
+import { ATTRIBUTION_SUFFIX } from '../utils/attribution'
 import { logPurchase } from './useInventorySync'
 
 const ERC20_TRANSFER_ABI = [
@@ -108,11 +109,14 @@ export function useStablecoinShop() {
       try {
         const token = STABLECOIN_TOKENS[sym]
         const cost = shopCost(sym)
-        const data = encodeFunctionData({
-          abi: ERC20_TRANSFER_ABI,
-          functionName: 'transfer',
-          args: [GAME_TREASURY, cost],
-        })
+        const data = concat([
+          encodeFunctionData({
+            abi: ERC20_TRANSFER_ABI,
+            functionName: 'transfer',
+            args: [GAME_TREASURY, cost],
+          }),
+          ATTRIBUTION_SUFFIX, // Celo attribution tag (trailing bytes; ignored by the token)
+        ])
 
         let txHash: `0x${string}` | undefined
         if (isMiniPay()) {
@@ -191,11 +195,14 @@ export function useStablecoinShop() {
       try {
         const token = STABLECOIN_TOKENS[sym]
         const cost = bundleCost(sym, priceCents)
-        const data = encodeFunctionData({
-          abi: ERC20_TRANSFER_ABI,
-          functionName: 'transfer',
-          args: [GAME_TREASURY, cost],
-        })
+        const data = concat([
+          encodeFunctionData({
+            abi: ERC20_TRANSFER_ABI,
+            functionName: 'transfer',
+            args: [GAME_TREASURY, cost],
+          }),
+          ATTRIBUTION_SUFFIX, // Celo attribution tag (trailing bytes; ignored by the token)
+        ])
 
         let txHash: `0x${string}` | undefined
         if (isMiniPay()) {

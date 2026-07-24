@@ -10,14 +10,20 @@ import { keccak256, encodePacked, toHex } from 'viem'
 import { BLOKZ_GAME_ABI, BLOKZ_TOURNAMENT_ABI } from '../constants/abi'
 import contractInfo from '../contract.json'
 import { isMiniPay } from '../utils/miniPay'
+import { ATTRIBUTION_SUFFIX } from '../utils/attribution'
 
 // MiniPay only supports legacy (type 0) transactions — EIP-1559 (type 2) is not supported.
 // MiniPay handles gas fee abstraction natively; dApps must NOT set feeCurrency here.
 // feeCurrency requires CIP-64 (type 0x7b) which is incompatible with type: 'legacy'.
+//
+// dataSuffix appends our Celo ERC-8021 attribution tag to the calldata; wagmi
+// concatenates it after the encoded function args, and the contract ignores the
+// trailing bytes. Spread into every writeContract call below so all on-chain
+// activity from Blokaz is attributed to us.
 const getTxOverrides = () =>
   isMiniPay()
-    ? { type: 'legacy' as const }
-    : {}
+    ? { type: 'legacy' as const, dataSuffix: ATTRIBUTION_SUFFIX }
+    : { dataSuffix: ATTRIBUTION_SUFFIX }
 
 /**
  * Returns an async function that fetches the pending nonce for the connected
